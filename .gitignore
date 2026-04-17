@@ -1,0 +1,53 @@
+# Rust build outputs
+target/
+**/*.rs.bk
+*.pdb
+
+# Engram derived/ephemeral state (rebuildable; do not commit)
+.engram/index.sqlite
+.engram/index.sqlite-*
+.engram/dreams/
+.engram/witness/
+.engram/logs/
+.engram/artifacts/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Editor / OS swap files
+*.swp
+*.swo
+*~
+.#*
+\#*#
+.idea/
+.vscode/
+
+# Environment / secrets (engram uses Keychain; env-vars are dev-only)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Xcode / Swift app
+DerivedData/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+build/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate
+
+# Node tooling (prettier, etc. — installed via npx, no node_modules expected,
+# but guard against accidental local installs)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Worktrees and Claude Code scratch
+.claude/worktrees/
