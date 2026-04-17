@@ -1,0 +1,17 @@
+version: "3"
+
+tasks:
+  format:
+    desc: Format all files in-place (md, json, yaml, js, ts, etc.)
+    cmds:
+      - npx --yes prettier --write .
+
+  format-check:
+    desc: Check formatting and show what would change without writing
+    cmds:
+      - npx --yes prettier --check .
+
+  format-change:
+    desc: Format only git-changed files in-place
+    cmds:
+      - git diff --name-only --diff-filter=ACMR HEAD | xargs npx --yes prettier --write --ignore-unknown
