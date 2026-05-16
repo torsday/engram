@@ -21,6 +21,7 @@ Format: each ADR is one page, in the form `NNNN-decision-name.md`. Status is `Ac
 | [0011](0011-tiered-model-escalation.md) | Tiered model escalation (start cheap, escalate on need) | Accepted |
 | [0012](0012-embedding-cache-by-content-hash.md) | Embedding cache keyed by content hash and model version | Accepted |
 | [0013](0013-tool-use-over-generation.md) | Prefer tool-use over LLM generation for deterministic subtasks | Accepted |
+| [0014](0014-lancedb-vector-storage.md) | LanceDB for vector storage in v1 (supersedes sqlite-vec) | Accepted |
 
 ## When to write an ADR
 

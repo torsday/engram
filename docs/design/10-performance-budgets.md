@@ -70,7 +70,7 @@ These are not user-facing but bound system load.
 | Indexer | 100 notes/sec on Apple Silicon | sqlite + FTS5 + sidecar parse |
 | Embedding (local bge-m3 via ONNX) | 50 notes/sec | Apple Silicon GPU |
 | Embedding (cloud OpenAI batch) | 200 notes/sec | Network-bound |
-| Vector search (sqlite-vec) | < 50ms p95 for 10K notes | Single ANN query |
+| Vector search (LanceDB HNSW) | < 30ms p95 for 10K notes; < 80ms p95 for 100K | Single ANN query with optional metadata filter |
 | BM25 (FTS5) | < 10ms p95 for 10K notes | Sqlite native |
 | Graph expansion (1--2 hop) | < 30ms p95 | sqlite recursive CTE |
 | File watcher debounce window | 2s default | Configurable; trade-off: too short = thrash, too long = lag |
@@ -101,7 +101,8 @@ Per-agent timing is bounded by LLM provider latency. Targets assume cloud Anthro
 | `engram serve` resident memory (peak during reindex) | < 1.5GB |
 | Swift app memory (steady state) | < 200MB |
 | Swift app memory (during voice transcription) | < 500MB |
-| `.engram/index.sqlite` (10K notes, 1024-dim embeddings) | < 100MB |
+| `.engram/index.sqlite` (10K notes; metadata + FTS5 + graph + cache, no vectors) | < 60MB |
+| `.engram/vectors/` (10K notes × 1024 dims, LanceDB compressed) | < 50MB |
 | `.engram/sidecar/` total (10K notes, typical) | < 50MB |
 | `.engram/artifacts/` | unbounded (user content); monitored, not capped |
 | `.engram/logs/` | < 100MB rotated |
@@ -123,7 +124,7 @@ System-wide cost cap is enforced by Watcher (see `03-architecture.md`).
 
 Targets above hold for 10K notes. Notable limits:
 
-- **sqlite-vec** scales linearly to ~100K vectors before HNSW or alternative indexing matters. At 50K+ notes, profiling required.
+- **LanceDB (HNSW)** scales gracefully to ~1M vectors on modest hardware; at v1's 10K-note target it's overprovisioned. Per [ADR 0014](adrs/0014-lancedb-vector-storage.md).
 - **FTS5** scales well; not the bottleneck.
 - **Link graph** scales well via sqlite indexes; not the bottleneck.
 - **Embedding pipeline** is the dominant cost at scale; cloud embedding cost grows linearly with note count.
