@@ -182,6 +182,8 @@ Terms used across the engram design corpus, alphabetically. Each entry is a one-
 
 **Prompt evolution** — The lightweight RLHF-like loop where agent prompt variants run in shadow mode, are compared on outcome metrics, and Auditor proposes promotion. → [01-agents-and-council.md](01-agents-and-council.md)
 
+**LanceDB** — Rust-native embedded columnar vector database used for semantic similarity search. Replaces sqlite-vec in v1. Datasets at `.engram/vectors/`. Eventually consistent with the canonical SQLite state (lag bounded by ~500ms). → [ADR 0014](adrs/0014-lancedb-vector-storage.md)
+
 **Pacekeeper state** — One of `normal`, `throttled`, `paused`. Computed hourly from backlog signals. Affects agent thresholds and which agents are deferred. State file at `.engram/meta/pace.md`. → [01-agents-and-council.md](01-agents-and-council.md)
 
 **Prompt caching (static head + dynamic tail)** — Engram structures every agent prompt with a cacheable static prefix (instructions, schema, biographer model) and a non-cacheable dynamic suffix (note context, retrieval results). Reduces input cost ~10× for frequently-running agents. → [ADR 0010](adrs/0010-prompt-caching-first-class.md)
@@ -190,7 +192,7 @@ Terms used across the engram design corpus, alphabetically. Each entry is a one-
 
 **Pending question** — A question routed from an external MCP client to the user via `ask_user`. Lives in `pending_questions` table. User replies, skips, or mutes the asking app. → [04-external-mcp.md](04-external-mcp.md)
 
-**Proposal** — In v1, a JSON file at `.engram/proposals/<id>.json` representing a proposed change awaiting human review. The Swift app surfaces proposals for stage/discard/edit. In v1.1+, proposals also flow through council deliberation before reaching the queue. → [12-agent-spec-template.md](12-agent-spec-template.md)
+**Proposal** — A JSON file at `.engram/proposals/<id>.json` representing a proposed change awaiting human review. Proposals come from two paths: (a) below-threshold individual-agent proposals; (b) high-invasiveness council deliberations that landed at PROPOSE rather than LAND. The Swift app surfaces proposals for stage/discard/edit. → [12-agent-spec-template.md](12-agent-spec-template.md)
 
 **Provenance** — The complete record of who wrote what, when, and under what deliberation. Three layers: action log (sqlite), block-level HTML comments (in note), sidecar history (JSON). → [01-agents-and-council.md](01-agents-and-council.md), [06-note-conventions.md](06-note-conventions.md)
 

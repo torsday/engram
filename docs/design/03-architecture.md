@@ -21,7 +21,7 @@
 | Frontmatter         | serde_yaml                | `serde_yaml`                    | YAML frontmatter is the Obsidian standard.                                                                                                              |
 | SQLite              | rusqlite                  | `rusqlite`                      | Direct bindings. One file for metadata, FTS, and vectors.                                                                                               |
 | Full-text search    | SQLite FTS5               | (built into rusqlite)           | BM25 scoring, incremental updates. Catches exact-term matches that embeddings miss.                                                                     |
-| Vector search       | sqlite-vec                | `sqlite-vec`                    | Same database file. 10K notes x 1024 dims ≈ 40MB (with `bge-m3`); 10K x 1536 dims ≈ 55MB (with OpenAI `text-embedding-3-large`). No separate vector DB. |
+| Vector search       | LanceDB (embedded)        | `lance`, `lancedb`              | Rust-native embedded columnar vector DB. Scales to 100K+ notes without re-architecture. Native HNSW indexing; built-in dataset versioning. Stored under `.engram/vectors/`. See [ADR 0014](adrs/0014-lancedb-vector-storage.md). |
 | Embeddings (local)  | ONNX Runtime              | `ort`                           | Run `bge-m3` or `nomic-embed-text-v2` in-process on Apple Silicon. No Ollama dependency for embeddings.                                                 |
 | Embeddings (cloud)  | OpenAI                    | `async-openai`                  | `text-embedding-3-large`, Matryoshka-reducible. ~$0.50 for 10K notes.                                                                                   |
 | LLM providers       | Anthropic, OpenAI, Ollama | `reqwest` + typed wrappers      | Provider trait with implementations. Agents specify a model tier (`fast`/`standard`/`deep`), the system maps to a concrete model.                       |
@@ -164,7 +164,7 @@ engram/
 │   │                                   # sidecar JSON read/write, slug + collision
 │   │                                   # detection, evergreen rubric checker
 │   │
-│   ├── engram-index/                   # sqlite manager, FTS5, sqlite-vec,
+│   ├── engram-index/                   # sqlite manager, FTS5, LanceDB,
 │   │                                   # link graph, tag graph, embedding pipeline,
 │   │                                   # hybrid search (BM25 + dense + RRF + rerank)
 │   │
@@ -298,8 +298,12 @@ engram/
 engram serve
     |
     +-- load .engram/config.toml (vault path, providers, privacy zones)
-    +-- open/create .engram/index.sqlite (metadata, FTS5, sqlite-vec, link graph,
-    |     agent memory, trust scores, conversations, sessions, dreams)
+    +-- open/create .engram/index.sqlite (metadata, FTS5, link graph,
+    |     agent memory, trust scores, conversations, sessions, dreams,
+    |     embedding_cache)
+    +-- open/create .engram/vectors/ (LanceDB dataset(s); per ADR 0014)
+    +-- run LanceDB <-> SQLite reconciliation pass (catch any missed
+    |     async upserts from prior shutdown)
     +-- load agents/ directory (hot-reload watcher on this dir)
     +-- load trust scores from sqlite, apply privilege overrides
     +-- expire stale agent memory entries (TTL cleanup)
@@ -406,18 +410,16 @@ CREATE VIRTUAL TABLE notes_fts USING fts5(
     content_rowid='rowid'
 );
 
--- Dense vector embeddings
-CREATE VIRTUAL TABLE notes_vec USING vec0(
-    id TEXT PRIMARY KEY,
-    embedding FLOAT[N]               -- N matches the active embedding model:
-                                     --   bge-m3        = 1024 (default local)
-                                     --   text-embedding-3-large = 1536 (OpenAI)
-                                     --   nomic-embed-text-v2 = 768
-                                     -- The active model is recorded in
-                                     -- `embedding_runs` and per-note in sidecar.
-                                     -- Switching models requires re-embedding;
-                                     -- handled via a numbered SQL migration.
-);
+-- NOTE: dense vector embeddings live in LanceDB, NOT in SQLite. See ADR 0014.
+-- The LanceDB dataset is at `.engram/vectors/notes_v1.lance/` with schema:
+--   id (utf8 ULID; join key back to `notes` here),
+--   content_hash (utf8; for reconciliation with embedding_cache),
+--   embedding (fixed_size_list<float32, N> where N matches active model dim),
+--   note_type, created_at, modified_at, tags (denormalized for filtered ANN).
+-- The active embedding model is configured in `.engram/config.toml`; multiple
+-- model datasets can coexist (switching models doesn't blow away old vectors).
+-- The `embedding_cache` SQLite table (below) is the authoritative computed-embedding
+-- cache; LanceDB is the queryable ANN index over those vectors.
 
 -- Link graph
 CREATE TABLE links (
@@ -759,7 +761,7 @@ CREATE TABLE digestion_discards (
 );
 
 -- Proposals: change drafts that need human review (high-invasiveness OR
--- below-threshold confidence in v1; council-deliberated in v1.1+).
+-- below-threshold confidence OR high-invasiveness council outcomes).
 -- The corresponding files live in .engram/proposals/<id>.json. The table is
 -- the queryable index over those files.
 CREATE TABLE proposals (
@@ -771,10 +773,10 @@ CREATE TABLE proposals (
     proposed_diff_path TEXT NOT NULL,         -- .engram/proposals/<id>.json (full payload)
     rationale       TEXT NOT NULL,
     confidence      REAL NOT NULL,            -- agent's self-score
-    deliberation_id TEXT,                     -- v1.1+: NULL in v1
+    deliberation_id TEXT,                     -- NULL for individual-agent proposals; set when from council
     status          TEXT NOT NULL,            -- pending, approved, rejected, expired, superseded
     decided_at      TEXT,
-    decided_by      TEXT,                     -- "human" or agent name (for council auto-approve in v1.1+)
+    decided_by      TEXT,                     -- "human" or agent name (council auto-approve path)
     resulting_action_id TEXT REFERENCES agent_actions(id) -- once approved + landed unstaged
 );
 CREATE INDEX idx_proposals_status ON proposals(status);
@@ -793,7 +795,7 @@ CREATE TABLE shelved (
 );
 CREATE INDEX idx_shelved_at ON shelved(shelved_at DESC);
 
--- Per-round, per-participant votes within a council deliberation (v1.1+).
+-- Per-round, per-participant votes within a council deliberation.
 -- Allows reconstructing the deliberation step-by-step for audit.
 CREATE TABLE deliberation_votes (
     deliberation_id TEXT NOT NULL REFERENCES deliberations(id),
@@ -945,15 +947,19 @@ Hybrid search follows the pattern from the LLM Wiki research, adapted for engram
 ```
 Query (from MCP tool, API, or agent)
     |
-    +-- 1. BM25 via FTS5 (exact-term matches: names, tags, IDs)
-    +-- 2. Dense cosine via sqlite-vec (semantic similarity)
+    +-- 1. BM25 via FTS5 in SQLite (exact-term matches: names, tags, IDs)
+    +-- 2. Dense ANN via LanceDB HNSW (semantic similarity, optionally
+    |       filtered by note_type / tags / date predicates in one pass)
     +-- 3. Reciprocal Rank Fusion to merge ranked lists
     +-- 4. Cross-encoder rerank on top 20-50 candidates
     |       (bge-reranker-v2-m3 locally, or Cohere rerank-3.5 cloud)
     +-- 5. Graph expansion: traverse outgoing/incoming wikilinks 1-2 hops
-    |       from top results. This is the killer feature for a linked vault.
+    |       from top results via SQLite recursive CTEs. The link graph IS
+    |       the killer feature for a linked vault.
     +-- 6. Return top-k with metadata, snippets, and graph context
 ```
+
+**Eventually-consistent vector layer.** A note modified at t=0 may not be findable via step 2 (LanceDB ANN) for up to ~500ms; the BM25 (step 1) and graph (step 5) layers cover this window so the user never sees wrong results, just slightly stale semantic search for freshly-modified notes. See [ADR 0014](adrs/0014-lancedb-vector-storage.md).
 
 The Karpathy-style `index.md` (maintained by Cartographer) serves as an additional retrieval path: the LLM reads the index directly and navigates by following links, bypassing vector search entirely. For some queries this outperforms embeddings.
 
@@ -1134,7 +1140,11 @@ The `.engram/` directory is engram's working area within the vault. Some content
 ```
 .engram/
 ├── config.toml                     # vault config, providers, privacy zones
-├── index.sqlite                    # derived index (NOT in git, rebuildable)
+├── index.sqlite                    # derived metadata + FTS5 + graph (NOT in git, rebuildable)
+├── vectors/                        # LanceDB datasets (per ADR 0014; backed up
+│   └── notes_v1.lance/             #   but technically rebuildable from
+│       ├── data/                   #   embedding_cache + vault)
+│       └── _versions/
 ├── artifacts/                      # ingested files, content-addressed (NOT in git)
 │   └── <sha256-prefix>/
 │       └── <sha256>.<ext>
@@ -1202,6 +1212,7 @@ The vault is canonical. Git provides versioning, not durability --- a lost `.git
 
 **Conditional:**
 - `.engram/artifacts/` --- the raw ingested files. Often large (PDFs, audio). Either back up locally OR rely on a separate content-addressed remote (S3-compatible) keyed by SHA-256.
+- `.engram/vectors/` --- LanceDB datasets. **Technically rebuildable** from `embedding_cache` (in SQLite) + the vault (re-embed any missing). Backing it up directly is recommended because rebuild at 10K notes takes ~10 min; at 100K it's substantial. Use directory snapshot semantics — LanceDB datasets are multi-file with internal versioning.
 
 **Never:**
 - `.engram/index.sqlite` --- derived; rebuildable via `engram reindex --full`.
@@ -1323,7 +1334,7 @@ Concretely:
 
 ### Derived state
 
-`notes_fts`, `notes_vec`, `links`, `tags`, agent memory caches --- all rebuildable. `engram reindex --full` drops and rebuilds. Migrations to derived-state tables can be aggressive (drop + recreate) without data risk.
+`notes_fts`, `links`, `tags`, agent memory caches, LanceDB vector datasets --- all rebuildable. `engram reindex --full` drops and rebuilds (SQLite tables via SQL; LanceDB datasets via re-upsert from `embedding_cache` + computed embeddings for any missing). Migrations to derived-state tables can be aggressive (drop + recreate) without data risk.
 
 **Real state** --- `agent_actions`, `predictions`, `outcomes`, `corpus_digestions`, `mcp_clients`, sidecar JSONs --- requires careful preservation. Migrations to these always include a data-copy step, never a drop-and-recreate.
 
@@ -1578,11 +1589,11 @@ When the cloud provider's circuit breaker opens:
 3. If no fallback, the agent's pending work queues; the user is notified once via Swift app: "Anthropic appears down; X agents paused, will resume automatically."
 4. Mechanical agents (Linker low-confidence checks) silently degrade; thinking agents (Synthesizer, Heretic) silently defer.
 
-### Atomic writes (markdown + sidecar + sqlite)
+### Atomic writes (markdown + sidecar + sqlite; LanceDB is downstream)
 
-A single agent action may need to update three places: the markdown file, the sidecar JSON, and the sqlite index. A crash mid-update would leave them inconsistent.
+A single agent action may need to update three **strictly-consistent** places: the markdown file, the sidecar JSON, and the SQLite index. **LanceDB (the vector store) is downstream and eventually consistent** (per [ADR 0014](adrs/0014-lancedb-vector-storage.md)) — its updates happen async after the strict-consistency triple commits.
 
-Pattern: **temp-file rename + write-ahead log entry.**
+Pattern: **temp-file rename + write-ahead log entry + async LanceDB upsert.**
 
 ```
 1. Begin: append a row to write_intents (sqlite) with:
@@ -1590,12 +1601,15 @@ Pattern: **temp-file rename + write-ahead log entry.**
 2. Write markdown to <path>.tmp (filesystem-atomic on macOS via O_DIRECT optional)
 3. Write sidecar to <sidecar>.tmp
 4. Write sqlite updates inside a transaction, including an `agent_actions`
-   row referencing the intent_id
+   row referencing the intent_id, and an `embedding_cache` entry if the
+   embedding has been computed (or scheduled)
 5. fsync both .tmp files
 6. Rename <path>.tmp -> <path> (atomic on POSIX)
 7. Rename <sidecar>.tmp -> <sidecar> (atomic on POSIX)
 8. Commit sqlite transaction (sqlite WAL ensures durability)
 9. Mark intent as committed in write_intents
+10. Async: enqueue LanceDB upsert (best-effort; retried by reconciliation if it
+    fails); the new vector becomes ANN-searchable typically within ~500ms
 ```
 
 On startup, the runner scans `write_intents` for non-committed rows and:
@@ -1603,7 +1617,9 @@ On startup, the runner scans `write_intents` for non-committed rows and:
 - If one .tmp file is missing: roll back (delete the other .tmp; clear the intent).
 - If both .tmp files are missing but intent is uncommitted: clear the intent (the write never happened).
 
-This guarantees the markdown + sidecar + sqlite triple is consistent, modulo the one-rename-then-crash window which is sub-millisecond on a healthy filesystem.
+**LanceDB reconciliation** runs separately on startup and hourly: for any SQLite `notes` row whose `(id, content_hash)` doesn't match a LanceDB record, queue an upsert. This catches missed async upserts from crashed prior runs.
+
+This guarantees the **markdown + sidecar + sqlite triple is strictly consistent**, modulo the one-rename-then-crash window (sub-millisecond on a healthy filesystem). The LanceDB vector layer is eventually consistent — semantic search on freshly-modified notes may lag by ~500ms but never returns *wrong* results (only stale-by-one-version results); BM25 + graph layers cover this window in the retrieval pipeline.
 
 ### Per-note advisory lock
 
@@ -1630,7 +1646,7 @@ When the user runs `git restore <path>` to discard an unstaged agent change, `no
 
 1. Re-reads the file from disk (now matching HEAD).
 2. Parses frontmatter; if the `id:` is unchanged, treats this as a content update.
-3. Updates the `notes`, `notes_fts`, `notes_vec`, and `links` rows.
+3. Updates the `notes`, `notes_fts`, and `links` rows (SQLite). Queues a LanceDB upsert for the new content hash (eventually consistent; reconciles within ~500ms).
 4. Updates the corresponding `agent_actions` row's `human_decision` to `rejected` (the runner's git-watcher detects the diff disappeared).
 5. The sidecar is **not** rolled back automatically — it's git-tracked and the user may also `git restore` it. If the sidecar diverges from the markdown's actual state, the next agent visit reconciles it.
 

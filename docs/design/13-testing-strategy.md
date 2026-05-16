@@ -126,7 +126,9 @@ let fixture = TestFixture::new()
 | `test_concurrent_agents_advisory_lock` | Two agents attempt to modify the same note. One wins the lock; the other defers. Both runs are logged correctly. |
 | `test_confidence_calibration_loop` | Run Linker 100 times; reject 30; verify Watcher's calibration record reflects 70% acceptance and proposes a prompt-tuning variant if rate drops below threshold. |
 | `test_atomic_triple_write_crash_recovery` | Begin a write; SIGKILL the process between markdown and sidecar writes; restart; verify recovery via the `write_intents` log; final state consistent. |
-| `test_git_restore_re_indexes` | Stage and discard an agent change via `git restore`; verify indexer re-reads the file and updates `notes_fts` and `notes_vec` to reflect the restored content. |
+| `test_git_restore_re_indexes` | Stage and discard an agent change via `git restore`; verify indexer re-reads the file, updates `notes_fts` (SQLite) and queues a LanceDB upsert to reflect the restored content. |
+| `test_lancedb_eventual_consistency_window` | Modify a note; query semantic search immediately (should still return correct results via BM25 + graph fallback); query again after 1s (LanceDB now reflects the new content). |
+| `test_lancedb_reconciliation_after_crash` | Modify a note; SIGKILL the process before async LanceDB upsert completes; restart; verify reconciliation pass detects the mismatch and re-upserts. |
 | `test_capture_idempotency` | Submit the same capture twice (same ULID); verify only one artifact and one literature note. |
 | `test_offline_capture_sync` | Simulate Swift app submitting captures while server is "down"; bring server back up; verify all captures sync once. |
 | `test_pacekeeper_throttle_state_transitions` | Force backlog growth; verify Pacekeeper transitions normal → throttled → paused; verify deferred agents stop running. |
@@ -154,8 +156,8 @@ Run the actual `engram serve` binary against a real vault on a temp port. Drive 
 
 - Morning routine: standup → diff queue → review → commit
 - Capture in the wild: offline queue → sync → diff appears
-- A hard problem: Untangler + Research Council → briefing note (in v1.1+)
-- Year-end ritual: Annual Review renders (in v1.2+)
+- A hard problem: Untangler + Research Council → briefing note (Untangler / Research Council land in v2.2; the e2e scenario is exercised then)
+- Year-end ritual: Annual Review renders (in v1)
 - First time: greenfield wizard end-to-end
 - Migration: corpus digestion of a small fixture corpus
 - A bad agent moment: Heretic produces output → user discards with reason → calibration updates

@@ -10,7 +10,7 @@ This is **engram** --- your thoughts, encoded. A living knowledge base that rewr
 
 ## Where to start
 
-1. Read [`docs/design/README.md`](docs/design/README.md) first --- it indexes the full design corpus (14 numbered docs + 13 ADRs + glossary) and gives a reading order.
+1. Read [`docs/design/README.md`](docs/design/README.md) first --- it indexes the full design corpus (14 numbered docs + 14 ADRs + glossary) and gives a reading order.
 2. For v1 scope and phasing, see [`docs/design/07-roadmap.md`](docs/design/07-roadmap.md).
 3. For machine-readable v1 acceptance criteria, see [`SPEC.md`](SPEC.md).
 4. For non-obvious architectural decisions and the reasoning behind them, see [`docs/design/adrs/`](docs/design/adrs/).
@@ -32,7 +32,7 @@ These are personal rules from the user (also encoded in `~/.claude/CLAUDE.md`):
 
 - **Rust** for the entire core --- no Python or TypeScript agent layer (see [ADR 0001](docs/design/adrs/0001-rust-everywhere.md)).
 - **SwiftUI** universal app for iOS + macOS.
-- **Vault is plain markdown + git;** SQLite (`sqlite-vec` + FTS5) for derived index.
+- **Vault is plain markdown + git;** SQLite (FTS5) for derived metadata index; LanceDB (per [ADR 0014](docs/design/adrs/0014-lancedb-vector-storage.md)) for vector search.
 - **Agents never run `git add` or `git commit`** --- all agent writes are unstaged; the human is the only entity that touches git history (see [ADR 0003](docs/design/adrs/0003-no-agent-commits.md)).
 - **Confidence-gated autonomy** --- agents self-assess confidence; below threshold, propose; above, write unstaged (see [ADR 0004](docs/design/adrs/0004-confidence-gated-autonomy.md)).
 - **Layered metadata** --- lean human-readable frontmatter + rich agent-readable sidecar JSON in `.engram/sidecar/<id>.json` (see [ADR 0005](docs/design/adrs/0005-sidecar-json.md)).

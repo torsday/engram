@@ -12,193 +12,154 @@ The design corpus (docs 00--11) describes the system engram aspires to be: ~35 a
 4. **Personal use first; product surface later.** External MCP is genuinely valuable but the user needs to use engram for themselves before exposing it to other apps. v2 problem.
 5. **Each phase has explicit acceptance criteria.** Not "feels good" --- specific behaviors that demonstrate the phase is done.
 
-## v1 --- Foundation (target: ~5--6 months)
+## v1 --- Full personal-use engram (target: ~14 months)
 
-> **Timeline note.** This was originally scoped at ~3 months. A scope-feasibility review (the four-agent design audit) found that realistic effort for the v1 set is closer to 5--6 months for one developer with Claude Code assistance. Rather than cut v1 scope to fit 3 months, we accepted the longer timeline. Subsequent phase targets below are relative to v1 completion, so they shift in absolute calendar terms but not in relative ordering.
+> **Timeline + scope evolution.** This was originally scoped at ~3 months as a thin foundation phase, then revised to 5--6 months after the feasibility audit, then expanded again when the user asked for v1 to be feature-complete for engram's intended shape. The current scope absorbs what were previously planned as v1.1 (critical thinking), v1.2 (personal context), and v1.3 (corpus digestion). v2+ remains separately phased (external-facing surfaces and self-improving meta-agents). Timeline for the expanded v1: ~14 months for one developer with Claude Code assistance.
 
 ### Scope
+
+v1 is the **full personal-use engram**: foundation + critical thinking + personal context + corpus digestion. Everything required for a single user to depend on the system for daily knowledge work. External-facing surfaces (the MCP scope-and-consent system that lets the user's other apps query engram) and self-improving meta-agents (Auditor, prompt evolution, Pacekeeper) remain in v2+.
 
 **Core infrastructure:**
 - Vault + git + `.engram/` layout per `06-note-conventions.md`
-- SQLite index: `notes`, `links`, `tags`, `artifacts`, `agent_actions`
-- Embeddings: local `bge-m3` via ONNX, or cloud OpenAI as opt-in
-- Hybrid retrieval: BM25 + dense + RRF + graph expansion (rerank deferred to v1.1)
-- File watcher with debounced reindexing
-- `gix`-backed git operations, **read-only and unstaged-write only** (no commits ever from the agent host)
+- SQLite index (`notes`, `links`, `tags`, `artifacts`, `agent_actions`, plus all the tables defined in `03-architecture.md`)
+- LanceDB for vector storage at `.engram/vectors/` (per [ADR 0014](adrs/0014-lancedb-vector-storage.md))
+- Embeddings: local `bge-m3` via ONNX, or cloud OpenAI as opt-in; cached by content hash (per [ADR 0012](adrs/0012-embedding-cache-by-content-hash.md))
+- Hybrid retrieval: BM25 (FTS5) + dense ANN (LanceDB HNSW with metadata filtering) + RRF + cross-encoder rerank + graph expansion
+- File watcher with debounced reindexing + LanceDB reconciliation
+- `gix`-backed git operations, **read-only and unstaged-write only** (per [ADR 0003](adrs/0003-no-agent-commits.md) and [ADR 0009](adrs/0009-git-read-write-boundary.md))
 - macOS Keychain integration for provider API keys
-- Backup Watcher (monitors backup recency; doesn't perform backup)
-- Schema migrations (numbered, forward-only)
+- Backup Watcher (monitors backup recency)
+- Schema migrations (numbered, forward-only) including LanceDB dataset versioning
+- System-wide cost ceiling + per-agent token budgets
+- Atomic markdown+sidecar+SQLite triple-writes; LanceDB downstream eventually consistent
+- Prompt caching (static head + dynamic tail, per [ADR 0010](adrs/0010-prompt-caching-first-class.md))
+- Tiered model escalation (start cheap, escalate on need, per [ADR 0011](adrs/0011-tiered-model-escalation.md))
+- Tool-use over generation as a design discipline (per [ADR 0013](adrs/0013-tool-use-over-generation.md))
+- Streaming structured output with early-exit + request coalescing
 
-**Five v1 agents:**
-- **Linker** --- propose wikilinks (auto-land at high confidence, propose otherwise)
-- **Gardener** --- dead link removal, TODO cleanup, basic staleness flags
-- **Cartographer** --- maintain `index.md` and basic MOCs (no quarterly tag audit yet)
-- **Scribe** --- fleeting-note cleanup
-- **Ingestor** --- file-drop → literature note (text + PDF + image via Claude vision; audio deferred to v1.2)
+**Agent roster (all of the following):**
 
-**Confidence-gated autonomy:**
-- Per-agent `auto_land_min_confidence` (default 0.85)
-- All writes go to working tree, unstaged
-- `agent_actions` table logs every action with confidence and rationale
-- Calibration data collected but not yet used to tune
+*Maintenance:* Linker, Gardener, Cartographer (continuous mode + quarterly tag audit), Historian
 
-**Swift app (capture-first):**
-- iOS + macOS universal binary
-- Capture: text, voice (cloud Whisper API), share-sheet, document picker, drag-drop
-- Offline capture queue (SwiftData, idempotent via ULID)
-- Diff review (per-file diff with agent attribution; tap-to-stage, swipe-to-discard)
-- Basic search (calls `/search` API; no offline FTS index yet)
-- Cost dashboard
-- Connection switcher (single Mac for v1; multi-instance in v2)
+*Processing:* Scribe, Ingestor (text + PDF + image + web URL + audio via local whisper.cpp), Inbox Triage, Curator
 
-**Internal MCP server:**
-- stdio transport for Claude Desktop
-- Tools: `search_notes`, `grep_notes`, `read_note`, `list_tags`, `follow_backlinks`, `recent_changes`, `read_index`
-- No external MCP yet
+*Structural:* Splitter, Merger, Bridge Builder
 
-**REST API (axum):**
-- `/notes`, `/notes/:id`, `/search`, `/graph/:id`
-- `/ingest` (multipart upload)
-- `/changes`, `/changes/:path/stage`, `/changes/:path/discard`, `/commit`
-- `/agents`, `/agents/:name/run`
-- `/status`, `/events` (SSE)
+*Thinking:* Synthesizer, Devil's Advocate, Steelman (constructive + rationality-gate roles), Inquirer (4-mode), Heretic, Confidence Annotator, Source Demand, Pair-Thinking
 
-**CLI:**
-- `engram serve`
-- `engram reindex [--full]`
-- `engram ingest <file>`
-- `engram run <agent>`
-- `engram status`
-- `engram migrate`
-- `engram secrets <set|rotate|list>`
+*Personal:* Biographer, Voice Keeper, Witness (on-device only, local-only LLM)
 
-### Out of v1 (deferred)
+*Temporal:* Predictor (predictions ledger + calibration profile), Annual Review
 
-- Council deliberation
-- All thinking agents (Synthesizer, Devil's Advocate, Heretic, Inquirer, etc.)
-- Personal agents (Biographer, Voice Keeper, Witness)
-- Temporal agents (Predictor, Annual Review)
-- Curator (corpus digestion)
-- External MCP
-- Auditor + outcome metrics + prompt evolution
-- Pacekeeper
-- Trust scores (everything runs at "medium" trust)
-- Audio extraction (Whisper local; cloud Whisper API is fine for v1)
-- Cross-encoder reranker
-- Apple Watch + Shortcuts integrations
+*Pedagogical:* Tutor (FSRS-4.5 spaced-repetition flashcards)
 
-### Acceptance criteria
-
-A user can:
-- Capture text/voice/files on iOS, see them sync to the Mac, and review them in Obsidian within seconds.
-- Drop a PDF and have a literature note land for review.
-- Watch agents propose wikilinks, fix dead links, and update the index --- with every change visible via `git diff` and stage-able from the Swift app.
-- Review every agent action, with confidence and rationale shown.
-- Run for a month without a token-cost surprise (system-wide cost ceiling enforced).
-- Lose the index entirely and rebuild from vault + git.
-- Use Claude Desktop with the vault exposed via internal MCP.
-
-The acceptance test: **the user prefers using engram over plain Obsidian for daily note-taking.** If that's true, v1 has earned the right to ship more.
-
----
-
-## v1.1 --- Critical thinking (target: ~6 weeks after v1)
-
-### Scope
+*Meta:* Watcher (basic — continuous metric collection + trust scores; full evaluation in v2.1), Completion Nudger, Backup Watcher
 
 **Council deliberation engine:**
-- State machine: `DRAFT -> CRITIQUE -> REVISE -> CONVERGE -> {LAND | PROPOSE | SHELVE}`
-- Deliberation transcripts in `.engram/deliberations/`
+- State machine: `DRAFT → CRITIQUE → REVISE → CONVERGE → {LAND | PROPOSE | SHELVE}` per `01-agents-and-council.md`
 - Quorum selection
-- The **Steelman rationality gate** for critical agents
+- Deliberation transcripts in `.engram/deliberations/`
+- Per-round vote rows in `deliberation_votes`
+- **Steelman rationality gate** for critical agents
+- Confidence-gated autonomy: per-agent `auto_land_min_confidence`; below threshold → proposal; above → unstaged write
+- Proposal-without-council format for v1 (per `12-agent-spec-template.md`) supports cases where individual agents propose outside a full council session
 
-**Thinking agents:**
-- **Synthesizer** --- propose new evergreen notes from clusters
-- **Devil's Advocate** --- critique (gated by Steelman)
-- **Steelman** --- both constructive role and gate role
-- **Inquirer** --- 4-mode question generation (replaces 4 prior agents)
-- **Heretic** --- sustained counter-arguments (gated)
-- **Confidence Annotator** --- demand explicit confidence markers
-- **Source Demand** --- demand citations
+**Coordinated flows:**
+- Evergreen birth ceremony
+- Daily standup
+- Insight harvest (basic — full prompt-evolution loop in v2.1)
+- Flow orchestrator state machine + cost-aware planning per `01-agents-and-council.md`
 
-**Pair-Thinking:**
-- Live writing collaborator
-- Conversational state machine
-- Swift app side-panel UI
-- Bounded rounds (3--5 per session)
+**Eval framework:**
+- Per-agent benchmark suite (`.engram/evals/<agent>/cases/`)
+- Quarterly baseline runs
+- CI gate on prompt changes
+- Bootstrap with 5-10 seed cases per v1 agent
 
-**Swift app additions:**
-- Today widget (pending diffs, due flashcards, conversation prep)
-- "I'm stuck on..." and "What do I think about..." quick-launch (Untangler + Research Council)
-- Conversation surface for conversational agents
-- Apple Shortcuts integration
-
-**Cross-encoder reranker** added to retrieval pipeline (BM25 + dense + RRF + **rerank** + graph).
-
-### Acceptance criteria
-
-- User can ask "what do I think about X?" and get a structured briefing.
-- Critical agents only produce rational, steelmanned critique --- the user no longer sees throwaway contrarianism.
-- Pair-Thinking changes the writing experience (subjective but observable).
-
----
-
-## v1.2 --- Personal context (target: ~2 months after v1.1)
-
-### Scope
-
-**Personal agents:**
-- **Biographer** --- the user model (`meta/biography.md`)
-- **Voice Keeper** --- protect authorial voice; participate in council
-- **Witness** --- private acknowledgment for journal notes (local-only)
-
-**Temporal:**
-- **Predictor** --- ledger + calibration profile
-- **Annual Review** --- yearly long-form reflection
-
-**Pedagogical:**
-- **Tutor** --- spaced-repetition flashcards (FSRS); Swift app review session
-
-**Audio extraction:**
-- Local `whisper.cpp` for voice memos and long-form audio
-- Apple Watch capture app
-- Long-form audio session UI in Swift app
-
-### Acceptance criteria
-
-- The system maintains a coherent model of the user; other agents read it and ground their work in it.
-- Voice Keeper catches and proposes fixes to homogenized prose.
-- Predictor's calibration profile starts to be useful after ~3 months of resolved predictions.
-
----
-
-## v1.3 --- Corpus digestion (target: ~2 months after v1.2)
-
-### Scope
-
-**Curator** + corpus digestion pipeline per `05-corpus-digestion.md`:
-- Survey → plan review → batch digestion → review → integration → audit
-- Six dispositions
+**Corpus digestion (Curator):**
+- Survey → plan review → batch digestion → review → integration → audit per `05-corpus-digestion.md`
+- Six dispositions (keep-evergreen-draft, keep-literature, merge-into, archive, discard, defer)
 - Cluster-level synthesis
 - Resumable across days/weeks
 - `notes/archive/` and `type: archive` for verbatim preservation
 
-**Inbox Triage** for fleeting note classification.
+**Swift app (capture-first universal app):**
+- iOS + macOS universal binary
+- Capture: text, voice (local whisper.cpp + cloud Whisper API option), share-sheet, document picker, drag-drop, camera, smart paste, capture batches, voice memo from Apple Watch, lock-screen widget, Action Button binding
+- Apple Shortcuts integration
+- Offline capture queue (SwiftData, idempotent via ULID)
+- Diff review: per-file diff with agent attribution + confidence + rationale-on-tap; tap-to-stage, swipe-to-discard, long-press-to-amend, discard-with-reason
+- Bulk actions + keyboard shortcuts (macOS)
+- Snooze
+- Search (calls `/search` API; offline fall-back to local SwiftData FTS index)
+- Today widget + Lock Screen widget
+- Conversation surface for conversational agents (token-streaming via SSE)
+- Flashcard review session
+- Predictions-due widget
+- Cost dashboard
+- Backup status indicator
+- Connection switcher (single-instance for v1; multi-instance and external-MCP client manager in v2)
+- Annual Review viewer (typography-tuned full-screen render)
+- Witness inbox (on-device only)
+- Spotlight integration (CoreSpotlight)
+- Handoff
+- Universal Clipboard awareness
 
-**Structural agents:**
-- **Splitter**
-- **Merger**
-- **Bridge Builder**
+**Internal MCP server:**
+- stdio transport for Claude Desktop / Code
+- Tools: `search_notes`, `grep_notes`, `read_note`, `list_tags`, `follow_backlinks`, `follow_links`, `recent_changes`, `read_index`, `read_biography`, `trace_concept`, `list_predictions`, `due_flashcards`, `list_contradictions`, `vault_health`
+
+**REST + SSE API:**
+- All endpoints from `03-architecture.md` §API surface except the external-MCP-management endpoints (which ship in v2)
+
+**CLI:**
+- `engram serve`, `engram reindex [--full]`, `engram ingest <file>`, `engram run <agent>`
+- `engram digest <path>`, `engram trace <concept>`, `engram untangle <topic>`, `engram prep`, `engram standup`
+- `engram council <question>`, `engram proposals [list|approve|reject]`
+- `engram flow [resume|retry|estimate]`
+- `engram eval <agent>`
+- `engram backup verify`
+- `engram migrate`, `engram secrets <set|rotate|list>`, `engram status`
+
+**First-run / onboarding** per `08-first-run.md`: wizard, bootstrap mode (first 30 days at 0.95 threshold), sparse-content handling for context agents, default agent set, tutorial vault.
+
+### Out of v1 (deferred to v2 and beyond)
+
+- **External MCP server** — the scope/consent/audit-based personal-context API that lets the user's other apps connect (v2; per `04-external-mcp.md`)
+- **Auditor** — quarterly qualitative deep evaluation (v2.1)
+- **Outcome-based metrics** beyond accept/reject (v2.1)
+- **Prompt evolution** (shadow-mode A/B variants with Auditor-proposed swaps) (v2.1)
+- **Trust scores modulating confidence thresholds** (v2.1)
+- **Pacekeeper** throttling (v2.1; v1 uses fixed thresholds)
+- **Analogist, Assumption Excavator, Socratic Prober, Contradiction Detector** — these thinking agents land in v2.2
+- **Untangler, Research Council, Conversation Prep, Debate Mode** — on-demand orchestrators land in v2.2
+- **Scout, Fact Checker** — external-source agents land in v2.2
+- **Speculative features** (Dream mode, agent spawning, goal-directed sessions, cloud relay, multi-user) — v3+ if at all
 
 ### Acceptance criteria
 
-- The user can point engram at `notes-2022-03/` and end with a curated engram vault.
-- Compression ratio ≥ 5x (source corpus ≥ 5x larger than resulting active engram content).
-- The user trusts the discard decisions (Auditor sample of discards shows < 5% regret).
+Per `/SPEC.md` for the machine-readable checklist. Summarized:
+
+A user can:
+- Capture text/voice/files/photos on iOS or macOS, see them sync to the Mac, and review them within seconds.
+- Drop a PDF, image, web URL, or audio file and have a literature note land for review.
+- Point engram at an existing Obsidian vault (~9K notes) and end with a curated engram vault at ≥5× compression; the user trusts the discard decisions.
+- Watch agents propose wikilinks, fix dead links, update the index, propose new evergreen notes, write heretical counter-notes, demand citations, surface contradictions — with every change visible via `git diff` and stage-able from the Swift app.
+- Ask a question and get a council briefing or trace concept evolution over time.
+- Engage Pair-Thinking during live writing.
+- Have a working spaced-repetition flashcard practice from any evergreen note.
+- Receive a year-end Annual Review.
+- Review every agent action with confidence and rationale shown.
+- Run for a month without a token-cost surprise.
+- Lose the SQLite index entirely and rebuild from vault + git.
+- Use Claude Desktop with the vault exposed via internal MCP.
+
+The "earned the right to ship more" test (per `/SPEC.md`) holds.
 
 ---
 
-## v2 --- External context layer (target: ~3 months after v1.3)
+## v2 --- External context layer (target: ~3 months after v1)
 
 ### Scope
 

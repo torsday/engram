@@ -65,7 +65,7 @@ User accepts/edits.
 
 ### 6. Initial agent selection
 
-Defaults: the v1 set (Linker, Gardener, Cartographer, Scribe, Ingestor) all enabled. User can disable any. Other agents (v1.1+) appear here only when their version of engram is installed.
+Defaults: the full v1 agent roster all enabled. User can disable any. v2+ agents (Auditor, Pacekeeper, Untangler, Research Council, Analogist, Scout, Fact Checker, etc.) appear here only when their version of engram is installed.
 
 ### 7. Tutorial offer
 
@@ -183,11 +183,11 @@ Dismissable; doesn't reappear once dismissed.
 
 ## Re-onboarding
 
-When the user pulls a major engram upgrade (e.g., v1 → v1.1, with new agents enabled), the wizard re-runs in light mode:
+When the user pulls a major engram upgrade (e.g., v1 → v2, with new agents enabled), the wizard re-runs in light mode:
 
 - New agents introduced; user accepts/disables each.
 - New configuration options surfaced.
-- New flows / ceremonies introduced (e.g., evergreen birth ceremony in v1.1) explained.
+- New flows / ceremonies introduced (e.g., Auditor's quarterly review in v2.1) explained.
 
 Bootstrap mode is **not** re-triggered on upgrades --- existing trust scores and history persist.
 
