@@ -86,5 +86,5 @@ The Swift app surfaces unstaged-diff review as its primary review interface --- 
 
 - **Multi-device sync.** If the Swift app is used from iOS away from the Mac, the vault needs to be reachable. v1: same-network or Tailscale. Sync is a v2 problem.
 - **Privacy routing.** Some artifacts (work documents, medical records) should never hit cloud LLMs. Per-drop and per-folder privacy flags route to local-only extraction. Exact UX TBD.
-- **Scale ceiling.** The architecture is sized for ~10K notes. At 50K+, sqlite-vec and FTS5 may need rethinking. Defer until it's a real problem.
+- **Scale ceiling.** The architecture is sized for ~10K notes; with LanceDB (per [ADR 0014](adrs/0014-lancedb-vector-storage.md)) the vector layer scales to 100K-1M without re-architecture. FTS5 and the link graph remain comfortable at 100K. Defer further analysis until a real workload bites.
 - **Agent tuning feedback loop.** The Watcher agent monitors rejection rates and proposes config changes. Whether this is sufficient or whether a more formal RLHF-like loop is needed is an open question.

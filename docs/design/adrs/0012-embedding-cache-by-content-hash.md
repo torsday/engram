@@ -70,7 +70,7 @@ content_hash=abc123 model=bge-m3       version=1.5  dim=1024  -> vector A
 content_hash=abc123 model=text-embed-3 version=2024-01 dim=1536 -> vector B
 ```
 
-This means **switching models doesn't blow away the old embeddings**. The vector store (`notes_vec`) uses the user's currently-active model; switching is a re-embedding migration, but the cached old vectors are kept until garbage collection (so reverting to a previous model is fast).
+This means **switching models doesn't blow away the old embeddings**. The active LanceDB dataset (per [ADR 0014](0014-lancedb-vector-storage.md)) uses the user's currently-active model; switching to a different model creates a new LanceDB dataset for that model + dim while keeping the cached old vectors until garbage collection (so reverting to a previous model is fast).
 
 ### Garbage collection
 

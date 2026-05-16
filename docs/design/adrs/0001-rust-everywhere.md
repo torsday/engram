@@ -27,7 +27,7 @@ Use **Rust for the entire core, including the agent host, council deliberation e
 
 - **Single static binary.** Ships next to the Swift app with no Python or Node runtime install. No version-pinning hell, no broken `pip` environments, no Electron weight.
 - **Type-safe deliberation.** The state machine (`DRAFT -> CRITIQUE -> REVISE -> CONVERGE -> {LAND | PROPOSE | SHELVE}`), tool schemas, structured agent outputs (with `confidence`, `rationale`, `rubric_check` fields), and invasiveness ceilings all benefit from compile-time enforcement. In Python or TS these would be runtime checks at best.
-- **Filesystem and SQLite ergonomics.** `notify`, `gix`, `rusqlite`, `sqlite-vec` are all best-in-class; the indexer and git layer are written in their native idiom.
+- **Filesystem, SQLite, and vector-DB ergonomics.** `notify`, `gix`, `rusqlite`, `lance` / `lancedb` are all best-in-class Rust-native; the indexer, vector store, and git layer are written in their native idiom.
 - **Performance under load.** A swarm of ~35 agents on a 10K-note vault with continuous file events is not a low-load scenario. Rust handles this without thinking; Python/Node would require careful work.
 - **The LLM ecosystem gap is overstated.** We use cloud LLMs as remote services via HTTP. `async-openai`, `anthropic-rs`, and direct `reqwest` calls are perfectly serviceable. We do not train models or run heavy local inference; the LLM-ecosystem advantage of Python applies to use cases we don't have.
 
