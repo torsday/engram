@@ -4,11 +4,11 @@
 
 `01-agents-and-council.md` describes each agent's job, trigger, output, invasiveness, and tools at a conceptual level. That's right for design discussion. **It is not enough to implement an agent.** Implementation requires: a concrete prompt skeleton, a structured output JSON schema, a confidence-formula, a tool list with input/output types, and test fixtures.
 
-This doc defines the **agent specification template** every agent must complete before implementation, plus filled specs for the **five v1 agents** (Linker, Gardener, Cartographer, Scribe, Ingestor).
+This doc defines the **agent specification template** every agent must complete before implementation, plus **filled specs for the foundational five** (Linker, Gardener, Cartographer, Scribe, Ingestor). The remaining v1 agents (council-using thinking agents, personal agents, temporal agents, Tutor, structural agents, Inbox Triage, Curator) follow the same template; their specs are filled during their implementation sub-phase within v1. The foundational five are spec'd here because they're built first and demonstrate the pattern.
 
 The template enforces consistency. A developer (or Claude Code) implementing any agent should be able to take the spec and produce a working implementation without architectural decisions left undecided.
 
-This doc also defines the **v1 proposal-without-council format** --- since council deliberation is v1.1, v1 proposals work as standalone JSON files reviewed in the Swift app.
+This doc also defines the **proposal file format** --- standalone JSON files at `.engram/proposals/<id>.json` that the Swift app surfaces for review. Both individual-agent below-threshold proposals AND council-decided high-invasiveness proposals use the same format.
 
 ---
 
@@ -22,7 +22,7 @@ Every agent specification is one page covering eight sections:
 ## Identity
 - **Name:** <kebab-case agent name; matches agents/<name>/ directory>
 - **Tier:** maintenance | processing | structural | thinking | personal | temporal | pedagogical | external | meta | on-demand
-- **Phase:** v1 | v1.1 | v1.2 | v1.3 | v2 | v2.1 | v2.2 | v3+
+- **Phase:** v1 | v2 | v2.1 | v2.2 | v3+
 - **Model tier:** fast | standard | deep
 - **Max invasiveness:** mechanical | additive | editorial | structural
 
@@ -176,7 +176,7 @@ calibration_adjustment:
 - `redundant/` --- target already linked; expected: no proposal
 - `low-signal/` --- weak retrieval agreement; expected: low confidence → proposal not auto-land
 - `wrong-target/` --- agent should reject a plausible-but-incorrect target
-- `voice-keeper-blocking/` --- proposed link's anchor text doesn't match user voice; expected: Voice Keeper participation in v1.1+
+- `voice-keeper-blocking/` --- proposed link's anchor text doesn't match user voice; expected: Voice Keeper participation
 
 ---
 
@@ -308,7 +308,7 @@ Flags don't carry confidence (they're advisory, not actions).
 ### Identity
 - **Name:** `cartographer`
 - **Tier:** maintenance
-- **Phase:** v1 (continuous mode); v1.3 adds quarterly tag-audit mode
+- **Phase:** v1 (continuous mode AND quarterly tag-audit mode)
 - **Model tier:** `fast` (continuous); `standard` (audit)
 - **Max invasiveness:** `editorial` (MOC/index updates); `structural` (tag renames, audit mode only)
 
@@ -389,7 +389,7 @@ LLM self-score weighted by:
 
 ### Outputs
 
-- Modified `index.md` (auto-land for additive/updates; council in v1.1+ for removal-on-active-note)
+- Modified `index.md` (auto-land for additive/updates; council for removal-on-active-note)
 
 ### Test fixtures
 
@@ -501,7 +501,7 @@ LLM self-score weighted by:
 ### Identity
 - **Name:** `ingestor`
 - **Tier:** processing
-- **Phase:** v1 (text, markdown, web URLs, PDFs via Claude vision, images via vision); audio in v1.2
+- **Phase:** v1 (text, markdown, web URLs, PDFs via Claude vision, images via vision, audio via local `whisper.cpp`)
 - **Model tier:** `standard` (extraction); `fast` (classification)
 - **Max invasiveness:** `structural` (creates new literature notes); always proposes — never auto-land
 
@@ -668,7 +668,7 @@ superseded (status=superseded)
 
 The Swift app's diff-review surface (described in `03-architecture.md` §Swift app) presents the proposed diff exactly as it will appear if approved. Approval triggers `POST /proposals/:id/approve`. The runner then applies the diff via the WriteGit handle (which writes files; the user still has to `git add` separately), creates the `agent_actions` row, and updates the proposal's status.
 
-This is the v1 path. In v1.1, council deliberation runs *before* a proposal lands here, often producing automatic resolution (LAND or SHELVE) so the proposal queue becomes shorter and only contains things the council couldn't decide automatically.
+This is the proposal-flow path used in v1. Council deliberation runs *before* a proposal lands here for high-invasiveness changes, often producing automatic resolution (LAND or SHELVE) so the proposal queue becomes shorter and only contains things the council couldn't decide automatically or that exceed the human-approval invasiveness ceiling.
 
 ---
 
@@ -692,4 +692,4 @@ Steps 3 and 4 are the only Rust code changes. Steps 1, 2, and 5 are pure data (p
 
 Without filled specs, "implement Linker" was estimated at multi-day exploratory work in the v1 feasibility review. With filled specs, "implement Linker" is one or two focused days: the prompt is written, the schema is defined, the confidence formula is testable, the tools are listed, the fixtures specify expected behavior. Same for the other four v1 agents.
 
-This is the bridge from design to implementation. The template applies equally to v1.1+ agents when their phase arrives.
+This is the bridge from design to implementation. The template applies equally to v2+ agents when their phase arrives.

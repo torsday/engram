@@ -6,7 +6,7 @@ This directory holds the complete design for engram. **No code yet** — the sys
 
 ## Status
 
-Design complete and ready for v1 implementation. v1 scope is explicit (see `07-roadmap.md`); v1 acceptance criteria are machine-readable in [`/SPEC.md`](../../SPEC.md). **Thirteen ADRs** capture the load-bearing architectural decisions, including the four-ADR token-efficiency stack (prompt caching, tier escalation, embedding cache, tool-use over generation). The agent spec template ([12](12-agent-spec-template.md)) is filled for the five v1 agents. The testing strategy ([13](13-testing-strategy.md)) defines how every layer of the system is verified. The eval framework + cost-aware planning (in [01](01-agents-and-council.md)) define how agents get systematically better and stay within budget. Streaming + request coalescing (in [03](03-architecture.md)) provide additional latency and cost wins. Open questions are flagged within the relevant docs and at the end of `00-overview.md`.
+Design complete and ready for v1 implementation. **v1 is the full personal-use engram** (~14 months target; previously planned as v1 + v1.1 + v1.2 + v1.3 — now collapsed into one phase per the user's "feature-complete" intent). v2+ remains separately phased for external-facing surfaces (external MCP) and self-improving meta-agents (Auditor, prompt evolution, Pacekeeper, etc.). v1 scope is explicit (see `07-roadmap.md`); v1 acceptance criteria are machine-readable in [`/SPEC.md`](../../SPEC.md). **Fourteen ADRs** capture the load-bearing architectural decisions, including the four-ADR token-efficiency stack (prompt caching, tier escalation, embedding cache, tool-use over generation) and the LanceDB vector-storage decision. The agent spec template ([12](12-agent-spec-template.md)) is filled for the foundational five agents (Linker, Gardener, Cartographer, Scribe, Ingestor); the remaining v1 agents follow the same template. The testing strategy ([13](13-testing-strategy.md)) defines how every layer of the system is verified. The eval framework + cost-aware planning (in [01](01-agents-and-council.md)) define how agents get systematically better and stay within budget. Streaming + request coalescing (in [03](03-architecture.md)) provide additional latency and cost wins. Open questions are flagged within the relevant docs and at the end of `00-overview.md`.
 
 ## Reading order
 
@@ -89,7 +89,8 @@ docs/design/
     ├── 0010-prompt-caching-first-class.md
     ├── 0011-tiered-model-escalation.md
     ├── 0012-embedding-cache-by-content-hash.md
-    └── 0013-tool-use-over-generation.md
+    ├── 0013-tool-use-over-generation.md
+    └── 0014-lancedb-vector-storage.md
 ```
 
 ## Conventions used in the docs

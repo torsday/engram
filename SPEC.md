@@ -6,11 +6,11 @@
 
 | Field            | Value                                                         |
 | ---------------- | ------------------------------------------------------------- |
-| Phase            | v1 --- Foundation                                              |
+| Phase            | v1 --- Full personal-use engram                                |
 | Implementation   | not started                                                   |
 | Acceptance       | not yet met                                                   |
-| Target duration  | **5--6 months** from start (one developer + Claude Code)        |
-| Timeline note    | Original 3-month estimate revised after scope-feasibility review found realistic duration is 5--6 months at the chosen scope. See `docs/design/07-roadmap.md` for phase timing. |
+| Target duration  | **~14 months** from start (one developer + Claude Code)        |
+| Timeline note    | Originally 3 months → 5--6 months (post-feasibility audit) → ~14 months after the user requested v1 be feature-complete for engram's intended shape. Now absorbs what were previously planned as v1.1 (critical thinking), v1.2 (personal context), and v1.3 (corpus digestion). v2+ remains separately phased (external-facing surfaces, self-improving meta-agents). See `docs/design/07-roadmap.md`. |
 
 ## Definition of done for v1
 
@@ -28,13 +28,68 @@ v1 ships when **all** the criteria below are met. Each is a concrete, testable b
 - [ ] Hybrid retrieval (BM25 + dense + RRF + graph expansion) works against the index. Cross-encoder reranker deferred to v1.1.
 - [ ] Stable note IDs survive renames: file move detected via surviving `id:` in frontmatter; link graph updated.
 
-### Functional --- agents (v1 set: 5)
+### Functional --- agents (full personal-use roster)
 
+**Maintenance:**
 - [ ] **Linker** proposes wikilinks; high-confidence proposals appear unstaged in `git status`; low-confidence proposals enter `.engram/proposals/`.
 - [ ] **Gardener** removes dead links and resolved TODOs; lands unstaged.
-- [ ] **Cartographer** maintains `index.md`; updates land unstaged.
+- [ ] **Cartographer** maintains `index.md` (continuous mode) and runs quarterly tag audits.
+- [ ] **Historian** produces weekly activity-log notes.
+
+**Processing:**
 - [ ] **Scribe** cleans fleeting notes (formatting, frontmatter normalization); lands unstaged.
-- [ ] **Ingestor** processes PDF, image, plain text, markdown, and web URLs into literature note drafts.
+- [ ] **Ingestor** processes PDF, image, plain text, markdown, web URLs, and audio (via local `whisper.cpp`) into literature note drafts.
+- [ ] **Inbox Triage** classifies new fleeting notes (keep / promote-literature / promote-evergreen-candidate / merge / discard).
+- [ ] **Curator** digests external note corpora into engram (full survey → batch digestion → audit pipeline per `05-corpus-digestion.md`).
+
+**Structural:**
+- [ ] **Splitter** proposes specific splits of notes violating atomicity.
+- [ ] **Merger** proposes unification of same-concept notes written at different times.
+- [ ] **Bridge Builder** finds isolated clusters via community detection; proposes bridge links or notes.
+
+**Thinking:**
+- [ ] **Synthesizer** proposes new evergreen notes from clusters of related material.
+- [ ] **Devil's Advocate** produces critique; all output passes the Steelman rationality gate.
+- [ ] **Steelman** serves both constructive role (strengthen weak notes) AND mandatory rationality-gate role.
+- [ ] **Inquirer** generates questions in 4 modes (daily-reactive / seed-empty-note / holistic-gap / blindspot).
+- [ ] **Heretic** writes sustained counter-arguments to evergreen notes when a defensible counter-position exists; shelves with "no defensible counter-position found" otherwise.
+- [ ] **Confidence Annotator** flags claims lacking explicit confidence markers.
+- [ ] **Source Demand** flags factual claims lacking citations.
+- [ ] **Pair-Thinking** runs bounded live-writing conversational sessions (3-5 rounds).
+
+**Personal:**
+- [ ] **Biographer** maintains `meta/biography.md` (read by other agents to ground their work).
+- [ ] **Voice Keeper** learns the user's writing voice; participates in council to flag homogenized prose.
+- [ ] **Witness** acknowledges journal/personal notes; on-device only, local-only LLM, no memory.
+
+**Temporal:**
+- [ ] **Predictor** maintains predictions ledger AND calibration profile (subsumed Calibration Tracker).
+- [ ] **Annual Review** generates yearly long-form narrative reflection notes.
+
+**Pedagogical:**
+- [ ] **Tutor** generates spaced-repetition flashcards using FSRS-4.5; daily review session in Swift app.
+
+**Meta:**
+- [ ] **Watcher** (basic) — continuous numerical monitoring; trust scores active but not yet modulating thresholds (that's v2.1).
+- [ ] **Completion Nudger** surfaces unfinished work as a daily digest.
+- [ ] **Backup Watcher** monitors backup recency across configured layers.
+
+### Functional --- council deliberation
+
+- [ ] State machine implemented: `DRAFT → CRITIQUE → REVISE → CONVERGE → {LAND | PROPOSE | SHELVE}`.
+- [ ] Per-round, per-participant votes stored in `deliberation_votes`.
+- [ ] Quorum selection produces a relevant subset, not the full roster.
+- [ ] **Steelman rationality gate** is mandatory for all critical-agent output.
+- [ ] Shelved-with-dissent transcripts preserved as vault artifacts.
+- [ ] Coordinated flows operational: Evergreen birth ceremony, Daily standup, Insight harvest (basic), Trust ceremony.
+- [ ] Flow orchestrator state machine with cost-aware planning (pre-flight estimates, mid-flow checkpoints, user confirmation > $1).
+
+### Functional --- eval framework
+
+- [ ] Each v1 agent has 5-10 seed cases in `.engram/evals/<agent>/cases/`.
+- [ ] Quarterly baseline runs execute per agent.
+- [ ] Prompt changes trigger an eval run in CI; cannot promote a variant whose scores don't meet or beat the active prompt.
+- [ ] Scorecard markdown regenerates after each run with 8-run trend sparklines.
 
 ### Functional --- confidence + git safety
 
@@ -45,17 +100,29 @@ v1 ships when **all** the criteria below are met. Each is a concrete, testable b
 - [ ] User actions (`stage`, `discard`, `amend`) update the corresponding `agent_actions` row.
 - [ ] `git restore <path>` discards an agent change; the change does not return without a triggering vault event.
 
-### Functional --- Swift app (capture-first)
+### Functional --- Swift app (capture-first universal app)
 
 - [ ] iOS + macOS universal app from a single Xcode project.
-- [ ] Capture sources working: text, voice memo (cloud Whisper API), share-sheet, document picker, drag-drop (macOS).
-- [ ] Offline capture queue (SwiftData) accepts captures when server is unreachable.
-- [ ] Captures sync (idempotent via ULID) when server is reachable; previously-acked captures are no-ops on resend.
-- [ ] Diff review surface: per-file diff with agent attribution and confidence.
-- [ ] Tap-to-stage runs `git add <path>`; swipe-to-discard runs `git restore <path>`; long-press-to-amend opens an editor.
-- [ ] Search calls `/search` API; basic results list (no offline FTS index in v1).
-- [ ] Cost dashboard visible (month-to-date spend, per-agent breakdown).
-- [ ] Connection switcher (single Mac for v1).
+- [ ] **Capture sources:** text, voice memo (local `whisper.cpp` AND cloud Whisper API), share-sheet, document picker, drag-drop (macOS), camera, smart paste, capture batches, voice memo from Apple Watch, lock-screen widget, Action Button binding.
+- [ ] **Apple Shortcuts integration** with `capture`, `ask`, `prep`, `untangle` actions.
+- [ ] **Offline capture queue** (SwiftData) accepts captures when server is unreachable; sync (idempotent via ULID) when server is reachable; previously-acked captures are no-ops on resend.
+- [ ] **Diff review** surface: per-file diff with agent attribution, confidence, and rationale-on-tap. Tap-to-stage runs `git add <path>`; swipe-to-discard runs `git restore <path>`; long-press-to-amend opens an editor.
+- [ ] **Bulk actions + keyboard shortcuts** on macOS.
+- [ ] **Discard with reason** (hallucinated / wrong direction / redundant / out-of-scope / voice-mismatch) feeds calibration.
+- [ ] **Snooze** defers a change for N days.
+- [ ] **Search:** calls `/search` API; offline fall-back to local SwiftData FTS index.
+- [ ] **Today widget + Lock Screen widget** with pending diffs, due flashcards, today's question, predictions due.
+- [ ] **Conversation surface** for Pair-Thinking and Inquirer-conversational-mode; token-streaming via SSE.
+- [ ] **Flashcard review session** (Tutor; FSRS-driven swipe interface).
+- [ ] **Predictions-due widget** with correct / incorrect / superseded.
+- [ ] **Cost dashboard** with month-to-date spend, per-agent breakdown, sparkline.
+- [ ] **Backup status indicator.**
+- [ ] **Annual Review viewer** (typography-tuned, full-screen, scroll-paced).
+- [ ] **Witness inbox** (on-device only; never synced; no share/export buttons).
+- [ ] **Spotlight integration** via CoreSpotlight.
+- [ ] **Handoff** between iPhone and Mac for capture and diff review.
+- [ ] **Universal Clipboard awareness** for capture dedup.
+- [ ] **Connection switcher** (v1 ships single-instance; multi-instance + external-MCP client manager land in v2).
 
 ### Functional --- internal MCP server
 
@@ -139,37 +206,29 @@ The original framing was "the user prefers engram over plain Obsidian." That's n
 - ❌ Free-form chat interface to the vault.
 - ❌ Auto-commit of any kind.
 
-## Out of v1 (deferred to later phases)
+## Out of v1 (deferred to v2 and beyond)
 
-See [`docs/design/07-roadmap.md`](docs/design/07-roadmap.md) for the full phasing of v1.1 through v3+.
+v1 now covers the full personal-use shape of engram (what was previously split as v1, v1.1, v1.2, v1.3). v2+ remains separately phased for external-facing surfaces and self-improving meta-agents. See [`docs/design/07-roadmap.md`](docs/design/07-roadmap.md) for full phasing.
 
-Notable v1 exclusions:
+Notable exclusions from v1:
 
 | Capability                                       | Phase  |
 | ------------------------------------------------ | ------ |
-| Council deliberation engine                      | v1.1   |
-| Steelman rationality gate                        | v1.1   |
-| Thinking agents (Synthesizer, Devil's Advocate, Heretic, Inquirer, Pair-Thinking) | v1.1 |
-| Confidence Annotator + Source Demand             | v1.1   |
-| Cross-encoder reranker in retrieval              | v1.1   |
-| Today widget + on-demand quick-launch buttons    | v1.1   |
-| Apple Shortcuts integration                      | v1.1   |
-| Personal agents (Biographer, Voice Keeper, Witness) | v1.2 |
-| Predictor + calibration                          | v1.2   |
-| Annual Review                                    | v1.2   |
-| Tutor (spaced-repetition flashcards)             | v1.2   |
-| Local audio transcription (`whisper.cpp`)         | v1.2   |
-| Apple Watch capture app                          | v1.2   |
-| Curator + corpus digestion                       | v1.3   |
-| Inbox Triage                                     | v1.3   |
-| Splitter / Merger / Bridge Builder               | v1.3   |
 | External MCP server + personal-context API       | v2     |
-| Auditor + outcome metrics + prompt evolution     | v2.1   |
-| Trust scores                                     | v2.1   |
-| Pacekeeper                                       | v2.1   |
-| Analogist, Assumption Excavator, Socratic Prober, Contradiction Detector, Untangler, Research Council, Conversation Prep, Scout, Fact Checker | v2.2 |
-| Coordinated flows (evergreen birth ceremony, daily standup, insight harvest, trust ceremony) | v2.2 |
-| Dream mode, agent spawning, goal-directed sessions, cloud relay, multi-user | v3+ |
+| MCP client manager in Swift app                  | v2     |
+| Multi-instance connection switcher in Swift app  | v2     |
+| Auditor (quarterly qualitative deep evaluation)  | v2.1   |
+| Outcome-based metrics (survival, engagement, downstream productivity) | v2.1 |
+| Prompt evolution (shadow-mode A/B variants)      | v2.1   |
+| Trust scores modulating confidence thresholds (v1 has trust scores but at fixed-tier behavior) | v2.1 |
+| Pacekeeper throttling                            | v2.1   |
+| Analogist, Assumption Excavator                  | v2.2   |
+| Socratic Prober, Contradiction Detector          | v2.2   |
+| Untangler, Research Council, Conversation Prep, Debate Mode | v2.2 |
+| Scout (RSS feeds), Fact Checker                  | v2.2   |
+| Dream mode, agent spawning, goal-directed sessions | v3+    |
+| Cloud relay for external MCP                     | v3+    |
+| Multi-user / vault sharing                       | v3+    |
 
 ## How to verify v1 acceptance
 
