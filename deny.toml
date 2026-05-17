@@ -16,10 +16,6 @@ deny = [
     "GPL-3.0",
     "AGPL-3.0",
 ]
-# Warn on unlisted rather than deny — lets new deps land without failing CI
-# until they're triaged.
-unlicensed = "warn"
-copyleft = "warn"
 
 [bans]
 multiple-versions = "warn"
