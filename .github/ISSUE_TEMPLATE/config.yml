@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Design corpus
+    url: https://github.com/torsday/engram/tree/main/docs/design
+    about: Read the design docs first — engram is design-complete; the README indexes 14 numbered docs + 14 ADRs + glossary + SPEC.

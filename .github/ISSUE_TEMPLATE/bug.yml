@@ -1,0 +1,45 @@
+name: Bug
+description: Something isn't working as designed
+labels: ["type: bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong? What were you expecting instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: "1. \n2. \n3. "
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "engram version, OS, provider config, vault size"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / agent_actions rows / sidecar excerpts
+      description: Paste any diagnostic data. Leave blank if none.

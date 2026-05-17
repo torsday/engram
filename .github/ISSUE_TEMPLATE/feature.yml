@@ -1,0 +1,45 @@
+name: Feature
+description: New functionality for engram (CC type — feat)
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One short paragraph — what this work delivers and why it's needed for v1.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable outcomes — not implementation steps. Mirror /SPEC.md format.
+      value: "- [ ] \n- [ ] "
+    validations:
+      required: true
+
+  - type: textarea
+    id: design-refs
+    attributes:
+      label: Design references
+      description: Links to the relevant design doc + section.
+      placeholder: |
+        - `docs/design/03-architecture.md` § <section>
+        - `docs/design/adrs/NNNN-<name>.md`
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      placeholder: |
+        - Blocked by: #N
+        - Blocks: #M
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Implementation notes
+      description: Files to touch, patterns to follow, constraints, gotchas. Omit if genuinely empty.
