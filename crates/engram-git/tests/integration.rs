@@ -296,7 +296,10 @@ fn restore_discards_unstaged_change() {
     write.restore(&[Path::new("a.md")]).expect("restore");
 
     let unstaged = write.diff_worktree().expect("diff_worktree after restore");
-    assert!(unstaged.is_empty(), "restore should discard worktree change");
+    assert!(
+        unstaged.is_empty(),
+        "restore should discard worktree change"
+    );
 }
 
 #[test]

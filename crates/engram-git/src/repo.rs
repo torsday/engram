@@ -74,7 +74,9 @@ fn git_cmd_success(cwd: &Path, args: &[&str], error_kind: impl Fn(String) -> Err
     if out.status.success() {
         Ok(())
     } else {
-        Err(error_kind(String::from_utf8_lossy(&out.stderr).into_owned()))
+        Err(error_kind(
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        ))
     }
 }
 
@@ -207,11 +209,7 @@ fn parse_unified_diff(diff_bytes: &[u8]) -> Vec<FileDiff> {
                 };
             } else if line.starts_with("@@") {
                 // Everything from this line onward is the patch.
-                patch_start = section
-                    .lines()
-                    .take(i)
-                    .map(|l| l.len() + 1)
-                    .sum::<usize>();
+                patch_start = section.lines().take(i).map(|l| l.len() + 1).sum::<usize>();
                 break;
             }
         }
@@ -240,7 +238,9 @@ fn read_diff_path(repo: &gix::Repository, path: &Path) -> Result<Diff> {
     // HEAD vs working tree for the given path.
     let out = git_cmd(&dir, &["diff", "HEAD", "--", path.to_str().unwrap_or("")]);
     if !out.status.success() {
-        return Err(Error::Diff(String::from_utf8_lossy(&out.stderr).into_owned()));
+        return Err(Error::Diff(
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        ));
     }
     let mut diffs = parse_unified_diff(&out.stdout);
     Ok(diffs.pop().unwrap_or(FileDiff {
@@ -255,7 +255,9 @@ fn read_diff_index(repo: &gix::Repository) -> Result<Vec<FileDiff>> {
     let dir = workdir(repo)?;
     let out = git_cmd(&dir, &["diff", "--cached"]);
     if !out.status.success() {
-        return Err(Error::Diff(String::from_utf8_lossy(&out.stderr).into_owned()));
+        return Err(Error::Diff(
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        ));
     }
     Ok(parse_unified_diff(&out.stdout))
 }
@@ -265,7 +267,9 @@ fn read_diff_worktree(repo: &gix::Repository) -> Result<Vec<FileDiff>> {
     // Unstaged changes (index vs working tree).
     let out = git_cmd(&dir, &["diff"]);
     if !out.status.success() {
-        return Err(Error::Diff(String::from_utf8_lossy(&out.stderr).into_owned()));
+        return Err(Error::Diff(
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        ));
     }
     Ok(parse_unified_diff(&out.stdout))
 }
@@ -447,7 +451,9 @@ fn write_add(repo: &gix::Repository, paths: &[&Path]) -> Result<()> {
     for s in &path_strs {
         args.push(s.as_str());
     }
-    git_cmd_success(&dir, &args, |e| Error::Commit(format!("git add failed: {e}")))
+    git_cmd_success(&dir, &args, |e| {
+        Error::Commit(format!("git add failed: {e}"))
+    })
 }
 
 fn write_restore(repo: &gix::Repository, paths: &[&Path]) -> Result<()> {
@@ -461,7 +467,9 @@ fn write_restore(repo: &gix::Repository, paths: &[&Path]) -> Result<()> {
     for s in &path_strs {
         args.push(s.as_str());
     }
-    git_cmd_success(&dir, &args, |e| Error::Commit(format!("git restore failed: {e}")))
+    git_cmd_success(&dir, &args, |e| {
+        Error::Commit(format!("git restore failed: {e}"))
+    })
 }
 
 fn write_commit(repo: &gix::Repository, message: &str, opts: CommitOpts) -> Result<Sha> {
@@ -494,11 +502,9 @@ fn write_push(repo: &gix::Repository, remote: &str, branch: &str) -> Result<()> 
     // `repo.push()` surface is not yet stable. Subprocess for now.
     // Track: https://github.com/Byron/gitoxide/issues/703 (push progress)
     let dir = workdir(repo)?;
-    git_cmd_success(
-        &dir,
-        &["push", remote, branch],
-        |e| Error::Commit(format!("git push failed: {e}")),
-    )
+    git_cmd_success(&dir, &["push", remote, branch], |e| {
+        Error::Commit(format!("git push failed: {e}"))
+    })
 }
 
 fn write_pull(repo: &gix::Repository, remote: &str, branch: &str) -> Result<()> {
@@ -506,11 +512,9 @@ fn write_pull(repo: &gix::Repository, remote: &str, branch: &str) -> Result<()> 
     // several steps (fetch, ref resolution, ff-merge). Subprocess is a
     // one-liner that also covers hooks and merge-message conventions.
     let dir = workdir(repo)?;
-    git_cmd_success(
-        &dir,
-        &["pull", "--ff-only", remote, branch],
-        |e| Error::Commit(format!("git pull failed: {e}")),
-    )
+    git_cmd_success(&dir, &["pull", "--ff-only", remote, branch], |e| {
+        Error::Commit(format!("git pull failed: {e}"))
+    })
 }
 
 // ─── ReadOnlyGit impls ─────────────────────────────────────────────────────
