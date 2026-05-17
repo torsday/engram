@@ -19,7 +19,7 @@ pub mod note_id {}
 pub mod slug;
 
 /// Filename collision detection at note-write time.
-pub mod collision {}
+pub mod collision;
 
 /// Sidecar JSON (`.engram/sidecar/<id>.json`) read/write.
 pub mod sidecar {}
