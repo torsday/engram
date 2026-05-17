@@ -96,7 +96,7 @@ If step 8 fails or crashes mid-write, the next file-change event or scheduled re
 LanceDB datasets are directory-based (multi-file). Backup model:
 
 - **Vault + sidecars + `.engram/index.sqlite`** — always back up (per existing design).
-- **`.engram/vectors/`** — conditionally back up. The vectors are *technically* rebuildable from `embedding_cache` + the vault (re-embed using the cached vectors, repopulate LanceDB). But rebuild time at 10K notes is ~10 min; at 100K it's substantial. Backing up the dataset directly skips this cost.
+- **`.engram/vectors/`** — conditionally back up. The vectors are _technically_ rebuildable from `embedding_cache` + the vault (re-embed using the cached vectors, repopulate LanceDB). But rebuild time at 10K notes is ~10 min; at 100K it's substantial. Backing up the dataset directly skips this cost.
 
 Recommended: include `.engram/vectors/` in routine backup. The full restore path is documented in `03-architecture.md` §Backup and disaster recovery, updated to include LanceDB.
 

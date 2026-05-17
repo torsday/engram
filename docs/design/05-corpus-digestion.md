@@ -405,4 +405,4 @@ The user's engram vault now contains ~2K curated, evergreen-quality notes drawn 
 - **Re-digestion.** If the user updates the policy and wants to re-run on a subset, the system should support this without re-doing already-approved work. Implemented as `engram digest --recluster`.
 - **Cross-corpus deduplication.** If the user digests two different external corpora that overlap, Merger should detect this and propose unification. Should work via existing Merger agent.
 - **Incremental digestion.** If the source corpus is still being added to (the user is still writing in `notes-2022-03/` while digesting), Curator should detect new/modified source notes and queue them for the next batch. v2.
-- **Digestion of engram itself.** Can engram digest *itself* to compress over time? Probably yes, but with extra caution --- the source isn't read-only in this case. Defer until the basic flow is solid.
+- **Digestion of engram itself.** Can engram digest _itself_ to compress over time? Probably yes, but with extra caution --- the source isn't read-only in this case. Defer until the basic flow is solid.

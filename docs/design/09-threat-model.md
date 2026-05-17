@@ -8,14 +8,14 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 
 ## Threat actors considered
 
-| Actor | Capabilities | Motivation |
-|---|---|---|
-| **Malicious external MCP client** | Has a valid API key + scopes; can call exposed tools; cannot reach the filesystem directly | Exfiltrate sensitive content; manipulate the user via prompt-poisoned responses |
-| **Malicious external MCP client author** | Builds the client; can attempt over-broad scope requests in registration | Get more access than the user intended |
-| **Malicious content in ingested material** | A note, web page, PDF, or audio source contains adversarial text | Inject prompts into agent inputs to manipulate behavior |
-| **Eavesdropper on local network** | Can observe HTTP+SSE traffic on the LAN | Capture personal-context responses; exfiltrate data |
-| **Casual snooper with file-system access** | Has read access to the user's machine (e.g., shared family computer) | Browse vault content |
-| **Agent miscalibration** | Not adversarial; an LLM agent producing wrong output at high claimed confidence | Hallucinated facts entering the vault; provenance noise |
+| Actor                                      | Capabilities                                                                               | Motivation                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| **Malicious external MCP client**          | Has a valid API key + scopes; can call exposed tools; cannot reach the filesystem directly | Exfiltrate sensitive content; manipulate the user via prompt-poisoned responses |
+| **Malicious external MCP client author**   | Builds the client; can attempt over-broad scope requests in registration                   | Get more access than the user intended                                          |
+| **Malicious content in ingested material** | A note, web page, PDF, or audio source contains adversarial text                           | Inject prompts into agent inputs to manipulate behavior                         |
+| **Eavesdropper on local network**          | Can observe HTTP+SSE traffic on the LAN                                                    | Capture personal-context responses; exfiltrate data                             |
+| **Casual snooper with file-system access** | Has read access to the user's machine (e.g., shared family computer)                       | Browse vault content                                                            |
+| **Agent miscalibration**                   | Not adversarial; an LLM agent producing wrong output at high claimed confidence            | Hallucinated facts entering the vault; provenance noise                         |
 
 **Not considered:** sophisticated nation-state attackers, supply-chain attacks against the engram binary itself, hardware-level attacks. Engram is not a security product.
 
@@ -26,6 +26,7 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 **Threat:** A registered client app requests broad scopes (e.g., `notes:read` for all notes) that the user didn't intend to grant, then exfiltrates content the user considered private.
 
 **Defenses:**
+
 - **Default-deny privacy zones.** `notes/work/`, `notes/medical/`, `notes/journal/` are excluded from `notes:read` by default; access requires the explicit `notes:read:zone/<zone>` scope.
 - **Consent flow on first connect.** Every requested scope appears in the Swift app consent prompt before any access is granted.
 - **Scope-additive consent.** A client requesting new scopes later triggers a fresh consent prompt for the additions only.
@@ -39,6 +40,7 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 **Threat:** Engram's outbound API keys (Anthropic, OpenAI, etc.) are exposed via filesystem access, process inspection, or accidental commit.
 
 **Defenses:**
+
 - **Keychain storage** on macOS (via `security-framework`); Linux Secret Service via `keyring`; encrypted file (`age`) for headless. Never plaintext in `.engram/config.toml`.
 - **Env-var fallback** is supported but documented as last-resort.
 - **Process-memory caching.** Keys are read once at startup; never logged.
@@ -52,6 +54,7 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 **Threat:** Sensitive content (work documents, medical records, journal entries) is sent to a cloud LLM provider when the user expected local-only processing.
 
 **Defenses:**
+
 - **Privacy zones** (per-folder) and **per-drop privacy flags** (`engram/private` tag) route processing to local-only models regardless of provider config.
 - **Witness uses local-only LLM by default**, regardless of vault config. Personal notes never touch cloud.
 - **The Swift app's privacy toggle on capture** is visible before submit, with the consequences ("processed locally only") spelled out.
@@ -64,6 +67,7 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 **Threat:** An agent's prompt has drifted (via prompt evolution or manual edits) such that it produces wrong output at high claimed confidence. The auto-land path then writes incorrect changes to the working tree.
 
 **Defenses:**
+
 - **Watcher tracks claimed-confidence vs. actual-acceptance** continuously; flags agents whose calibration degrades.
 - **Auditor reads samples quarterly** and surfaces qualitative drift (the agent does what it claims).
 - **Trust score modulates threshold;** miscalibrated agents are auto-demoted to higher confidence requirements.
@@ -77,6 +81,7 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 **Threat:** An agent generates content that sounds plausible but is wrong (a fabricated quote, a false attribution, a non-existent source).
 
 **Defenses:**
+
 - **Rationality gate** ([ADR 0007](adrs/0007-steelman-rationality-gate.md)) for critical agents requires real evidence and real-world adherents; sloppy critique is rejected.
 - **Source Demand** flags claims lacking citations; **Citation Verifier** (a future agent in v2.2) checks that quotes attributed to sources actually appear in those sources.
 - **Voice Keeper** flags content that doesn't sound like the user, catching some classes of hallucination indirectly.
@@ -90,6 +95,7 @@ The aim is honesty, not paranoia. Engram is a personal local tool, not a multi-t
 **Threat:** Scout fetches an RSS feed; the feed includes adversarial content designed to manipulate Scout's classifier or downstream agents that read the content.
 
 **Defenses:**
+
 - **Structured outputs** at every agent boundary. Scout produces a structured `RelevanceVerdict { score, reason, would_ingest }` rather than free-text; downstream agents read the structured field, not the raw content.
 - **Tool gateway sanitization.** When ingested content is re-injected into agent context (e.g., as a literature note for Linker to consider), the system wraps it in an explicit `<external_content>` delimiter so the agent prompt is clear that this is data, not instruction.
 - **Council oversight.** Substantive changes (new evergreen note from external content) require council deliberation, which adds human-in-loop friction for adversarial paths.
@@ -104,6 +110,7 @@ These are explicit non-goals. Naming them is part of the threat model.
 ### Local-machine compromise
 
 If an attacker has root or user-level access to the machine running `engram serve`, they can:
+
 - Read the vault
 - Read sidecars
 - Read SQLite indices
@@ -155,14 +162,14 @@ Side-channel, cold-boot, BadUSB, etc. Out of scope.
 
 In rough order of likelihood × impact:
 
-| Risk | Likelihood | Impact | Defense layer |
-|---|---|---|---|
-| LLM prompt injection via ingested content | High | Medium | Structured outputs, tool gateway, council, git review |
-| Agent miscalibration causing bad auto-lands | Medium | Low (caught at git review) | Watcher, Auditor, trust modulation, unstaged-only writes |
-| Provider API key exposure | Low (with Keychain) | High | Keychain, no plaintext, rotation tooling |
-| External MCP client over-reach | Low (with consent) | High | Default-deny, consent flow, audit log, revoke |
-| Accidental cloud LLM data leak | Low (with zones) | High | Privacy zones, per-drop flag, Witness local-only |
-| Local-machine compromise | Out of scope | Total | (FileVault, OS hardening) |
+| Risk                                        | Likelihood          | Impact                     | Defense layer                                            |
+| ------------------------------------------- | ------------------- | -------------------------- | -------------------------------------------------------- |
+| LLM prompt injection via ingested content   | High                | Medium                     | Structured outputs, tool gateway, council, git review    |
+| Agent miscalibration causing bad auto-lands | Medium              | Low (caught at git review) | Watcher, Auditor, trust modulation, unstaged-only writes |
+| Provider API key exposure                   | Low (with Keychain) | High                       | Keychain, no plaintext, rotation tooling                 |
+| External MCP client over-reach              | Low (with consent)  | High                       | Default-deny, consent flow, audit log, revoke            |
+| Accidental cloud LLM data leak              | Low (with zones)    | High                       | Privacy zones, per-drop flag, Witness local-only         |
+| Local-machine compromise                    | Out of scope        | Total                      | (FileVault, OS hardening)                                |
 
 ## Future hardening (not in v1)
 

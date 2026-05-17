@@ -45,7 +45,7 @@ The hash is over the **embeddable content**, not the entire markdown file:
 
 - For a whole-note embedding: SHA-256 of `(title + "\n\n" + body)` after frontmatter strip and standard whitespace normalization (trim trailing whitespace per line; collapse runs of blank lines to one).
 - For a section-level embedding (used by Splitter, Inquirer's blindspot mode): SHA-256 of just the section text.
-- Normalization is deterministic and documented. Identical *normalized* content → identical hash.
+- Normalization is deterministic and documented. Identical _normalized_ content → identical hash.
 
 ### Lookup flow
 

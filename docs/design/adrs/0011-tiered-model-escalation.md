@@ -67,7 +67,7 @@ Bounded by `max_escalations_per_call` (default 2; fast → standard → deep cov
 
 ### Cost accounting
 
-Each tier's tokens are charged separately. A call that escalated `fast → standard` charges for *both* attempts (the fast attempt was a real call). The cost estimator accounts for this by computing an *expected* cost based on historical escalation frequency:
+Each tier's tokens are charged separately. A call that escalated `fast → standard` charges for _both_ attempts (the fast attempt was a real call). The cost estimator accounts for this by computing an _expected_ cost based on historical escalation frequency:
 
 ```
 expected_cost = base_tier_cost × (1 + escalation_rate × escalation_cost_multiplier)

@@ -4,13 +4,13 @@
 
 ## Status
 
-| Field            | Value                                                         |
-| ---------------- | ------------------------------------------------------------- |
-| Phase            | v1 --- Full personal-use engram                                |
-| Implementation   | not started                                                   |
-| Acceptance       | not yet met                                                   |
-| Target duration  | **~14 months** from start (one developer + Claude Code)        |
-| Timeline note    | Originally 3 months → 5--6 months (post-feasibility audit) → ~14 months after the user requested v1 be feature-complete for engram's intended shape. Now absorbs what were previously planned as v1.1 (critical thinking), v1.2 (personal context), and v1.3 (corpus digestion). v2+ remains separately phased (external-facing surfaces, self-improving meta-agents). See `docs/design/07-roadmap.md`. |
+| Field           | Value                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase           | v1 --- Full personal-use engram                                                                                                                                                                                                                                                                                                                                                                         |
+| Implementation  | not started                                                                                                                                                                                                                                                                                                                                                                                             |
+| Acceptance      | not yet met                                                                                                                                                                                                                                                                                                                                                                                             |
+| Target duration | **~14 months** from start (one developer + Claude Code)                                                                                                                                                                                                                                                                                                                                                 |
+| Timeline note   | Originally 3 months → 5--6 months (post-feasibility audit) → ~14 months after the user requested v1 be feature-complete for engram's intended shape. Now absorbs what were previously planned as v1.1 (critical thinking), v1.2 (personal context), and v1.3 (corpus digestion). v2+ remains separately phased (external-facing surfaces, self-improving meta-agents). See `docs/design/07-roadmap.md`. |
 
 ## Definition of done for v1
 
@@ -31,23 +31,27 @@ v1 ships when **all** the criteria below are met. Each is a concrete, testable b
 ### Functional --- agents (full personal-use roster)
 
 **Maintenance:**
+
 - [ ] **Linker** proposes wikilinks; high-confidence proposals appear unstaged in `git status`; low-confidence proposals enter `.engram/proposals/`.
 - [ ] **Gardener** removes dead links and resolved TODOs; lands unstaged.
 - [ ] **Cartographer** maintains `index.md` (continuous mode) and runs quarterly tag audits.
 - [ ] **Historian** produces weekly activity-log notes.
 
 **Processing:**
+
 - [ ] **Scribe** cleans fleeting notes (formatting, frontmatter normalization); lands unstaged.
 - [ ] **Ingestor** processes PDF, image, plain text, markdown, web URLs, and audio (via local `whisper.cpp`) into literature note drafts.
 - [ ] **Inbox Triage** classifies new fleeting notes (keep / promote-literature / promote-evergreen-candidate / merge / discard).
 - [ ] **Curator** digests external note corpora into engram (full survey → batch digestion → audit pipeline per `05-corpus-digestion.md`).
 
 **Structural:**
+
 - [ ] **Splitter** proposes specific splits of notes violating atomicity.
 - [ ] **Merger** proposes unification of same-concept notes written at different times.
 - [ ] **Bridge Builder** finds isolated clusters via community detection; proposes bridge links or notes.
 
 **Thinking:**
+
 - [ ] **Synthesizer** proposes new evergreen notes from clusters of related material.
 - [ ] **Devil's Advocate** produces critique; all output passes the Steelman rationality gate.
 - [ ] **Steelman** serves both constructive role (strengthen weak notes) AND mandatory rationality-gate role.
@@ -58,18 +62,22 @@ v1 ships when **all** the criteria below are met. Each is a concrete, testable b
 - [ ] **Pair-Thinking** runs bounded live-writing conversational sessions (3-5 rounds).
 
 **Personal:**
+
 - [ ] **Biographer** maintains `meta/biography.md` (read by other agents to ground their work).
 - [ ] **Voice Keeper** learns the user's writing voice; participates in council to flag homogenized prose.
 - [ ] **Witness** acknowledges journal/personal notes; on-device only, local-only LLM, no memory.
 
 **Temporal:**
+
 - [ ] **Predictor** maintains predictions ledger AND calibration profile (subsumed Calibration Tracker).
 - [ ] **Annual Review** generates yearly long-form narrative reflection notes.
 
 **Pedagogical:**
+
 - [ ] **Tutor** generates spaced-repetition flashcards using FSRS-4.5; daily review session in Swift app.
 
 **Meta:**
+
 - [ ] **Watcher** (basic) — continuous numerical monitoring; trust scores active but not yet modulating thresholds (that's v2.1).
 - [ ] **Completion Nudger** surfaces unfinished work as a daily digest.
 - [ ] **Backup Watcher** monitors backup recency across configured layers.
@@ -212,23 +220,23 @@ v1 now covers the full personal-use shape of engram (what was previously split a
 
 Notable exclusions from v1:
 
-| Capability                                       | Phase  |
-| ------------------------------------------------ | ------ |
-| External MCP server + personal-context API       | v2     |
-| MCP client manager in Swift app                  | v2     |
-| Multi-instance connection switcher in Swift app  | v2     |
-| Auditor (quarterly qualitative deep evaluation)  | v2.1   |
-| Outcome-based metrics (survival, engagement, downstream productivity) | v2.1 |
-| Prompt evolution (shadow-mode A/B variants)      | v2.1   |
-| Trust scores modulating confidence thresholds (v1 has trust scores but at fixed-tier behavior) | v2.1 |
-| Pacekeeper throttling                            | v2.1   |
-| Analogist, Assumption Excavator                  | v2.2   |
-| Socratic Prober, Contradiction Detector          | v2.2   |
-| Untangler, Research Council, Conversation Prep, Debate Mode | v2.2 |
-| Scout (RSS feeds), Fact Checker                  | v2.2   |
-| Dream mode, agent spawning, goal-directed sessions | v3+    |
-| Cloud relay for external MCP                     | v3+    |
-| Multi-user / vault sharing                       | v3+    |
+| Capability                                                                                     | Phase |
+| ---------------------------------------------------------------------------------------------- | ----- |
+| External MCP server + personal-context API                                                     | v2    |
+| MCP client manager in Swift app                                                                | v2    |
+| Multi-instance connection switcher in Swift app                                                | v2    |
+| Auditor (quarterly qualitative deep evaluation)                                                | v2.1  |
+| Outcome-based metrics (survival, engagement, downstream productivity)                          | v2.1  |
+| Prompt evolution (shadow-mode A/B variants)                                                    | v2.1  |
+| Trust scores modulating confidence thresholds (v1 has trust scores but at fixed-tier behavior) | v2.1  |
+| Pacekeeper throttling                                                                          | v2.1  |
+| Analogist, Assumption Excavator                                                                | v2.2  |
+| Socratic Prober, Contradiction Detector                                                        | v2.2  |
+| Untangler, Research Council, Conversation Prep, Debate Mode                                    | v2.2  |
+| Scout (RSS feeds), Fact Checker                                                                | v2.2  |
+| Dream mode, agent spawning, goal-directed sessions                                             | v3+   |
+| Cloud relay for external MCP                                                                   | v3+   |
+| Multi-user / vault sharing                                                                     | v3+   |
 
 ## How to verify v1 acceptance
 

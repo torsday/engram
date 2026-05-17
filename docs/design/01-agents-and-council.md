@@ -25,18 +25,18 @@ How confidence is computed:
 
 **Layer 2: git is the safety net.** No matter how confident an agent is, **agents never run `git add` or `git commit`.** All agent writes land in the working tree as unstaged changes. The user is the only entity that stages or commits. `git diff` is always the review surface. `git restore` is always the revert.
 
-This is the core promise of engram's autonomy model: agents can be aggressive within their working-tree sandbox precisely *because* nothing they do reaches history without the human's deliberate `git add`.
+This is the core promise of engram's autonomy model: agents can be aggressive within their working-tree sandbox precisely _because_ nothing they do reaches history without the human's deliberate `git add`.
 
 ### Invasiveness ceilings
 
 Even with high confidence, agents have invasiveness ceilings beyond which they cannot autonomously write --- these always go through council and human approval:
 
-| Invasiveness  | Examples                                              | Path                                                  |
-| ------------- | ----------------------------------------------------- | ----------------------------------------------------- |
-| Mechanical    | Dead link fix, tag normalization, index refresh       | Confidence-gated autonomous write (working tree)      |
-| Additive      | New link, backlink section, inline annotation         | Confidence-gated autonomous write (working tree)      |
-| Editorial     | Note rewrite, section restructure, content change     | Council deliberation; if convergent, written unstaged |
-| Structural    | New evergreen note, note merge, note split, deletion  | Council + explicit human approval before write        |
+| Invasiveness | Examples                                             | Path                                                  |
+| ------------ | ---------------------------------------------------- | ----------------------------------------------------- |
+| Mechanical   | Dead link fix, tag normalization, index refresh      | Confidence-gated autonomous write (working tree)      |
+| Additive     | New link, backlink section, inline annotation        | Confidence-gated autonomous write (working tree)      |
+| Editorial    | Note rewrite, section restructure, content change    | Council deliberation; if convergent, written unstaged |
+| Structural   | New evergreen note, note merge, note split, deletion | Council + explicit human approval before write        |
 
 The ceiling per agent is set in `config.toml` via `max_invasiveness`. An agent's `auto_land_min_confidence` only applies to actions at or below its ceiling.
 
@@ -454,11 +454,11 @@ Pacekeeper computes a single **pace state** from observed signals. Three states:
 
 **State definitions:**
 
-| State       | Trigger condition (any of)                                                | Effect                                                                                                                                                            |
-| ----------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `normal`    | Backlog < 20 items AND oldest unstaged < 48h AND staged-per-week ≥ 5      | Default thresholds; all agents run on schedule.                                                                                                                   |
-| `throttled` | Backlog 20--50 OR oldest unstaged 48--168h OR staged-per-week 1--4         | Raise every agent's `auto_land_min_confidence` by **+0.05** (e.g., 0.85 → 0.90). Defer Heretic, Synthesizer scheduled passes, Annual Review prep, Scout polling. |
-| `paused`    | Backlog ≥ 50 OR oldest unstaged ≥ 168h (1 week) OR staged-per-week = 0    | Raise threshold by **+0.10** (0.85 → 0.95). Pause all non-mechanical agents. Mechanical agents (dead-link fix, index update) continue.                            |
+| State       | Trigger condition (any of)                                             | Effect                                                                                                                                                           |
+| ----------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `normal`    | Backlog < 20 items AND oldest unstaged < 48h AND staged-per-week ≥ 5   | Default thresholds; all agents run on schedule.                                                                                                                  |
+| `throttled` | Backlog 20--50 OR oldest unstaged 48--168h OR staged-per-week 1--4     | Raise every agent's `auto_land_min_confidence` by **+0.05** (e.g., 0.85 → 0.90). Defer Heretic, Synthesizer scheduled passes, Annual Review prep, Scout polling. |
+| `paused`    | Backlog ≥ 50 OR oldest unstaged ≥ 168h (1 week) OR staged-per-week = 0 | Raise threshold by **+0.10** (0.85 → 0.95). Pause all non-mechanical agents. Mechanical agents (dead-link fix, index update) continue.                           |
 
 State is recomputed hourly. Hysteresis: state can only relax (`paused → throttled → normal`) after the trigger condition has cleared for **at least 6 hours**, preventing oscillation.
 
@@ -598,6 +598,7 @@ running
 ```
 
 **Per-flow timeouts:**
+
 - Evergreen birth ceremony: 10 min wall-clock (allows for human input round)
 - Trust ceremony: 5 min
 - Insight harvest: 30 min (large retrieval pass)
@@ -651,6 +652,7 @@ This makes engram **trustworthy for expensive operations** — the user is never
 A morning report (delivered to the Swift app, not the vault) summarizing what the swarm did overnight and what needs the user's attention today. 5--10 lines maximum.
 
 Composition:
+
 - Pending proposals (count + oldest)
 - Conversations awaiting reply
 - Predictions due today
@@ -666,12 +668,13 @@ Different from Historian (weekly + reflective) and Watcher's `health.md` (weekly
 
 Quarterly: scan everything the generative agents (Synthesizer, Analogist, Heretic, Inquirer, Bridge Builder, Dream mode) produced this quarter. Identify which outputs the user actually approved, used, cited, or built on. Compute hit rate and pattern.
 
-Output: `meta/insights/YYYY-QN.md` --- a celebration of what worked and a record of what didn't. The system *learns what kinds of generative work pay off for this user specifically* and feeds that back into:
+Output: `meta/insights/YYYY-QN.md` --- a celebration of what worked and a record of what didn't. The system _learns what kinds of generative work pay off for this user specifically_ and feeds that back into:
+
 - Prompt evolution (variants weighted toward styles that produced hits)
 - Trust score weighting (agents whose work has high downstream impact get faster trust gains)
 - Auditor's quarterly reviews (insight-harvest data informs keep/tune/retire decisions)
 
-This is how the swarm gets *better at being useful to you* rather than just better at being accepted.
+This is how the swarm gets _better at being useful to you_ rather than just better at being accepted.
 
 ### Trust ceremony
 
@@ -688,7 +691,7 @@ Same outcome as a quick yes/no, but more deliberate. Makes "the system earned mo
 
 ### Eval framework (held-out benchmark suite per agent)
 
-**The gap this fills.** Watcher counts in-the-wild outcomes (acceptance, survival, cost). Auditor reads samples qualitatively. Insight harvest measures downstream value. None of these can answer: **"is this agent better or worse than last quarter at the things it's *supposed* to do?"** Without held-out test cases, prompt evolution is hopeful tuning; with them, it's measurable improvement.
+**The gap this fills.** Watcher counts in-the-wild outcomes (acceptance, survival, cost). Auditor reads samples qualitatively. Insight harvest measures downstream value. None of these can answer: **"is this agent better or worse than last quarter at the things it's _supposed_ to do?"** Without held-out test cases, prompt evolution is hopeful tuning; with them, it's measurable improvement.
 
 This is industry best practice for production agentic systems. Engram needs it.
 
@@ -729,10 +732,10 @@ expected:
   rationale_must_mention: ["semantic", "agreement"]
 
 scoring:
-  precision_weight: 1.0    # did the agent propose only the expected link, or more?
-  recall_weight: 1.0       # did the agent propose the expected link?
-  calibration_weight: 0.5  # was claimed confidence within expected range?
-  cost_weight: 0.2         # token efficiency
+  precision_weight: 1.0 # did the agent propose only the expected link, or more?
+  recall_weight: 1.0 # did the agent propose the expected link?
+  calibration_weight: 0.5 # was claimed confidence within expected range?
+  cost_weight: 0.2 # token efficiency
 ```
 
 Vault snapshots are content-addressed tarballs at `.engram/evals/snapshots/<sha>/`. A single snapshot can be referenced by many cases.
@@ -803,19 +806,21 @@ Vault snapshots are content-addressed tarballs at `.engram/evals/snapshots/<sha>
 
 ## Current run: 2026-Q3-after-tuning (2026-09-30)
 
-| Metric                    | Current | Previous | Δ        | Trend (8 runs) |
-|---------------------------|---------|----------|----------|----------------|
-| Pass rate                 | 78%     | 71%      | +7pp     | ▁▂▃▄▅▆▇█       |
-| Mean precision            | 0.82    | 0.74     | +0.08    | ▂▃▄▅▆▇▇█       |
-| Mean recall               | 0.95    | 0.93     | +0.02    | ▆▇▇█▇█▇█       |
-| Mean calibration error    | 0.08    | 0.15     | -0.07    | █▇▆▅▄▃▂▁       |
-| Mean cost per proposal    | $0.0014 | $0.0018  | -$0.0004 | █▇▇▆▆▅▅▄       |
+| Metric                 | Current | Previous | Δ        | Trend (8 runs) |
+| ---------------------- | ------- | -------- | -------- | -------------- |
+| Pass rate              | 78%     | 71%      | +7pp     | ▁▂▃▄▅▆▇█       |
+| Mean precision         | 0.82    | 0.74     | +0.08    | ▂▃▄▅▆▇▇█       |
+| Mean recall            | 0.95    | 0.93     | +0.02    | ▆▇▇█▇█▇█       |
+| Mean calibration error | 0.08    | 0.15     | -0.07    | █▇▆▅▄▃▂▁       |
+| Mean cost per proposal | $0.0014 | $0.0018  | -$0.0004 | █▇▇▆▆▅▅▄       |
 
 ## Notable changes
+
 - Prompt tuned for redundancy detection: case 002 now passes (was failing).
 - Calibration error halved across the board after Watcher feedback loop matured.
 
 ## Open issues
+
 - Case 007 (cross-domain link) consistently fails; may indicate Linker's confidence formula
   doesn't weight retrieval agreement strongly enough in cross-domain situations.
 ```
@@ -851,7 +856,7 @@ CREATE TABLE eval_case_results (
 
 #### Anti-pattern: don't snapshot LLM outputs as eval expectations
 
-Cases assert *behavioral* expectations (links proposed, confidence range, cost bounds) — not byte-level output. LLM responses vary even with `temperature=0` across model versions; asserting exact text would produce flaky evals. The pass/fail criteria are defined in `expected:` and `scoring:`.
+Cases assert _behavioral_ expectations (links proposed, confidence range, cost bounds) — not byte-level output. LLM responses vary even with `temperature=0` across model versions; asserting exact text would produce flaky evals. The pass/fail criteria are defined in `expected:` and `scoring:`.
 
 #### Bootstrap
 

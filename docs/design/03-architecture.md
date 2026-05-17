@@ -12,42 +12,42 @@
 
 ## Tech stack
 
-| Layer               | Choice                    | Crate / tool                    | Rationale                                                                                                                                               |
-| ------------------- | ------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language            | Rust                      | ---                             | Single binary, excellent SQLite/filesystem ergonomics, type system pays for deliberation state machines and tool schemas. No runtime install for users. |
-| Async runtime       | Tokio                     | `tokio`                         | Standard. Needed for concurrent agent runs, file watching, HTTP serving.                                                                                |
-| HTTP server         | Axum                      | `axum`                          | Tokio-native, tower middleware, SSE support built-in.                                                                                                   |
-| Markdown parser     | Comrak                    | `comrak`                        | CommonMark + GFM, AST access for structural edits. Custom extensions for wikilinks and frontmatter.                                                     |
-| Frontmatter         | serde_yaml                | `serde_yaml`                    | YAML frontmatter is the Obsidian standard.                                                                                                              |
-| SQLite              | rusqlite                  | `rusqlite`                      | Direct bindings. One file for metadata, FTS, and vectors.                                                                                               |
-| Full-text search    | SQLite FTS5               | (built into rusqlite)           | BM25 scoring, incremental updates. Catches exact-term matches that embeddings miss.                                                                     |
+| Layer               | Choice                    | Crate / tool                    | Rationale                                                                                                                                                                                                                        |
+| ------------------- | ------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language            | Rust                      | ---                             | Single binary, excellent SQLite/filesystem ergonomics, type system pays for deliberation state machines and tool schemas. No runtime install for users.                                                                          |
+| Async runtime       | Tokio                     | `tokio`                         | Standard. Needed for concurrent agent runs, file watching, HTTP serving.                                                                                                                                                         |
+| HTTP server         | Axum                      | `axum`                          | Tokio-native, tower middleware, SSE support built-in.                                                                                                                                                                            |
+| Markdown parser     | Comrak                    | `comrak`                        | CommonMark + GFM, AST access for structural edits. Custom extensions for wikilinks and frontmatter.                                                                                                                              |
+| Frontmatter         | serde_yaml                | `serde_yaml`                    | YAML frontmatter is the Obsidian standard.                                                                                                                                                                                       |
+| SQLite              | rusqlite                  | `rusqlite`                      | Direct bindings. One file for metadata, FTS, and vectors.                                                                                                                                                                        |
+| Full-text search    | SQLite FTS5               | (built into rusqlite)           | BM25 scoring, incremental updates. Catches exact-term matches that embeddings miss.                                                                                                                                              |
 | Vector search       | LanceDB (embedded)        | `lance`, `lancedb`              | Rust-native embedded columnar vector DB. Scales to 100K+ notes without re-architecture. Native HNSW indexing; built-in dataset versioning. Stored under `.engram/vectors/`. See [ADR 0014](adrs/0014-lancedb-vector-storage.md). |
-| Embeddings (local)  | ONNX Runtime              | `ort`                           | Run `bge-m3` or `nomic-embed-text-v2` in-process on Apple Silicon. No Ollama dependency for embeddings.                                                 |
-| Embeddings (cloud)  | OpenAI                    | `async-openai`                  | `text-embedding-3-large`, Matryoshka-reducible. ~$0.50 for 10K notes.                                                                                   |
-| LLM providers       | Anthropic, OpenAI, Ollama | `reqwest` + typed wrappers      | Provider trait with implementations. Agents specify a model tier (`fast`/`standard`/`deep`), the system maps to a concrete model.                       |
-| Git                 | Gitoxide                  | `gix`                           | Pure Rust, no libgit2. Commit-as-agent, branch management, diff.                                                                                        |
-| File watching       | notify                    | `notify`                        | Debounced, cross-platform. Triggers indexing and agent runs.                                                                                            |
-| Audio transcription | whisper.cpp               | `whisper-rs`                    | Local, fast on Apple Silicon.                                                                                                                           |
-| OCR                 | ocrs                      | `ocrs`                          | Rust-native OCR. Fallback when cloud vision is unavailable or privacy-gated.                                                                            |
-| MCP server          | Rust MCP SDK              | `rmcp`                          | Exposes vault tools to Claude Desktop/Code. Same process, same index access.                                                                            |
-| CLI                 | clap                      | `clap`                          | Standard. Subcommands: `serve`, `reindex`, `run`, `status`, `ingest`.                                                                                   |
-| Config              | TOML                      | `toml`                          | Agent configs, vault config, privacy zones.                                                                                                             |
-| Logging / tracing   | tracing                   | `tracing`, `tracing-subscriber` | Structured, async-aware. JSON output for machine consumption, human-readable for CLI.                                                                   |
-| Serialization       | serde                     | `serde`, `serde_json`           | Everywhere.                                                                                                                                             |
+| Embeddings (local)  | ONNX Runtime              | `ort`                           | Run `bge-m3` or `nomic-embed-text-v2` in-process on Apple Silicon. No Ollama dependency for embeddings.                                                                                                                          |
+| Embeddings (cloud)  | OpenAI                    | `async-openai`                  | `text-embedding-3-large`, Matryoshka-reducible. ~$0.50 for 10K notes.                                                                                                                                                            |
+| LLM providers       | Anthropic, OpenAI, Ollama | `reqwest` + typed wrappers      | Provider trait with implementations. Agents specify a model tier (`fast`/`standard`/`deep`), the system maps to a concrete model.                                                                                                |
+| Git                 | Gitoxide                  | `gix`                           | Pure Rust, no libgit2. Commit-as-agent, branch management, diff.                                                                                                                                                                 |
+| File watching       | notify                    | `notify`                        | Debounced, cross-platform. Triggers indexing and agent runs.                                                                                                                                                                     |
+| Audio transcription | whisper.cpp               | `whisper-rs`                    | Local, fast on Apple Silicon.                                                                                                                                                                                                    |
+| OCR                 | ocrs                      | `ocrs`                          | Rust-native OCR. Fallback when cloud vision is unavailable or privacy-gated.                                                                                                                                                     |
+| MCP server          | Rust MCP SDK              | `rmcp`                          | Exposes vault tools to Claude Desktop/Code. Same process, same index access.                                                                                                                                                     |
+| CLI                 | clap                      | `clap`                          | Standard. Subcommands: `serve`, `reindex`, `run`, `status`, `ingest`.                                                                                                                                                            |
+| Config              | TOML                      | `toml`                          | Agent configs, vault config, privacy zones.                                                                                                                                                                                      |
+| Logging / tracing   | tracing                   | `tracing`, `tracing-subscriber` | Structured, async-aware. JSON output for machine consumption, human-readable for CLI.                                                                                                                                            |
+| Serialization       | serde                     | `serde`, `serde_json`           | Everywhere.                                                                                                                                                                                                                      |
 
 ### Swift app
 
 The Swift app has four primary roles, in priority order: **capture, diff review, search, browse.** Capture is the highest-priority surface --- the failure mode of a knowledge tool is friction at the entry point.
 
-| Layer         | Choice                                                                                  | Rationale                                                                                                              |
-| ------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Framework     | SwiftUI                                                                                 | Universal (iOS + macOS). Declarative, native feel on both platforms.                                                   |
-| Concurrency   | Swift concurrency (async/await)                                                         | Native, structured. No Combine for new code.                                                                           |
-| Networking    | URLSession + async                                                                      | Talks to `engram serve` over HTTP. SSE for real-time agent events.                                                     |
-| Local storage | SwiftData                                                                               | Two roles: (1) metadata cache for offline browse/search; (2) **offline capture queue** (see below).                    |
-| Capture       | Share extension + document picker + drag-drop + voice memo                              | iOS: share sheet + document picker + voice memo. macOS: drag-drop window + share extension. Bound to global hotkey.    |
-| Diff review   | Per-file diff with agent attribution, confidence score, rationale-on-tap                | Tap to stage (`git add`); swipe-to-discard (`git restore`); long-press to amend before staging.                        |
-| Search        | Hybrid retrieval against `/search` API; offline fall-back to local SwiftData FTS index  | Useful when away from Obsidian or when reviewing context for a capture.                                                |
+| Layer         | Choice                                                                                 | Rationale                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Framework     | SwiftUI                                                                                | Universal (iOS + macOS). Declarative, native feel on both platforms.                                                |
+| Concurrency   | Swift concurrency (async/await)                                                        | Native, structured. No Combine for new code.                                                                        |
+| Networking    | URLSession + async                                                                     | Talks to `engram serve` over HTTP. SSE for real-time agent events.                                                  |
+| Local storage | SwiftData                                                                              | Two roles: (1) metadata cache for offline browse/search; (2) **offline capture queue** (see below).                 |
+| Capture       | Share extension + document picker + drag-drop + voice memo                             | iOS: share sheet + document picker + voice memo. macOS: drag-drop window + share extension. Bound to global hotkey. |
+| Diff review   | Per-file diff with agent attribution, confidence score, rationale-on-tap               | Tap to stage (`git add`); swipe-to-discard (`git restore`); long-press to amend before staging.                     |
+| Search        | Hybrid retrieval against `/search` API; offline fall-back to local SwiftData FTS index | Useful when away from Obsidian or when reviewing context for a capture.                                             |
 
 #### Offline capture queue (iOS)
 
@@ -74,6 +74,7 @@ engram core (Mac)
 ```
 
 Properties:
+
 - **Idempotent.** Server uses the ULID as an idempotency key. Re-sending a previously-acked capture is a no-op. Resilient to retries, app restarts, and unreliable mobile networks.
 - **Content-addressed.** SHA-256 hash matches what the server's artifact store computes, so dedup works across the queue/server boundary.
 - **Lossless.** Captures persist across app restarts. Failed captures stay in the queue for inspection rather than silently dropping.
@@ -998,90 +999,90 @@ The `privacy: local-only` flag on a note forces the local model mapping regardle
 
 ### REST endpoints
 
-| Method            | Path                       | Description                                                  |
-| ----------------- | -------------------------- | ------------------------------------------------------------ |
-| **Notes**         |                            |                                                              |
-| GET               | `/notes`                   | List notes (filterable by type, status, tag, date, author)   |
-| GET               | `/notes/:id`               | Read a single note (markdown + frontmatter)                  |
-| GET               | `/search?q=...&author=...` | Hybrid search with provenance filter                         |
-| GET               | `/graph/:id`               | Link graph neighborhood for a note                           |
-| **Ingestion**     |                            |                                                              |
-| POST              | `/ingest`                  | Upload file for ingestion                                    |
-| **Review (unstaged)** |                            |                                                          |
-| GET               | `/changes`                 | All pending unstaged agent changes (per-file, with attribution + confidence + rationale) |
-| GET               | `/changes/:path`           | Diff + agent_actions row(s) for one file                     |
-| POST              | `/changes/:path/stage`     | `git add <path>` --- accept the change                       |
-| POST              | `/changes/:path/discard`   | `git restore <path>` --- reject the change                   |
-| POST              | `/changes/:path/amend`     | Save edited content over the unstaged version, then stage    |
-| POST              | `/commit`                  | `git commit` with a message (commits whatever is staged)     |
-| **Review (proposals)** |                            |                                                         |
-| GET               | `/proposals`               | List explicit human-approval proposals (high-invasiveness)   |
-| POST              | `/proposals/:id/approve`   | Approve --- triggers agent to write to working tree unstaged |
-| POST              | `/proposals/:id/reject`    | Reject a proposal                                            |
-| **Council**       |                            |                                                              |
-| POST              | `/council/query`           | Submit a Research Council question                           |
-| POST              | `/council/debate`          | Initiate Debate Mode between two notes                       |
-| **Conversations** |                            |                                                              |
-| GET               | `/conversations`           | List active agent conversations                              |
-| GET               | `/conversations/:id`       | Read conversation transcript                                 |
-| POST              | `/conversations/:id/reply` | Send human reply in a conversation                           |
-| GET               | `/conversations/:id/stream` | SSE stream of agent's next turn (token-by-token chunks)     |
-| POST              | `/conversations/:id/end`   | End a conversation early                                     |
-| **Sessions**      |                            |                                                              |
-| GET               | `/sessions`                | List goal-directed sessions                                  |
-| POST              | `/sessions`                | Create a new goal-directed session                           |
-| PATCH             | `/sessions/:id`            | Update session (pause, resume, complete)                     |
-| **Dreams**        |                            |                                                              |
-| GET               | `/dreams`                  | List speculative proposals from dream mode                   |
-| POST              | `/dreams/:id/promote`      | Promote a dream to a real proposal                           |
-| DELETE            | `/dreams/:id`              | Dismiss a dream                                              |
-| **Agents**        |                            |                                                              |
-| GET               | `/agents`                  | List agents, their state, and trust scores                   |
-| POST              | `/agents/:name/run`        | Manually trigger an agent                                    |
-| GET               | `/agents/:name/memory`     | Inspect an agent's memory store                              |
-| GET               | `/agents/trust`            | Trust score summary for all agents                           |
-| **Predictions**   |                            |                                                              |
-| GET               | `/predictions`             | List predictions (filter by status, due date, topic)         |
-| POST              | `/predictions/:id/resolve` | Resolve a due prediction (correct, incorrect, superseded)    |
-| GET               | `/calibration`             | Calibration profile (claimed vs. actual accuracy by topic)   |
-| **Pedagogy**      |                            |                                                              |
-| GET               | `/flashcards/due`          | Cards due for review today                                   |
-| POST              | `/flashcards/:id/review`   | Submit a review rating (1-4)                                 |
-| GET               | `/flashcards/stats`        | Review streak, retention rate, weak areas                    |
-| **Flows + cost**  |                            |                                                              |
-| GET               | `/flows`                   | List active and recent flow runs                             |
-| GET               | `/flows/:id`               | Flow run state, step results, cost actual vs. estimated      |
-| POST              | `/flows/estimate`          | Pre-flight cost estimate for a proposed flow (`{kind, target, dry_run}`) |
-| POST              | `/flows/:id/confirm`       | User confirms a flow that triggered a cost prompt            |
-| POST              | `/flows/:id/pause`         | Pause a running flow at next step boundary                   |
-| POST              | `/flows/:id/resume`        | Resume a blocked, paused, or failed flow                     |
-| **Evals**         |                            |                                                              |
-| GET               | `/evals/:agent`            | List eval runs for an agent (most recent first)              |
-| GET               | `/evals/:agent/scorecard`  | Latest scorecard markdown                                    |
-| POST              | `/evals/:agent/run`        | Trigger a fresh eval run (`{cases: optional case-id list}`)  |
-| GET               | `/evals/:agent/runs/:id`   | Full results for a specific run                              |
-| **Personal**      |                            |                                                              |
-| GET               | `/biography`               | Read the current biographer model                            |
-| POST              | `/voice/check`             | Submit text, get voice-match score + suggested edits         |
-| GET               | `/trajectory/:concept`     | Trace thinking on a concept over time                        |
-| **Digestion**     |                            |                                                              |
-| POST              | `/digest`                  | Start a corpus digestion (`{path, policy_overrides}`)        |
-| GET               | `/digest`                  | List all digestions and their state                          |
-| GET               | `/digest/:id`              | Status, plan, batch progress for one digestion               |
-| GET               | `/digest/:id/batches`      | List batches with disposition counts                         |
-| GET               | `/digest/:id/batches/:bid` | Read a batch's per-item proposals (for Swift app review)     |
-| POST              | `/digest/:id/batches/:bid/decide` | Submit batch review (per-item approve/override/reject) |
-| PATCH             | `/digest/:id/policy`       | Update policy mid-digestion                                  |
-| POST              | `/digest/:id/recluster`    | Re-run a cluster with new policy                             |
-| GET               | `/digest/:id/discards`     | The discard log (one-line summaries)                         |
-| GET               | `/digest/:id/audit`        | Auditor's post-digestion review                              |
-| **On-demand**     |                            |                                                              |
-| POST              | `/prep`                    | Generate a conversation prep briefing                        |
-| POST              | `/untangle`                | Generate a sensemaking map for a confused topic              |
-| GET               | `/standup`                 | Today's morning report (operational summary)                 |
-| **System**        |                            |                                                              |
-| GET               | `/status`                  | System health, agent states, queue depth                     |
-| GET               | `/events`                  | SSE stream: agent activity, proposals, conversations, dreams |
+| Method                 | Path                              | Description                                                                              |
+| ---------------------- | --------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Notes**              |                                   |                                                                                          |
+| GET                    | `/notes`                          | List notes (filterable by type, status, tag, date, author)                               |
+| GET                    | `/notes/:id`                      | Read a single note (markdown + frontmatter)                                              |
+| GET                    | `/search?q=...&author=...`        | Hybrid search with provenance filter                                                     |
+| GET                    | `/graph/:id`                      | Link graph neighborhood for a note                                                       |
+| **Ingestion**          |                                   |                                                                                          |
+| POST                   | `/ingest`                         | Upload file for ingestion                                                                |
+| **Review (unstaged)**  |                                   |                                                                                          |
+| GET                    | `/changes`                        | All pending unstaged agent changes (per-file, with attribution + confidence + rationale) |
+| GET                    | `/changes/:path`                  | Diff + agent_actions row(s) for one file                                                 |
+| POST                   | `/changes/:path/stage`            | `git add <path>` --- accept the change                                                   |
+| POST                   | `/changes/:path/discard`          | `git restore <path>` --- reject the change                                               |
+| POST                   | `/changes/:path/amend`            | Save edited content over the unstaged version, then stage                                |
+| POST                   | `/commit`                         | `git commit` with a message (commits whatever is staged)                                 |
+| **Review (proposals)** |                                   |                                                                                          |
+| GET                    | `/proposals`                      | List explicit human-approval proposals (high-invasiveness)                               |
+| POST                   | `/proposals/:id/approve`          | Approve --- triggers agent to write to working tree unstaged                             |
+| POST                   | `/proposals/:id/reject`           | Reject a proposal                                                                        |
+| **Council**            |                                   |                                                                                          |
+| POST                   | `/council/query`                  | Submit a Research Council question                                                       |
+| POST                   | `/council/debate`                 | Initiate Debate Mode between two notes                                                   |
+| **Conversations**      |                                   |                                                                                          |
+| GET                    | `/conversations`                  | List active agent conversations                                                          |
+| GET                    | `/conversations/:id`              | Read conversation transcript                                                             |
+| POST                   | `/conversations/:id/reply`        | Send human reply in a conversation                                                       |
+| GET                    | `/conversations/:id/stream`       | SSE stream of agent's next turn (token-by-token chunks)                                  |
+| POST                   | `/conversations/:id/end`          | End a conversation early                                                                 |
+| **Sessions**           |                                   |                                                                                          |
+| GET                    | `/sessions`                       | List goal-directed sessions                                                              |
+| POST                   | `/sessions`                       | Create a new goal-directed session                                                       |
+| PATCH                  | `/sessions/:id`                   | Update session (pause, resume, complete)                                                 |
+| **Dreams**             |                                   |                                                                                          |
+| GET                    | `/dreams`                         | List speculative proposals from dream mode                                               |
+| POST                   | `/dreams/:id/promote`             | Promote a dream to a real proposal                                                       |
+| DELETE                 | `/dreams/:id`                     | Dismiss a dream                                                                          |
+| **Agents**             |                                   |                                                                                          |
+| GET                    | `/agents`                         | List agents, their state, and trust scores                                               |
+| POST                   | `/agents/:name/run`               | Manually trigger an agent                                                                |
+| GET                    | `/agents/:name/memory`            | Inspect an agent's memory store                                                          |
+| GET                    | `/agents/trust`                   | Trust score summary for all agents                                                       |
+| **Predictions**        |                                   |                                                                                          |
+| GET                    | `/predictions`                    | List predictions (filter by status, due date, topic)                                     |
+| POST                   | `/predictions/:id/resolve`        | Resolve a due prediction (correct, incorrect, superseded)                                |
+| GET                    | `/calibration`                    | Calibration profile (claimed vs. actual accuracy by topic)                               |
+| **Pedagogy**           |                                   |                                                                                          |
+| GET                    | `/flashcards/due`                 | Cards due for review today                                                               |
+| POST                   | `/flashcards/:id/review`          | Submit a review rating (1-4)                                                             |
+| GET                    | `/flashcards/stats`               | Review streak, retention rate, weak areas                                                |
+| **Flows + cost**       |                                   |                                                                                          |
+| GET                    | `/flows`                          | List active and recent flow runs                                                         |
+| GET                    | `/flows/:id`                      | Flow run state, step results, cost actual vs. estimated                                  |
+| POST                   | `/flows/estimate`                 | Pre-flight cost estimate for a proposed flow (`{kind, target, dry_run}`)                 |
+| POST                   | `/flows/:id/confirm`              | User confirms a flow that triggered a cost prompt                                        |
+| POST                   | `/flows/:id/pause`                | Pause a running flow at next step boundary                                               |
+| POST                   | `/flows/:id/resume`               | Resume a blocked, paused, or failed flow                                                 |
+| **Evals**              |                                   |                                                                                          |
+| GET                    | `/evals/:agent`                   | List eval runs for an agent (most recent first)                                          |
+| GET                    | `/evals/:agent/scorecard`         | Latest scorecard markdown                                                                |
+| POST                   | `/evals/:agent/run`               | Trigger a fresh eval run (`{cases: optional case-id list}`)                              |
+| GET                    | `/evals/:agent/runs/:id`          | Full results for a specific run                                                          |
+| **Personal**           |                                   |                                                                                          |
+| GET                    | `/biography`                      | Read the current biographer model                                                        |
+| POST                   | `/voice/check`                    | Submit text, get voice-match score + suggested edits                                     |
+| GET                    | `/trajectory/:concept`            | Trace thinking on a concept over time                                                    |
+| **Digestion**          |                                   |                                                                                          |
+| POST                   | `/digest`                         | Start a corpus digestion (`{path, policy_overrides}`)                                    |
+| GET                    | `/digest`                         | List all digestions and their state                                                      |
+| GET                    | `/digest/:id`                     | Status, plan, batch progress for one digestion                                           |
+| GET                    | `/digest/:id/batches`             | List batches with disposition counts                                                     |
+| GET                    | `/digest/:id/batches/:bid`        | Read a batch's per-item proposals (for Swift app review)                                 |
+| POST                   | `/digest/:id/batches/:bid/decide` | Submit batch review (per-item approve/override/reject)                                   |
+| PATCH                  | `/digest/:id/policy`              | Update policy mid-digestion                                                              |
+| POST                   | `/digest/:id/recluster`           | Re-run a cluster with new policy                                                         |
+| GET                    | `/digest/:id/discards`            | The discard log (one-line summaries)                                                     |
+| GET                    | `/digest/:id/audit`               | Auditor's post-digestion review                                                          |
+| **On-demand**          |                                   |                                                                                          |
+| POST                   | `/prep`                           | Generate a conversation prep briefing                                                    |
+| POST                   | `/untangle`                       | Generate a sensemaking map for a confused topic                                          |
+| GET                    | `/standup`                        | Today's morning report (operational summary)                                             |
+| **System**             |                                   |                                                                                          |
+| GET                    | `/status`                         | System health, agent states, queue depth                                                 |
+| GET                    | `/events`                         | SSE stream: agent activity, proposals, conversations, dreams                             |
 
 ### MCP servers
 
@@ -1202,6 +1203,7 @@ The vault is canonical. Git provides versioning, not durability --- a lost `.git
 ### What to back up
 
 **Always:**
+
 - Vault root (markdown files, `.git/`)
 - `.engram/sidecar/` (per-note metadata, git-tracked anyway)
 - `.engram/deliberations/`, `.engram/proposals/`, `.engram/shelved/` (council artifacts, in git)
@@ -1211,10 +1213,12 @@ The vault is canonical. Git provides versioning, not durability --- a lost `.git
 - `.engram/config.toml`
 
 **Conditional:**
+
 - `.engram/artifacts/` --- the raw ingested files. Often large (PDFs, audio). Either back up locally OR rely on a separate content-addressed remote (S3-compatible) keyed by SHA-256.
 - `.engram/vectors/` --- LanceDB datasets. **Technically rebuildable** from `embedding_cache` (in SQLite) + the vault (re-embed any missing). Backing it up directly is recommended because rebuild at 10K notes takes ~10 min; at 100K it's substantial. Use directory snapshot semantics — LanceDB datasets are multi-file with internal versioning.
 
 **Never:**
+
 - `.engram/index.sqlite` --- derived; rebuildable via `engram reindex --full`.
 - `.engram/dreams/` --- speculative; not durable record.
 - `.engram/witness/` --- intentionally on-device only; never synced anywhere.
@@ -1231,6 +1235,7 @@ Three-layer defense:
 ### Backup Watcher agent
 
 A simple agent (added in v1) that monitors:
+
 - Time since last successful git push (`git log origin/main..HEAD` count)
 - Time since last filesystem snapshot (Time Machine API on macOS, file mtime on snapshot dirs elsewhere)
 - Reachability of the artifact remote (probe + last-sync timestamp)
@@ -1272,6 +1277,7 @@ Engram needs outbound credentials for cloud LLM providers (Anthropic, OpenAI), e
 - Git push credentials (only if engram triggers backups; otherwise out of scope --- the user's git config holds these)
 
 **Never stored** by engram secrets:
+
 - External MCP client API keys (those are issued by engram, hashed in `mcp_clients` table, given to the client once at registration)
 - User Apple Calendar / iCloud / etc. credentials (handled by Swift app frameworks)
 
@@ -1288,6 +1294,7 @@ engram secrets export --to-env-file     # for backup or migration; warned about
 ### Rotation policy
 
 Documented but not enforced:
+
 - Provider keys rotate annually or on suspected compromise.
 - External MCP client keys: revoke + reissue (no automatic rotation; client must re-register).
 
@@ -1321,13 +1328,14 @@ Engram's SQLite schema and sidecar JSON schema will evolve. Old vaults must cont
 
 Sidecar files carry `schema_version: <int>` (already in the schema). On read, if the version is old, the loader applies in-memory upgrades. On write, sidecars are rewritten at the current version.
 
-If a sidecar version is *newer* than the current binary supports (e.g., user downgraded), the loader refuses and surfaces an explicit error rather than silently corrupting.
+If a sidecar version is _newer_ than the current binary supports (e.g., user downgraded), the loader refuses and surfaces an explicit error rather than silently corrupting.
 
 ### Stability promise
 
 > Migrations forward, never break old vaults.
 
 Concretely:
+
 - Major version bumps may add tables/columns and may transform sidecar JSON shape; never drop user data.
 - Old vaults can always be opened by a newer engram (after migrations apply).
 - Newer vaults cannot be opened by an older engram (sidecar version check refuses).
@@ -1352,7 +1360,7 @@ engram migrate --dry-run    # show what would happen
 
 ## System-wide cost ceiling
 
-Per-agent token budgets exist (see `agent_budgets` table); they prevent any single agent from running away. They do not prevent the *aggregate* from exceeding what the user expects to spend.
+Per-agent token budgets exist (see `agent_budgets` table); they prevent any single agent from running away. They do not prevent the _aggregate_ from exceeding what the user expects to spend.
 
 ### Configuration
 
@@ -1380,6 +1388,7 @@ The Watcher tracks aggregate spend across all agents per calendar month. When mo
 ### Visibility
 
 Cost dashboard in the Swift app and `engram status` shows:
+
 - Month-to-date spend (USD)
 - Per-agent breakdown (top 5)
 - Sparkline of daily spend
@@ -1426,14 +1435,14 @@ Jitter is multiplicative (uniform in [0.5, 1.5]) to prevent thundering-herd when
 
 Retry is conditional on error type:
 
-| Error class           | Retry?                                              |
-| --------------------- | --------------------------------------------------- |
-| Network timeout       | Yes (transient)                                     |
-| 5xx                   | Yes (transient)                                     |
-| 429 rate limit        | Yes, respect `Retry-After` header if present        |
-| 4xx (other)           | No (permanent — bad request, auth, etc.)            |
-| Context overflow      | No (re-prompt would just fail again; surface error) |
-| Schema parse failure  | One retry with stricter prompt; then fail           |
+| Error class          | Retry?                                              |
+| -------------------- | --------------------------------------------------- |
+| Network timeout      | Yes (transient)                                     |
+| 5xx                  | Yes (transient)                                     |
+| 429 rate limit       | Yes, respect `Retry-After` header if present        |
+| 4xx (other)          | No (permanent — bad request, auth, etc.)            |
+| Context overflow     | No (re-prompt would just fail again; surface error) |
+| Schema parse failure | One retry with stricter prompt; then fail           |
 
 ### Circuit breaker (per provider)
 
@@ -1565,14 +1574,14 @@ async fn fetch_coalesced<K: Hash, V: Clone>(
 
 **Coalesced calls** (in the order of value):
 
-| Call                    | Key                          | Window | Notes                                  |
-| ----------------------- | ---------------------------- | ------ | -------------------------------------- |
-| `read_note(id)`         | `note_id`                    | 50ms   | Highest hit rate during council        |
-| `read_sidecar(id)`      | `note_id`                    | 50ms   | Pairs with read_note                   |
-| `hybrid_search(q,n)`    | `(query_hash, n)`            | 200ms  | Embedding + BM25 + RRF; expensive      |
-| `list_neighbors(id,d)`  | `(note_id, depth)`           | 100ms  | Pure sqlite; coalesce mainly to reduce DB pressure |
-| `read_index()`          | `()`                         | 1s     | Whole-vault index; rare update         |
-| `embed(text)`           | `(content_hash, model, ver)` | n/a    | Already deduplicated via embedding cache (ADR 0012) |
+| Call                   | Key                          | Window | Notes                                               |
+| ---------------------- | ---------------------------- | ------ | --------------------------------------------------- |
+| `read_note(id)`        | `note_id`                    | 50ms   | Highest hit rate during council                     |
+| `read_sidecar(id)`     | `note_id`                    | 50ms   | Pairs with read_note                                |
+| `hybrid_search(q,n)`   | `(query_hash, n)`            | 200ms  | Embedding + BM25 + RRF; expensive                   |
+| `list_neighbors(id,d)` | `(note_id, depth)`           | 100ms  | Pure sqlite; coalesce mainly to reduce DB pressure  |
+| `read_index()`         | `()`                         | 1s     | Whole-vault index; rare update                      |
+| `embed(text)`          | `(content_hash, model, ver)` | n/a    | Already deduplicated via embedding cache (ADR 0012) |
 
 **Latency win:** council convene-to-quorum-ready time drops from ~600ms (5 sequential retrievals × ~120ms each) to ~200ms (one batch + cached responses). User-perceived faster diff queue updates.
 
@@ -1613,13 +1622,14 @@ Pattern: **temp-file rename + write-ahead log entry + async LanceDB upsert.**
 ```
 
 On startup, the runner scans `write_intents` for non-committed rows and:
+
 - If both .tmp files exist: replay step 6-8.
 - If one .tmp file is missing: roll back (delete the other .tmp; clear the intent).
 - If both .tmp files are missing but intent is uncommitted: clear the intent (the write never happened).
 
 **LanceDB reconciliation** runs separately on startup and hourly: for any SQLite `notes` row whose `(id, content_hash)` doesn't match a LanceDB record, queue an upsert. This catches missed async upserts from crashed prior runs.
 
-This guarantees the **markdown + sidecar + sqlite triple is strictly consistent**, modulo the one-rename-then-crash window (sub-millisecond on a healthy filesystem). The LanceDB vector layer is eventually consistent — semantic search on freshly-modified notes may lag by ~500ms but never returns *wrong* results (only stale-by-one-version results); BM25 + graph layers cover this window in the retrieval pipeline.
+This guarantees the **markdown + sidecar + sqlite triple is strictly consistent**, modulo the one-rename-then-crash window (sub-millisecond on a healthy filesystem). The LanceDB vector layer is eventually consistent — semantic search on freshly-modified notes may lag by ~500ms but never returns _wrong_ results (only stale-by-one-version results); BM25 + graph layers cover this window in the retrieval pipeline.
 
 ### Per-note advisory lock
 
@@ -1672,6 +1682,7 @@ The user runs `git add <path>` (via Swift app, CLI, or directly). How does `agen
 4. After commit (also detected via index change → HEAD update), runs `git rev-parse HEAD` and writes `git_commit_sha` to all rows updated in this batch.
 
 **Edge cases:**
+
 - If the user manually edits a file before staging (`amend` flow): the diff hash on disk no longer matches `agent_actions.diff_hash`. The runner records `human_decision = 'amended'` and stores the post-amend hash in `final_diff_hash`.
 - If the user stages a file that has no corresponding pending `agent_actions` row (a manual edit): no row is created or updated — manual edits are not in the agent action log by design.
 - If the user reverts a previously-staged-and-committed change later: a new commit is created (`git revert`) and a synthetic `agent_actions` row is **not** created; the revert is just a normal commit attributed to the human. Watcher's outcome tracking notices the file now mismatches the prior committed state and updates the prior `agent_actions` row's `outcome` field.
@@ -1690,26 +1701,26 @@ This is intentional — the user reviewing `git diff` will see both changes; the
 
 **REST API:** per-IP and per-API-token rate limits, enforced by `tower_governor` middleware:
 
-| Endpoint group         | Default rate limit                |
-| ---------------------- | --------------------------------- |
-| `/changes`             | 60 req/min per source             |
-| `/notes/*`, `/search`  | 120 req/min per source            |
-| `/ingest`              | 30 req/min per source             |
-| `/council/*`, `/prep`  | 10 req/min per source (LLM-heavy) |
-| `/agents/:name/run`    | 6 req/min per source              |
+| Endpoint group        | Default rate limit                |
+| --------------------- | --------------------------------- |
+| `/changes`            | 60 req/min per source             |
+| `/notes/*`, `/search` | 120 req/min per source            |
+| `/ingest`             | 30 req/min per source             |
+| `/council/*`, `/prep` | 10 req/min per source (LLM-heavy) |
+| `/agents/:name/run`   | 6 req/min per source              |
 
 Limits are configurable in `config.toml`. Limits apply per-source where source = remote IP for unauthenticated calls, or `client_id` for authenticated external MCP calls.
 
 **External MCP:** in addition to REST limits, per-client per-tool quotas:
 
-| Tool                  | Default quota          |
-| --------------------- | ---------------------- |
-| `personal_context`    | 100/day per client     |
-| `preferences`         | 200/day per client     |
-| `recent_thinking_on`  | 500/day per client     |
-| `ask_user`            | 20/day per client      |
-| `record_session`      | 50/day per client      |
-| `search_notes`        | 1000/day per client    |
+| Tool                 | Default quota       |
+| -------------------- | ------------------- |
+| `personal_context`   | 100/day per client  |
+| `preferences`        | 200/day per client  |
+| `recent_thinking_on` | 500/day per client  |
+| `ask_user`           | 20/day per client   |
+| `record_session`     | 50/day per client   |
+| `search_notes`       | 1000/day per client |
 
 Exceeding a quota returns 429 with `Retry-After` set to seconds-until-midnight-UTC. Quotas reset at 00:00 UTC.
 
@@ -1746,6 +1757,7 @@ timezone = "America/Los_Angeles"   # IANA identifier; auto-detected on first run
 ```
 
 Used for:
+
 - "Morning standup" — fires at user-local 06:00
 - "Today's flashcards due" — uses user-local midnight as the day boundary
 - "Predictions due today" — same
@@ -1763,14 +1775,14 @@ Single source of truth: `.engram/config.toml`. Per-agent overrides in `agents/<n
 
 **Hot-reload scope:**
 
-| What                                                  | Reload behavior                                |
-| ----------------------------------------------------- | ---------------------------------------------- |
-| `agents/<name>/prompt.md`                             | Hot-reload (next run picks up)                 |
-| `agents/<name>/config.toml`                           | Hot-reload (next run; in-flight unaffected)    |
-| `.engram/config.toml` --- agent set, schedule changes | Hot-reload (scheduler refreshed)               |
-| `.engram/config.toml` --- model providers, secrets    | Restart required                               |
-| `.engram/config.toml` --- privacy zones               | Hot-reload (applies to next file event)        |
-| `.engram/digestion/<slug>/policy.toml`                | Hot-reload (applies to next batch)             |
+| What                                                  | Reload behavior                             |
+| ----------------------------------------------------- | ------------------------------------------- |
+| `agents/<name>/prompt.md`                             | Hot-reload (next run picks up)              |
+| `agents/<name>/config.toml`                           | Hot-reload (next run; in-flight unaffected) |
+| `.engram/config.toml` --- agent set, schedule changes | Hot-reload (scheduler refreshed)            |
+| `.engram/config.toml` --- model providers, secrets    | Restart required                            |
+| `.engram/config.toml` --- privacy zones               | Hot-reload (applies to next file event)     |
+| `.engram/digestion/<slug>/policy.toml`                | Hot-reload (applies to next batch)          |
 
 Reload-required-but-not-applied state is surfaced in `engram status`.
 
@@ -1784,7 +1796,7 @@ Reload-required-but-not-applied state is surfaced in `engram status`.
 
 ### Backup verification (not just monitoring)
 
-The Backup Watcher monitors backup *recency* (when did we last back up?) but recency is not the same as recoverability. **Quarterly restore drill:**
+The Backup Watcher monitors backup _recency_ (when did we last back up?) but recency is not the same as recoverability. **Quarterly restore drill:**
 
 A scripted task (`engram backup verify`) performs a full restore-and-validate against a sandbox:
 

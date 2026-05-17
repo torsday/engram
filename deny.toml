@@ -1,0 +1,36 @@
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "CC0-1.0",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "OpenSSL",
+    "Zlib",
+]
+deny = [
+    "GPL-3.0",
+    "AGPL-3.0",
+]
+# Warn on unlisted rather than deny — lets new deps land without failing CI
+# until they're triaged.
+unlicensed = "warn"
+copyleft = "warn"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[advisories]
+# "workspace" checks only crates that are workspace members; "all" includes
+# transitive deps. Use "all" so vendor supply-chain issues surface immediately.
+version = 2
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

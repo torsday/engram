@@ -15,10 +15,10 @@ This document is the single reference for filename rules, frontmatter schema, si
 
 ## The two layers
 
-| Layer                                  | Where it lives                          | Audience              | Properties                                       |
-| -------------------------------------- | --------------------------------------- | --------------------- | ------------------------------------------------ |
-| Markdown file (frontmatter + body)     | `notes/<type>/<slug>.md`                | Human-first           | Lean, readable, foldable, plugin-compatible      |
-| Sidecar JSON                           | `.engram/sidecar/<id>.json`             | Agent-first           | Rich, structured, git-tracked, never rendered    |
+| Layer                              | Where it lives              | Audience    | Properties                                    |
+| ---------------------------------- | --------------------------- | ----------- | --------------------------------------------- |
+| Markdown file (frontmatter + body) | `notes/<type>/<slug>.md`    | Human-first | Lean, readable, foldable, plugin-compatible   |
+| Sidecar JSON                       | `.engram/sidecar/<id>.json` | Agent-first | Rich, structured, git-tracked, never rendered |
 
 The note's identity (its ID) ties the two together. Wikilinks and titles operate on the markdown layer; agent reasoning operates on both.
 
@@ -78,21 +78,21 @@ The note's `id` in frontmatter is canonical. When a file is renamed (in Obsidian
 
 ```yaml
 ---
-id: 01JRZK3M7PQNX8B...        # ULID. Canonical. Never changes.
+id: 01JRZK3M7PQNX8B... # ULID. Canonical. Never changes.
 title: Attention as lossy compression
-type: evergreen                 # see type list below
+type: evergreen # see type list below
 ---
 ```
 
 ### Common optional fields
 
 ```yaml
-status: evergreen               # draft | candidate-evergreen | evergreen | needs-review | contested
-created: 2026-04-15             # ISO date
-tags:                           # array of slash-namespaced tags
+status: evergreen # draft | candidate-evergreen | evergreen | needs-review | contested
+created: 2026-04-15 # ISO date
+tags: # array of slash-namespaced tags
   - topic/attention
   - topic/information-theory
-aliases:                        # array of alternative titles for wikilink resolution
+aliases: # array of alternative titles for wikilink resolution
   - Attention is lossy compression
   - Attention as compression
 ```
@@ -112,28 +112,28 @@ published: 2017
 
 ```yaml
 type: heretical
-challenges: 01JRZK3M7P...       # ID of the note this contradicts
+challenges: 01JRZK3M7P... # ID of the note this contradicts
 ```
 
 **Archive notes** preserve their source corpus path:
 
 ```yaml
 type: archive
-source_corpus: notes-2022-03    # short slug; full provenance in sidecar
+source_corpus: notes-2022-03 # short slug; full provenance in sidecar
 ```
 
 ### Allowed `type:` values
 
-| Type           | Purpose                                         |
-| -------------- | ----------------------------------------------- |
-| `fleeting`     | Quick captures, voice memos, share-sheet drops  |
-| `literature`   | One per ingested source                         |
-| `evergreen`    | Curated, atomic concept notes                   |
-| `moc`          | Maps of content / index                         |
-| `archive`      | Corpus-digestion preserved (read-only, inert)   |
-| `journal`      | Personal/dated entries                          |
-| `heretical`    | Sustained counter-argument to an evergreen      |
-| `deliberation` | Council transcript (in `.engram/`)              |
+| Type           | Purpose                                        |
+| -------------- | ---------------------------------------------- |
+| `fleeting`     | Quick captures, voice memos, share-sheet drops |
+| `literature`   | One per ingested source                        |
+| `evergreen`    | Curated, atomic concept notes                  |
+| `moc`          | Maps of content / index                        |
+| `archive`      | Corpus-digestion preserved (read-only, inert)  |
+| `journal`      | Personal/dated entries                         |
+| `heretical`    | Sustained counter-argument to an evergreen     |
+| `deliberation` | Council transcript (in `.engram/`)             |
 
 ### What does NOT belong in frontmatter
 
@@ -170,8 +170,18 @@ The principle: **if a human reading the note in Obsidian wouldn't care about it,
   "birth_certificate": "2026-04-15-0003",
 
   "provenance_history": [
-    { "event": "created", "by": "synthesizer", "at": "2026-04-15T14:32:00Z", "deliberation": "2026-04-15-0003" },
-    { "event": "linked", "by": "linker", "at": "2026-04-15T15:01:00Z", "confidence": 0.93 },
+    {
+      "event": "created",
+      "by": "synthesizer",
+      "at": "2026-04-15T14:32:00Z",
+      "deliberation": "2026-04-15-0003"
+    },
+    {
+      "event": "linked",
+      "by": "linker",
+      "at": "2026-04-15T15:01:00Z",
+      "confidence": 0.93
+    },
     { "event": "probed", "by": "socratic-prober", "at": "2026-04-16T09:12:00Z" }
   ],
 
@@ -185,7 +195,11 @@ The principle: **if a human reading the note in Obsidian wouldn't care about it,
 
   "agent_visit_log": [
     { "agent": "linker", "at": "2026-04-17T03:00:00Z", "outcome": "no-change" },
-    { "agent": "fact-checker", "at": "2026-04-20T03:00:00Z", "outcome": "verified" }
+    {
+      "agent": "fact-checker",
+      "at": "2026-04-20T03:00:00Z",
+      "outcome": "verified"
+    }
   ],
 
   "rubric_check_history": [
@@ -193,7 +207,12 @@ The principle: **if a human reading the note in Obsidian wouldn't care about it,
   ],
 
   "calibration_claims": [
-    { "claim": "transformers will plateau by 2027", "confidence": 0.7, "by": "human", "extracted_by": "predictor" }
+    {
+      "claim": "transformers will plateau by 2027",
+      "confidence": 0.7,
+      "by": "human",
+      "extracted_by": "predictor"
+    }
   ],
 
   "ingestion": {
@@ -238,6 +257,7 @@ notes/
 This matches the Matuschak/Zettelkasten convention and is dramatically easier for agents (predictable paths, no "where does this go" decision per write).
 
 Exceptions:
+
 - `archive/` preserves the source corpus's internal structure (so `notes-2022-03/2. KNOWLEDGE/foo.md` lands at `archive/notes-2022-03/2. KNOWLEDGE/foo.md`).
 - `journal/` may have year subfolders (`journal/2026/2026-04-17.md`) if the user prefers; engram doesn't enforce.
 
@@ -247,14 +267,14 @@ Exceptions:
 
 Don't enforce a rigid template. Instead, define **section names that agents look for** but tolerate absence. Humans write free-form prose; agents have known places to find and append structured content.
 
-| Section          | Owner / writer            | Purpose                                          |
-| ---------------- | ------------------------- | ------------------------------------------------ |
-| `## Sources`     | Source Demand, human      | Citations and reference list                     |
-| `## Connections` | Linker (proposes), human  | Wikilinks to related concepts                    |
-| `## Probe`       | Socratic Prober           | Stress-test questions before evergreen promotion |
-| `## Challenged by` | Heretic                 | Links to heretical counter-notes                 |
-| `## Open questions` | Inquirer, human        | Unresolved questions about this concept          |
-| `## Predictions` | Predictor                 | Extracted prediction claims                      |
+| Section             | Owner / writer           | Purpose                                          |
+| ------------------- | ------------------------ | ------------------------------------------------ |
+| `## Sources`        | Source Demand, human     | Citations and reference list                     |
+| `## Connections`    | Linker (proposes), human | Wikilinks to related concepts                    |
+| `## Probe`          | Socratic Prober          | Stress-test questions before evergreen promotion |
+| `## Challenged by`  | Heretic                  | Links to heretical counter-notes                 |
+| `## Open questions` | Inquirer, human          | Unresolved questions about this concept          |
+| `## Predictions`    | Predictor                | Extracted prediction claims                      |
 
 Rules:
 
@@ -271,25 +291,25 @@ Hierarchical via `/` (Obsidian-native). Reserved namespaces for agents.
 
 ### User-owned namespaces
 
-| Namespace            | Purpose                                                  |
-| -------------------- | -------------------------------------------------------- |
-| `topic/<concept>`    | Subject classification (`topic/attention`)               |
-| `area/<life-area>`   | Domain (`area/work`, `area/personal`, `area/research`)   |
-| `type/<note-type>`   | Mirror of `type:` frontmatter (for tag-pane navigation)  |
-| `status/<state>`     | Mirror of `status:` frontmatter                          |
-| `<freeform>`         | Anything else the user wants (`interesting`, `revisit`)  |
+| Namespace          | Purpose                                                 |
+| ------------------ | ------------------------------------------------------- |
+| `topic/<concept>`  | Subject classification (`topic/attention`)              |
+| `area/<life-area>` | Domain (`area/work`, `area/personal`, `area/research`)  |
+| `type/<note-type>` | Mirror of `type:` frontmatter (for tag-pane navigation) |
+| `status/<state>`   | Mirror of `status:` frontmatter                         |
+| `<freeform>`       | Anything else the user wants (`interesting`, `revisit`) |
 
 ### Reserved `engram/` namespace (agent writes only)
 
-| Tag                           | Set by                  | Meaning                                              |
-| ----------------------------- | ----------------------- | ---------------------------------------------------- |
-| `engram/needs-citation`       | Source Demand           | Note has uncited factual claims                      |
-| `engram/needs-confidence`     | Confidence Annotator    | Note has unmarked confidence claims                  |
-| `engram/contested`            | Council                 | Has at least one shelved-with-dissent deliberation   |
-| `engram/has-heresy`           | Heretic                 | A heretical counterpart note exists                  |
-| `engram/needs-review`         | Various                 | Agent flagged for human attention                    |
-| `engram/keep-name`            | User                    | Cartographer should not propose renaming this file   |
-| `engram/private`              | User                    | Excluded from external MCP regardless of zone        |
+| Tag                       | Set by               | Meaning                                            |
+| ------------------------- | -------------------- | -------------------------------------------------- |
+| `engram/needs-citation`   | Source Demand        | Note has uncited factual claims                    |
+| `engram/needs-confidence` | Confidence Annotator | Note has unmarked confidence claims                |
+| `engram/contested`        | Council              | Has at least one shelved-with-dissent deliberation |
+| `engram/has-heresy`       | Heretic              | A heretical counterpart note exists                |
+| `engram/needs-review`     | Various              | Agent flagged for human attention                  |
+| `engram/keep-name`        | User                 | Cartographer should not propose renaming this file |
+| `engram/private`          | User                 | Excluded from external MCP regardless of zone      |
 
 The `engram/` namespace is reserved --- humans should not write tags there. Agents only write within it. This keeps the tag pane unambiguous: a human can filter `engram/*` to see all agent flags at once, or hide them entirely.
 
@@ -302,10 +322,10 @@ The Cartographer's quarterly audit normalizes user tags (synonym detection, hier
 Standard Obsidian:
 
 ```markdown
-[[Attention as lossy compression]]                      # by title
-[[Attention as lossy compression|attention]]            # with display alias
-[[Attention as lossy compression#^claim-compression]]   # by block ID
-[[01JRZK3M7P|attention]]                                # by ID (when title is ambiguous)
+[[Attention as lossy compression]] # by title
+[[Attention as lossy compression|attention]] # with display alias
+[[Attention as lossy compression#^claim-compression]] # by block ID
+[[01JRZK3M7P|attention]] # by ID (when title is ambiguous)
 ```
 
 Agents prefer the title form for human readability. When titles are ambiguous (rare, given collision handling), they fall back to the ID form, which works because the ID is also kept in `aliases:` automatically.
@@ -343,9 +363,11 @@ Block-level attribution via HTML comments. Invisible in Obsidian's rendered view
 
 ```markdown
 This connects to [[Rate-distortion theory]] in information theory.
+
 <!-- by: linker confidence: 0.93 -->
 
 Attention mechanisms perform lossy compression. ^claim-attention-compression
+
 <!-- by: synthesizer deliberation: 2026-04-15-0003 -->
 ```
 
@@ -371,17 +393,17 @@ When `git restore` discards an agent change, the comment goes with it. The `agen
 
 These conventions are designed to coexist with the Obsidian plugin ecosystem, not fight it.
 
-| Plugin / feature      | Status      | Notes                                                                                  |
-| --------------------- | ----------- | -------------------------------------------------------------------------------------- |
-| Dataview              | Works       | Frontmatter is structured and queryable. Reserved `engram/*` tags are filterable.      |
-| Templater             | Works       | No conflict. Users can templer-prefix new notes with their preferred frontmatter.       |
-| Daily Notes           | Works       | Engram's `journal/` follows whatever daily-notes path/format the user has configured.   |
-| Graph view            | Works       | Standard wikilinks. Filenames are clean.                                                |
-| Tag pane              | Works       | `engram/*` is filterable; user tags are normal.                                        |
-| Search                | Works       | Standard markdown content. Engram's hybrid search is supplementary, not a replacement. |
-| Backlinks pane        | Works       | Wikilinks are standard.                                                                 |
-| Front Matter Title    | Not needed  | Filenames are already clean; no plugin required to make Obsidian show the right name.   |
-| Templater + agents    | Compatible  | Templater-created notes get an `id` assigned by engram on the next file-watcher pass.   |
+| Plugin / feature   | Status     | Notes                                                                                  |
+| ------------------ | ---------- | -------------------------------------------------------------------------------------- |
+| Dataview           | Works      | Frontmatter is structured and queryable. Reserved `engram/*` tags are filterable.      |
+| Templater          | Works      | No conflict. Users can templer-prefix new notes with their preferred frontmatter.      |
+| Daily Notes        | Works      | Engram's `journal/` follows whatever daily-notes path/format the user has configured.  |
+| Graph view         | Works      | Standard wikilinks. Filenames are clean.                                               |
+| Tag pane           | Works      | `engram/*` is filterable; user tags are normal.                                        |
+| Search             | Works      | Standard markdown content. Engram's hybrid search is supplementary, not a replacement. |
+| Backlinks pane     | Works      | Wikilinks are standard.                                                                |
+| Front Matter Title | Not needed | Filenames are already clean; no plugin required to make Obsidian show the right name.  |
+| Templater + agents | Compatible | Templater-created notes get an `id` assigned by engram on the next file-watcher pass.  |
 
 Engram is a **layer over** an Obsidian vault, not a replacement for it. Anything the user does natively in Obsidian works.
 
@@ -389,20 +411,20 @@ Engram is a **layer over** an Obsidian vault, not a replacement for it. Anything
 
 ## Quick reference
 
-| Concern                   | Where it lives                                |
-| ------------------------- | --------------------------------------------- |
-| Display title             | filename slug + `title:` frontmatter          |
-| Canonical reference       | `id:` frontmatter (ULID)                      |
-| Note classification       | `type:`, `status:` frontmatter                |
+| Concern                   | Where it lives                                 |
+| ------------------------- | ---------------------------------------------- |
+| Display title             | filename slug + `title:` frontmatter           |
+| Canonical reference       | `id:` frontmatter (ULID)                       |
+| Note classification       | `type:`, `status:` frontmatter                 |
 | Tags (user)               | `tags:` frontmatter, `topic/*`, `area/*`, etc. |
-| Tags (agent flags)        | `tags:` frontmatter, `engram/*`               |
-| Citations                 | `## Sources` section                          |
-| Wikilinks                 | inline + `## Connections` section             |
-| Provenance (per block)    | HTML comments inline                          |
-| Provenance (full history) | `.engram/sidecar/<id>.json`                   |
-| Embedding metadata        | sidecar                                       |
-| Agent visit log           | sidecar                                       |
-| Block-precise references  | `^block-id` syntax                            |
-| Agent action audit        | `agent_actions` table (sqlite)                |
-| Council transcripts       | `.engram/deliberations/`                      |
-| Pending agent changes     | `git status` (unstaged working tree)          |
+| Tags (agent flags)        | `tags:` frontmatter, `engram/*`                |
+| Citations                 | `## Sources` section                           |
+| Wikilinks                 | inline + `## Connections` section              |
+| Provenance (per block)    | HTML comments inline                           |
+| Provenance (full history) | `.engram/sidecar/<id>.json`                    |
+| Embedding metadata        | sidecar                                        |
+| Agent visit log           | sidecar                                        |
+| Block-precise references  | `^block-id` syntax                             |
+| Agent action audit        | `agent_actions` table (sqlite)                 |
+| Council transcripts       | `.engram/deliberations/`                       |
+| Pending agent changes     | `git status` (unstaged working tree)           |

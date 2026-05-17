@@ -21,6 +21,7 @@ The design corpus (docs 00--11) describes the system engram aspires to be: ~35 a
 v1 is the **full personal-use engram**: foundation + critical thinking + personal context + corpus digestion. Everything required for a single user to depend on the system for daily knowledge work. External-facing surfaces (the MCP scope-and-consent system that lets the user's other apps query engram) and self-improving meta-agents (Auditor, prompt evolution, Pacekeeper) remain in v2+.
 
 **Core infrastructure:**
+
 - Vault + git + `.engram/` layout per `06-note-conventions.md`
 - SQLite index (`notes`, `links`, `tags`, `artifacts`, `agent_actions`, plus all the tables defined in `03-architecture.md`)
 - LanceDB for vector storage at `.engram/vectors/` (per [ADR 0014](adrs/0014-lancedb-vector-storage.md))
@@ -40,23 +41,24 @@ v1 is the **full personal-use engram**: foundation + critical thinking + persona
 
 **Agent roster (all of the following):**
 
-*Maintenance:* Linker, Gardener, Cartographer (continuous mode + quarterly tag audit), Historian
+_Maintenance:_ Linker, Gardener, Cartographer (continuous mode + quarterly tag audit), Historian
 
-*Processing:* Scribe, Ingestor (text + PDF + image + web URL + audio via local whisper.cpp), Inbox Triage, Curator
+_Processing:_ Scribe, Ingestor (text + PDF + image + web URL + audio via local whisper.cpp), Inbox Triage, Curator
 
-*Structural:* Splitter, Merger, Bridge Builder
+_Structural:_ Splitter, Merger, Bridge Builder
 
-*Thinking:* Synthesizer, Devil's Advocate, Steelman (constructive + rationality-gate roles), Inquirer (4-mode), Heretic, Confidence Annotator, Source Demand, Pair-Thinking
+_Thinking:_ Synthesizer, Devil's Advocate, Steelman (constructive + rationality-gate roles), Inquirer (4-mode), Heretic, Confidence Annotator, Source Demand, Pair-Thinking
 
-*Personal:* Biographer, Voice Keeper, Witness (on-device only, local-only LLM)
+_Personal:_ Biographer, Voice Keeper, Witness (on-device only, local-only LLM)
 
-*Temporal:* Predictor (predictions ledger + calibration profile), Annual Review
+_Temporal:_ Predictor (predictions ledger + calibration profile), Annual Review
 
-*Pedagogical:* Tutor (FSRS-4.5 spaced-repetition flashcards)
+_Pedagogical:_ Tutor (FSRS-4.5 spaced-repetition flashcards)
 
-*Meta:* Watcher (basic — continuous metric collection + trust scores; full evaluation in v2.1), Completion Nudger, Backup Watcher
+_Meta:_ Watcher (basic — continuous metric collection + trust scores; full evaluation in v2.1), Completion Nudger, Backup Watcher
 
 **Council deliberation engine:**
+
 - State machine: `DRAFT → CRITIQUE → REVISE → CONVERGE → {LAND | PROPOSE | SHELVE}` per `01-agents-and-council.md`
 - Quorum selection
 - Deliberation transcripts in `.engram/deliberations/`
@@ -66,18 +68,21 @@ v1 is the **full personal-use engram**: foundation + critical thinking + persona
 - Proposal-without-council format for v1 (per `12-agent-spec-template.md`) supports cases where individual agents propose outside a full council session
 
 **Coordinated flows:**
+
 - Evergreen birth ceremony
 - Daily standup
 - Insight harvest (basic — full prompt-evolution loop in v2.1)
 - Flow orchestrator state machine + cost-aware planning per `01-agents-and-council.md`
 
 **Eval framework:**
+
 - Per-agent benchmark suite (`.engram/evals/<agent>/cases/`)
 - Quarterly baseline runs
 - CI gate on prompt changes
 - Bootstrap with 5-10 seed cases per v1 agent
 
 **Corpus digestion (Curator):**
+
 - Survey → plan review → batch digestion → review → integration → audit per `05-corpus-digestion.md`
 - Six dispositions (keep-evergreen-draft, keep-literature, merge-into, archive, discard, defer)
 - Cluster-level synthesis
@@ -85,6 +90,7 @@ v1 is the **full personal-use engram**: foundation + critical thinking + persona
 - `notes/archive/` and `type: archive` for verbatim preservation
 
 **Swift app (capture-first universal app):**
+
 - iOS + macOS universal binary
 - Capture: text, voice (local whisper.cpp + cloud Whisper API option), share-sheet, document picker, drag-drop, camera, smart paste, capture batches, voice memo from Apple Watch, lock-screen widget, Action Button binding
 - Apple Shortcuts integration
@@ -107,13 +113,16 @@ v1 is the **full personal-use engram**: foundation + critical thinking + persona
 - Universal Clipboard awareness
 
 **Internal MCP server:**
+
 - stdio transport for Claude Desktop / Code
 - Tools: `search_notes`, `grep_notes`, `read_note`, `list_tags`, `follow_backlinks`, `follow_links`, `recent_changes`, `read_index`, `read_biography`, `trace_concept`, `list_predictions`, `due_flashcards`, `list_contradictions`, `vault_health`
 
 **REST + SSE API:**
+
 - All endpoints from `03-architecture.md` §API surface except the external-MCP-management endpoints (which ship in v2)
 
 **CLI:**
+
 - `engram serve`, `engram reindex [--full]`, `engram ingest <file>`, `engram run <agent>`
 - `engram digest <path>`, `engram trace <concept>`, `engram untangle <topic>`, `engram prep`, `engram standup`
 - `engram council <question>`, `engram proposals [list|approve|reject]`
@@ -142,6 +151,7 @@ v1 is the **full personal-use engram**: foundation + critical thinking + persona
 Per `/SPEC.md` for the machine-readable checklist. Summarized:
 
 A user can:
+
 - Capture text/voice/files/photos on iOS or macOS, see them sync to the Mac, and review them within seconds.
 - Drop a PDF, image, web URL, or audio file and have a literature note land for review.
 - Point engram at an existing Obsidian vault (~9K notes) and end with a curated engram vault at ≥5× compression; the user trusts the discard decisions.
@@ -164,6 +174,7 @@ The "earned the right to ship more" test (per `/SPEC.md`) holds.
 ### Scope
 
 **External MCP server** per `04-external-mcp.md`:
+
 - HTTP+SSE transport
 - API key + scope-based auth
 - Consent flow via Swift app
@@ -171,9 +182,11 @@ The "earned the right to ship more" test (per `/SPEC.md`) holds.
 - Audit log
 
 **Personal-context tools:**
+
 - `personal_context`, `preferences`, `recent_thinking_on`, `ask_user`, `record_session`
 
 **MCP client manager** in Swift app:
+
 - Per-client audit views, scope management, revoke, "what does this app see?" preview
 
 **Travel-app reference implementation** as a demonstration client.
@@ -193,6 +206,7 @@ The "earned the right to ship more" test (per `/SPEC.md`) holds.
 **Auditor** (deep qualitative evaluator) + Auditor outputs in `.engram/meta/audits/`.
 
 **Outcome metrics** beyond accept/reject:
+
 - Survival (30/90/180-day)
 - Engagement (visited/linked/modified after)
 - Downstream productivity
@@ -217,6 +231,7 @@ The "earned the right to ship more" test (per `/SPEC.md`) holds.
 ### Scope
 
 The remaining thinking and on-demand agents:
+
 - **Analogist** (cross-domain parallels)
 - **Assumption Excavator**
 - **Socratic Prober** (with evergreen birth ceremony)
@@ -228,6 +243,7 @@ The remaining thinking and on-demand agents:
 - **Fact Checker**
 
 **Coordinated flows:**
+
 - Evergreen birth ceremony
 - Daily standup
 - Insight harvest

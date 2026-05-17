@@ -18,6 +18,7 @@ The natural refinement: have each agent self-assess confidence per action. The s
 - `confidence < threshold` OR invasiveness exceeds the ceiling: the action becomes an explicit proposal through council.
 
 Confidence is computed from:
+
 1. **LLM self-score** in the agent's structured output (a `confidence` field).
 2. **Retrieval-signal agreement** (BM25 + dense + graph all converging raises confidence; conflict lowers it).
 3. **Calibration adjustment** (Watcher tracks claimed-vs-actual acceptance per agent over time; agents that overstate get auto-corrected via prompt evolution).

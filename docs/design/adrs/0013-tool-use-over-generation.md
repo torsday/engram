@@ -26,7 +26,7 @@ For every agent's design, walk through the agent's responsibilities and apply th
 1. **Can a deterministic computation produce this output exactly?** → Tool, not LLM.
    - Examples: "list notes in this tag," "find SHA-256 hash of this content," "compute Reciprocal Rank Fusion of two ranked lists," "extract YAML frontmatter from a markdown string," "verify this wikilink targets an existing note."
 
-2. **Can a deterministic computation produce a *candidate set* the LLM then judges?** → Tool produces candidates; LLM judges. Don't ask the LLM to generate candidates.
+2. **Can a deterministic computation produce a _candidate set_ the LLM then judges?** → Tool produces candidates; LLM judges. Don't ask the LLM to generate candidates.
    - Linker's design: `hybrid_search` produces the top-K candidate notes; LLM judges which (if any) deserve a wikilink. The LLM is **not** asked "what should this note link to?" — it's asked "of these K candidates, which are good links and why?"
    - Cartographer's design: SQL produces the list of new/changed notes; LLM writes the one-sentence summary for each. The LLM is **not** asked "what notes are in the vault?"
 
@@ -60,6 +60,7 @@ trait ToolGateway {
 ```
 
 Every agent's spec (per `12-agent-spec-template.md`) lists:
+
 - Tools the agent calls (deterministic; cheap)
 - LLM calls the agent makes (with prompt structure; expensive)
 
@@ -113,7 +114,7 @@ Tools are deterministic functions with typed inputs and outputs. Unit tests are 
 **Negative:**
 
 - **Discipline required at design time.** Agent authors must consciously look for "could this be a tool?" rather than reflexively reaching for the LLM. Mitigation: the agent spec template includes the checklist explicitly; reviews flag LLM-heavy agents.
-- **Some judgments resist tool-ification.** Synthesizer's "is this a meaningful concept?" can't be a tool; it's irreducible LLM work. That's fine — the principle is "prefer tool-use *where applicable*," not "eliminate LLM use."
+- **Some judgments resist tool-ification.** Synthesizer's "is this a meaningful concept?" can't be a tool; it's irreducible LLM work. That's fine — the principle is "prefer tool-use _where applicable_," not "eliminate LLM use."
 - **Tool growth is also a cost.** Adding 50 specialized tools to support agents means 50 more functions to maintain and test. Mitigation: keep tools small and composable; reuse aggressively (`find_neighbors` is shared across many agents); resist single-use tools.
 - **The principle is a design-time check, not an enforced runtime constraint.** Mitigation: agent specs (`12-agent-spec-template.md`) record tool list AND LLM-call structure; deviations are visible in code review and Auditor's qualitative pass.
 

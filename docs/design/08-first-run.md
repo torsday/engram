@@ -9,6 +9,7 @@ This document covers the **bootstrap problem**: how engram behaves usefully and 
 ## The bootstrap problem
 
 The mature design assumes:
+
 - Trust scores per agent are calibrated against acceptance rate.
 - Voice Keeper has analyzed enough human-written content to detect drift.
 - Biographer has a coherent user model.
@@ -48,6 +49,7 @@ Default `monthly_usd_cap = 25.0` (conservative). User can raise. Suggested range
 ### 4. Backup configuration
 
 The Backup Watcher needs to know what to monitor:
+
 - Git remote URL (or "I'll set this up later")
 - Time Machine status (auto-detected on macOS)
 - Optional: artifact remote (S3 / Backblaze)
@@ -57,6 +59,7 @@ Warns clearly if no backup is configured. Does not block --- the user can defer,
 ### 5. Privacy zones
 
 Defaults proposed:
+
 - `notes/work/` --- local-only processing
 - `notes/medical/` --- local-only
 - `notes/journal/` --- local-only, eligible for Witness
@@ -81,11 +84,12 @@ When a vault has been active for less than 30 days **or** has fewer than 100 not
 
 Every agent's `auto_land_min_confidence` is overridden to **0.95** in bootstrap mode (typical default is 0.85). The result: almost everything goes through the diff-review queue rather than landing autonomously. The user sees more of what agents would do, builds an intuition for which agents to trust, and gives Watcher data to calibrate against.
 
-After 30 days *and* at least 50 resolved diff-reviews, the override is lifted; agents resume their configured thresholds.
+After 30 days _and_ at least 50 resolved diff-reviews, the override is lifted; agents resume their configured thresholds.
 
 ### 2. Heightened transparency
 
 Bootstrap-mode notifications are slightly more verbose:
+
 - The standup includes a "what the swarm tried" summary section, not just "what's pending."
 - Each diff in the review queue includes a longer rationale by default.
 - Agent run failures surface to the user (not just to Watcher), so the user develops a feel for which agents are working.
@@ -97,6 +101,7 @@ Auditor's quarterly evaluation is skipped until enough decisions exist (default:
 ### Transition out
 
 When all of these hold:
+
 - Vault age ≥ 30 days
 - Note count ≥ 100
 - ≥ 50 resolved decisions across the swarm
@@ -145,13 +150,13 @@ Generates flashcards from any evergreen note. No bootstrap gate --- but the Swif
 
 Even within the v1 agent set (5 agents), behavior on day one is calibrated:
 
-| Agent       | Day 1 behavior                                                         |
-| ----------- | ---------------------------------------------------------------------- |
-| Linker      | Active. Threshold 0.95. Most proposals enter review queue.             |
-| Gardener    | Active but quiet --- nothing is "stale" yet. Main work: dead-link fix. |
+| Agent        | Day 1 behavior                                                         |
+| ------------ | ---------------------------------------------------------------------- |
+| Linker       | Active. Threshold 0.95. Most proposals enter review queue.             |
+| Gardener     | Active but quiet --- nothing is "stale" yet. Main work: dead-link fix. |
 | Cartographer | Active. Generates `index.md` from initial notes.                       |
-| Scribe      | Active for fleeting notes only.                                        |
-| Ingestor    | Active immediately (file drop and capture both flow through).          |
+| Scribe       | Active for fleeting notes only.                                        |
+| Ingestor     | Active immediately (file drop and capture both flow through).          |
 
 ---
 

@@ -69,11 +69,11 @@ Untangler reads the vault. It assembles a sensemaking map note in `meta/untangli
 - **Internal contradictions**: a note from last month argued "external apps should be unconstrained — the consent flow is the security boundary"; a recent note argued "any external surface needs defense in depth."
 - **Possible reframings**: maybe the question isn't "rate limiting" but "what does it look like when an external MCP client misbehaves, and how does the user notice?"
 
-She reads this. The reframing in the last bullet is the unlock. The right question wasn't about rate limits — it was about *visibility* into client behavior. Rate limits are one possible answer; better audit-log surfacing is another.
+She reads this. The reframing in the last bullet is the unlock. The right question wasn't about rate limits — it was about _visibility_ into client behavior. Rate limits are one possible answer; better audit-log surfacing is another.
 
 She drafts a new fleeting note capturing the reframing. Tags it for next development. The Untangler map stays in `meta/untangling/` as a reference; she'll re-read it next time the question comes up.
 
-She didn't get an answer. She got a *better question*. That's the point.
+She didn't get an answer. She got a _better question_. That's the point.
 
 ---
 
@@ -113,6 +113,7 @@ She launches the Swift app on her Mac. The first-run wizard opens.
 7. **Tutorial.** "Spend 5 minutes learning conventions?" She says yes.
 
 The tutorial walks her through:
+
 - The `welcome.md` MOC (showing the navigation pattern)
 - A sample fleeting note (showing capture format)
 - A sample literature note (showing source-orientation)
@@ -193,7 +194,7 @@ The travel app's LLM, grounded in this digest, drafts an outline: "Slovenia in l
 
 Travel app finalizes the plan. Calls `record_session` to deposit a literature note in engram about what it researched and decided. The note enters the diff queue (proposal route — write scopes always go through review). She approves it later that day.
 
-Now her vault has a `notes/literature/travel-slovenia-2026-q3.md` that Linker connects to her earlier travel-evergreen notes. The next time *any* app calls `personal_context("travel")`, the picture is richer for it.
+Now her vault has a `notes/literature/travel-slovenia-2026-q3.md` that Linker connects to her earlier travel-evergreen notes. The next time _any_ app calls `personal_context("travel")`, the picture is richer for it.
 
 She didn't onboard the travel app. The app already knew her.
 
