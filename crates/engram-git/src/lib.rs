@@ -29,6 +29,12 @@ pub mod repo;
 pub mod traits;
 pub mod types;
 
+/// Re-exports for integration tests only — not part of the public API.
+#[doc(hidden)]
+pub mod testing {
+    pub use crate::repo::build_commit_message;
+}
+
 pub use error::{Error, Result};
 pub use repo::{open, ReadHandle, WriteHandle};
 pub use traits::{ReadOnlyGit, WriteGit};

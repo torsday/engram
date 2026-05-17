@@ -1,5 +1,5 @@
-//! Integration tests for the read-side of [`engram_git`] against a real,
-//! disposable git repository created in a `tempfile::TempDir`.
+//! Integration tests for [`engram_git`] against a real, disposable git
+//! repository created in a `tempfile::TempDir`.
 //!
 //! The harness uses the system `git` binary to populate the test repo —
 //! exercising our gix-backed reads against ground truth produced by git
@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use engram_git::{Change, ReadOnlyGit, WriteGit};
+use engram_git::{Change, CommitOpts, ReadOnlyGit, WriteGit};
 use tempfile::TempDir;
 
 struct TestRepo {
@@ -192,24 +192,179 @@ fn show_returns_blob_bytes_at_commit() {
     assert_eq!(bytes, b"hello world\n");
 }
 
+// ─── diff tests ───────────────────────────────────────────────────────────
+
 #[test]
-fn write_methods_return_not_yet_implemented() {
-    // The trait surface is locked even before each method is wired to gix.
-    // Once a method is implemented this assertion will be flipped to verify
-    // the success path; failing here is a healthy signal that the typed
-    // placeholder is reachable from the WriteGit handle.
+fn diff_path_returns_empty_patch_when_clean() {
+    let repo = TestRepo::new();
+    repo.write("note.md", "v1\n");
+    repo.commit_all("seed");
+
+    let (_, read) = engram_git::open(repo.path()).expect("open");
+    let diff = read.diff(Path::new("note.md")).expect("diff");
+    assert!(diff.patch.is_empty(), "no changes — patch should be empty");
+}
+
+#[test]
+fn diff_path_contains_hunk_for_modified_file() {
+    let repo = TestRepo::new();
+    repo.write("note.md", "line one\n");
+    repo.commit_all("seed");
+    repo.write("note.md", "line one\nline two\n");
+
+    let (_, read) = engram_git::open(repo.path()).expect("open");
+    let diff = read.diff(Path::new("note.md")).expect("diff");
+    assert!(
+        diff.patch.contains("+line two"),
+        "expected added line in patch: {diff:?}"
+    );
+}
+
+#[test]
+fn diff_index_empty_when_nothing_staged() {
     let repo = TestRepo::new();
     repo.write("a.md", "x\n");
     repo.commit_all("seed");
 
+    let (_, read) = engram_git::open(repo.path()).expect("open");
+    let diffs = read.diff_index().expect("diff_index");
+    assert!(diffs.is_empty(), "nothing staged");
+}
+
+#[test]
+fn diff_index_shows_staged_change() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "v1\n");
+    repo.commit_all("seed");
+    repo.write("a.md", "v2\n");
+    run(repo.path(), &["add", "a.md"]);
+
+    let (_, read) = engram_git::open(repo.path()).expect("open");
+    let diffs = read.diff_index().expect("diff_index");
+    assert_eq!(diffs.len(), 1);
+    assert!(diffs[0].patch.contains("+v2"), "staged hunk expected");
+}
+
+#[test]
+fn diff_worktree_empty_when_clean() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "x\n");
+    repo.commit_all("seed");
+
+    let (_, read) = engram_git::open(repo.path()).expect("open");
+    let diffs = read.diff_worktree().expect("diff_worktree");
+    assert!(diffs.is_empty(), "clean worktree");
+}
+
+#[test]
+fn diff_worktree_shows_unstaged_change() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "v1\n");
+    repo.commit_all("seed");
+    repo.write("a.md", "v2\n"); // not staged
+
+    let (_, read) = engram_git::open(repo.path()).expect("open");
+    let diffs = read.diff_worktree().expect("diff_worktree");
+    assert_eq!(diffs.len(), 1);
+    assert!(diffs[0].patch.contains("+v2"), "unstaged hunk expected");
+}
+
+// ─── write tests ──────────────────────────────────────────────────────────
+
+#[test]
+fn add_stages_file() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "v1\n");
+    repo.commit_all("seed");
+    repo.write("a.md", "v2\n");
+
     let (write, _) = engram_git::open(repo.path()).expect("open");
-    let err = write
-        .commit("msg", engram_git::CommitOpts::default())
-        .unwrap_err();
-    assert!(matches!(
-        err,
-        engram_git::Error::NotYetImplemented {
-            method: "WriteGit::commit"
-        }
-    ));
+    write.add(&[Path::new("a.md")]).expect("add");
+
+    let staged = write.diff_index().expect("diff_index after add");
+    assert_eq!(staged.len(), 1, "file should be staged");
+}
+
+#[test]
+fn restore_discards_unstaged_change() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "v1\n");
+    repo.commit_all("seed");
+    repo.write("a.md", "v2\n");
+
+    let (write, _) = engram_git::open(repo.path()).expect("open");
+    write.restore(&[Path::new("a.md")]).expect("restore");
+
+    let unstaged = write.diff_worktree().expect("diff_worktree after restore");
+    assert!(unstaged.is_empty(), "restore should discard worktree change");
+}
+
+#[test]
+fn commit_creates_new_head() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "v1\n");
+    repo.commit_all("seed");
+    let (write, read) = engram_git::open(repo.path()).expect("open");
+    let before = read.rev_parse("HEAD").expect("HEAD before");
+
+    repo.write("a.md", "v2\n");
+    write.add(&[Path::new("a.md")]).expect("add");
+    let new_sha = write
+        .commit("update a", CommitOpts::default())
+        .expect("commit");
+
+    assert_ne!(new_sha.as_str(), before.as_str(), "HEAD must advance");
+    assert_eq!(new_sha.as_str().len(), 40);
+}
+
+#[test]
+fn commit_appends_co_author_trailers() {
+    let repo = TestRepo::new();
+    repo.write("a.md", "v1\n");
+    repo.commit_all("seed");
+    let (write, read) = engram_git::open(repo.path()).expect("open");
+
+    repo.write("a.md", "v2\n");
+    write.add(&[Path::new("a.md")]).expect("add");
+    write
+        .commit(
+            "update with trailer",
+            CommitOpts {
+                co_authors: vec!["Alice <alice@example.com>".to_string()],
+                footer_lines: vec!["engram-actions: summarize".to_string()],
+            },
+        )
+        .expect("commit");
+
+    let commits = read.log(None, 1).expect("log");
+    let msg = &commits[0].message;
+    assert!(
+        msg.contains("Co-authored-by: Alice <alice@example.com>"),
+        "co-author trailer missing from: {msg}"
+    );
+    assert!(
+        msg.contains("engram-actions: summarize"),
+        "footer line missing from: {msg}"
+    );
+}
+
+#[test]
+fn build_commit_message_no_trailers() {
+    // Verify the pure-function path — no subprocess needed.
+    let msg = "simple message";
+    let out = engram_git::testing::build_commit_message(msg, &CommitOpts::default());
+    assert_eq!(out, msg);
+}
+
+#[test]
+fn build_commit_message_with_trailers() {
+    let opts = CommitOpts {
+        co_authors: vec!["Bob <bob@example.com>".to_string()],
+        footer_lines: vec!["x-custom: value".to_string()],
+    };
+    let out = engram_git::testing::build_commit_message("subject", &opts);
+    assert!(out.contains("Co-authored-by: Bob <bob@example.com>"));
+    assert!(out.contains("x-custom: value"));
+    // Blank line separates body from trailer block.
+    assert!(out.contains("\n\n"));
 }
