@@ -1,9 +1,8 @@
 //! Error taxonomy for git operations.
 //!
-//! Each variant maps to a distinct failure mode. `NotYetImplemented` is a
-//! deliberate placeholder for write operations that this crate exposes through
-//! its trait surface but has not yet wired to a gix backend. Callers can match
-//! on it to distinguish "this op isn't built yet" from real I/O failures.
+//! Each variant maps to a distinct failure mode at the read and write surfaces
+//! of the git crate. Callers match on these to distinguish I/O errors from
+//! ref-resolution failures, object lookup misses, etc.
 
 use std::path::PathBuf;
 
@@ -36,9 +35,4 @@ pub enum Error {
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-
-    /// Method is part of the trait surface but not yet backed by gix.
-    /// Tracked under follow-up issues from #14; safe for callers to match.
-    #[error("not yet implemented: {method}")]
-    NotYetImplemented { method: &'static str },
 }
