@@ -1,0 +1,25 @@
+name: Chore
+description: Maintenance, tooling, dependencies, build, CI
+labels: ["type: chore"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What needs doing and why. One paragraph.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: "- [ ] \n- [ ] "
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Files to touch, prior art, gotchas. Leave blank if none.

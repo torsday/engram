@@ -1,0 +1,48 @@
+name: Spike
+description: Time-boxed research — output is a decision, not code
+labels: ["type: spike"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question to answer
+      description: One specific decision this spike produces — not a general investigation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Approach
+      description: How will you investigate? What will you compare or measure?
+    validations:
+      required: true
+
+  - type: input
+    id: timebox
+    attributes:
+      label: Time box
+      placeholder: "e.g. 2 days"
+    validations:
+      required: true
+
+  - type: input
+    id: deliverable
+    attributes:
+      label: Deliverable
+      description: What artifact ends this spike?
+      placeholder: "ADR, design doc update, prototype, written recommendation"
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Options under consideration
+      description: Alternatives being evaluated.
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Known constraints
+      description: Constraints that will shape the decision.
