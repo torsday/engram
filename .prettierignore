@@ -1,0 +1,11 @@
+# Cargo lock files
+Cargo.lock
+
+# TOML files (prettier has no TOML parser)
+*.toml
+
+# Rust source files
+*.rs
+
+# Build artifacts
+target/
