@@ -16,7 +16,7 @@ pub mod wikilink {}
 pub mod note_id {}
 
 /// Pure-title slug normalization (unicode fold, diacritics, path safety).
-pub mod slug {}
+pub mod slug;
 
 /// Filename collision detection at note-write time.
 pub mod collision {}
