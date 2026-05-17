@@ -31,70 +31,71 @@ set -euo pipefail
 
 REPO="torsday/engram"
 PROJECT_OWNER="@me"
-PROJECT_NUMBER=8
-PROJECT_ID="PVT_kwHOAARNgc4BX6_c"
+PROJECT_NUMBER=11
+PROJECT_ID="PVT_kwHOAARNgc4BX7L-"
 
 # Field IDs (hard-coded; immutable for this project)
-FIELD_STATUS="PVTSSF_lAHOAARNgc4BX6_czhTEdxc"
-FIELD_PRIORITY="PVTSSF_lAHOAARNgc4BX6_czhTEd3w"
-FIELD_SIZE="PVTSSF_lAHOAARNgc4BX6_czhTEd30"
-FIELD_RISK="PVTSSF_lAHOAARNgc4BX6_czhTEd34"
-FIELD_MODEL_QUEUE="PVTSSF_lAHOAARNgc4BX6_czhTEd38"
+FIELD_STATUS="PVTSSF_lAHOAARNgc4BX7L-zhTEozE"
+FIELD_PRIORITY="PVTSSF_lAHOAARNgc4BX7L-zhTEo3A"
+FIELD_SIZE="PVTSSF_lAHOAARNgc4BX7L-zhTEo3E"
+FIELD_RISK="PVTSSF_lAHOAARNgc4BX7L-zhTEpNU"
+FIELD_MODEL_QUEUE="PVTSSF_lAHOAARNgc4BX7L-zhTEpOQ"
 
 # Option-ID lookup helpers (case statements for bash 3.2 compatibility).
-# Sync with `gh project field-list 8 --owner "@me" --format json` if fields change.
+# Sync with `gh project field-list 11 --owner "@me" --format json` if fields change.
 
 status_opt_id() {
     case "$1" in
-        "Backlog")     echo "d6571969" ;;
-        "Up Next")     echo "c373fa25" ;;
-        "In Progress") echo "1626046a" ;;
-        "In Review")   echo "bbd086a7" ;;
-        "On Hold")     echo "ca424e32" ;;
-        "Done")        echo "fb8a175d" ;;
+        "Backlog")     echo "aef4f7ab" ;;
+        "Up Next")     echo "7f94edb5" ;;
+        "In Progress") echo "fe5d8cf3" ;;
+        "In Review")   echo "212df82b" ;;
+        "On Hold")     echo "651738b2" ;;
+        "Done")        echo "e3fc929c" ;;
         *) return 1 ;;
     esac
 }
 
 priority_opt_id() {
     case "$1" in
-        "P0 · critical") echo "8fb84140" ;;
-        "P1 · high")     echo "71679cf0" ;;
-        "P2 · medium")   echo "c4200c71" ;;
+        "P0 · critical") echo "a17a68da" ;;
+        "P1 · high")     echo "b7d1cc9e" ;;
+        "P2 · medium")   echo "910980be" ;;
+        "P3 · low")      echo "bcd2cd23" ;;
         *) return 1 ;;
     esac
 }
 
 size_opt_id() {
     case "$1" in
-        "XS") echo "22f31820" ;;
-        "S")  echo "6e360c3c" ;;
-        "M")  echo "f0415cd7" ;;
-        "L")  echo "85372fd1" ;;
-        "XL") echo "31299ff0" ;;
+        "XS") echo "6c6483d2" ;;
+        "S")  echo "f784b110" ;;
+        "M")  echo "7515a9f1" ;;
+        "L")  echo "817d0097" ;;
+        "XL") echo "db339eb2" ;;
         *) return 1 ;;
     esac
 }
 
 risk_opt_id() {
     case "$1" in
-        "🔴 High")   echo "4dc685c0" ;;
-        "🟡 Medium") echo "21f6bae3" ;;
-        "🟢 Low")    echo "351301d2" ;;
+        "🔴 High")   echo "1f9feff3" ;;
+        "🟡 Medium") echo "0f1215d3" ;;
+        "🟢 Low")    echo "f24e801d" ;;
         *) return 1 ;;
     esac
 }
 
 model_q_opt_id() {
     case "$1" in
-        "sonnet-low")   echo "7a09b90a" ;;
-        "opus-med")     echo "273f3e4a" ;;
-        "opus-high")    echo "6e179971" ;;
-        "opus-1m-max")  echo "84ad08f5" ;;
-        "In Progress")  echo "8b689b4b" ;;
-        "In Review")    echo "385eb87f" ;;
-        "On Hold")      echo "b3cbb3a2" ;;
-        "Done")         echo "6cc1b28a" ;;
+        "sonnet-low")   echo "48f2e718" ;;
+        "opus-med")     echo "da802396" ;;
+        "opus-high")    echo "4c6c3bf9" ;;
+        "opus-1m-max")  echo "2279674a" ;;
+        "In Progress")  echo "ef447ff0" ;;
+        "In Review")    echo "7c09a9ed" ;;
+        "On Hold")      echo "ffb29598" ;;
+        "Done")         echo "f009db04" ;;
         *) return 1 ;;
     esac
 }
