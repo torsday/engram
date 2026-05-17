@@ -11,6 +11,8 @@ allow = [
     "Unicode-3.0",
     "OpenSSL",
     "Zlib",
+    # engram workspace crates are proprietary / all-rights-reserved.
+    "LicenseRef-proprietary",
 ]
 # Licenses not in the allow list are denied by default (cargo-deny 0.16+).
 # GPL-3.0 and AGPL-3.0 are implicitly denied by not being listed above.
@@ -19,9 +21,11 @@ allow = [
 multiple-versions = "warn"
 
 [advisories]
-# "workspace" checks only crates that are workspace members; "all" includes
-# transitive deps. Use "all" so vendor supply-chain issues surface immediately.
 version = 2
+# Ignore unmaintained notices for transitive deps until we can upgrade them.
+# bincode 1.x (via syntect): RUSTSEC-2025-0141
+# yaml-rust (via serde_yaml 0.9): RUSTSEC-2024-0320
+ignore = ["RUSTSEC-2025-0141", "RUSTSEC-2024-0320"]
 
 [sources]
 unknown-registry = "warn"
