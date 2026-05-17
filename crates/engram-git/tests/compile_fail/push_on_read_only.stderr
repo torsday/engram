@@ -1,0 +1,5 @@
+error[E0599]: no method named `push` found for reference `&dyn ReadOnlyGit` in the current scope
+ --> tests/compile_fail/push_on_read_only.rs:6:17
+  |
+6 |     let _ = git.push("origin", "main");
+  |                 ^^^^ method not found in `&dyn ReadOnlyGit`

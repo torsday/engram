@@ -1,0 +1,5 @@
+error[E0599]: no method named `commit` found for reference `&dyn ReadOnlyGit` in the current scope
+ --> tests/compile_fail/commit_on_read_only.rs:7:17
+  |
+7 |     let _ = git.commit("agents should not be able to do this", CommitOpts::default());
+  |                 ^^^^^^ method not found in `&dyn ReadOnlyGit`
