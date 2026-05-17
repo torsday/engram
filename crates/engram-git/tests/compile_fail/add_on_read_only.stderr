@@ -1,0 +1,5 @@
+error[E0599]: no method named `add` found for reference `&dyn ReadOnlyGit` in the current scope
+ --> tests/compile_fail/add_on_read_only.rs:8:17
+  |
+8 |     let _ = git.add(&[p]);
+  |                 ^^^ method not found in `&dyn ReadOnlyGit`
