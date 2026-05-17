@@ -12,14 +12,11 @@ allow = [
     "OpenSSL",
     "Zlib",
 ]
-deny = [
-    "GPL-3.0",
-    "AGPL-3.0",
-]
+# Licenses not in the allow list are denied by default (cargo-deny 0.16+).
+# GPL-3.0 and AGPL-3.0 are implicitly denied by not being listed above.
 
 [bans]
 multiple-versions = "warn"
-wildcards = "allow"
 
 [advisories]
 # "workspace" checks only crates that are workspace members; "all" includes
