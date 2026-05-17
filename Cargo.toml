@@ -57,7 +57,7 @@ comrak = "0.29"
 rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
 
 # git
-gix = "0.67"
+gix = "0.83"
 
 # file watching
 notify = "6"

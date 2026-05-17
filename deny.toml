@@ -26,9 +26,9 @@ multiple-versions = "warn"
 wildcards = "allow"
 
 [advisories]
-# Fail on unmaintained crates so they get triaged promptly.
-unmaintained = "warn"
-yanked = "warn"
+# "workspace" checks only crates that are workspace members; "all" includes
+# transitive deps. Use "all" so vendor supply-chain issues surface immediately.
+version = 2
 
 [sources]
 unknown-registry = "warn"
