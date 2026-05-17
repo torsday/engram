@@ -11,6 +11,7 @@ allow = [
     "Unicode-3.0",
     "OpenSSL",
     "Zlib",
+    "MPL-2.0",
     # engram workspace crates are proprietary / all-rights-reserved.
     "LicenseRef-proprietary",
 ]
