@@ -17,47 +17,47 @@ if anything fails; do not ship around it.
 ## 1 · Functional
 
 - [ ] All acceptance criteria in `SPEC.md` verified green by `engram spec verify`
-      ([#103]) — paste the run URL here: ___
+      ([#103]) — paste the run URL here: \_\_\_
 - [ ] `cargo test --workspace` passes clean (zero failures, zero ignored-but-broken)
       on the commit you intend to tag
 - [ ] CI on `main` has been green for ≥ 7 consecutive days (no red-then-revert
-      patches in that window) — link to the Actions run history: ___
+      patches in that window) — link to the Actions run history: \_\_\_
 
 ## 2 · Performance
 
 - [ ] Performance budget verification harness ([#109]) has reported green for
-      ≥ 30 consecutive nightly runs — link to the dashboard or run log: ___
+      ≥ 30 consecutive nightly runs — link to the dashboard or run log: \_\_\_
 - [ ] No budget line regressed more than 10 % vs. the last green baseline without
       an intentional, tracked exception filed in the tracker
 
 ## 3 · Security
 
 - [ ] Threat model verification harness ([#110]) reports green on the release commit
-- [ ] `cargo audit` reports zero advisories of severity ≥ medium (paste output): ___
+- [ ] `cargo audit` reports zero advisories of severity ≥ medium (paste output): \_\_\_
 - [ ] `cargo deny check` reports zero denials
 - [ ] No secrets, API keys, or PII appear in `git log` for the v1 branch (run
       `git log -p | grep -i 'sk-\|api_key\|password\|token'` and confirm empty)
 
 ## 4 · Personal-use validation (dogfooding)
 
-- [ ] Self-dogfooded for ≥ 60 continuous days before the release date (started: ___)
+- [ ] Self-dogfooded for ≥ 60 continuous days before the release date (started: \_\_\_)
 - [ ] ≥ 3 of the 5 core agents (Scribe, Cartographer, Gardener, Synthesizer,
       Inquirer) have produced output the user found genuinely valuable — record
       one concrete example per agent in a "dogfooding journal" note in the vault
-      and link it here: ___
+      and link it here: \_\_\_
 - [ ] No show-stopping friction has gone unfiled as a bug during the dogfood period
 
 ## 5 · Cost validation
 
 - [ ] 30-day actual token cost ≤ configured ceiling for ≥ 90 consecutive days of
-      light-to-normal use — paste the cost dashboard summary: ___
+      light-to-normal use — paste the cost dashboard summary: \_\_\_
 - [ ] No single agent has consumed > 20 % of the total monthly budget without a
       known, accepted reason
 
 ## 6 · Recovery validation
 
 - [ ] At least one full "delete SQLite, rebuild from vault + git" recovery exercise
-      performed and completed successfully — date: ___, duration: ___
+      performed and completed successfully — date: **_, duration: _**
 - [ ] The rebuilt index matched the pre-deletion state to the satisfaction of the
       user (spot-checked ≥ 10 queries before and after)
 
@@ -65,7 +65,7 @@ if anything fails; do not ship around it.
 
 - [ ] Vault has been pushed to the designated git remote continuously for ≥ 30 days
       (check `git log --remotes` on the vault repo)
-- [ ] At least one "restore from remote" exercise completed successfully — date: ___
+- [ ] At least one "restore from remote" exercise completed successfully — date: \_\_\_
 - [ ] Backup Watcher alerts were received and acknowledged on at least one occasion
       where the backup genuinely lapsed
 
@@ -106,7 +106,7 @@ Only proceed if all boxes above are checked:
 
 - [ ] **I, the user, have read every item above and believe engram v1 is ready to
       tag as a stable personal release.**
-- [ ] Release tag: `v1.0.0` — date: ___
+- [ ] Release tag: `v1.0.0` — date: \_\_\_
 
 ---
 

@@ -144,7 +144,6 @@ tags:
      ingested_by, extraction model + version, and provenance history.
      See 06-note-conventions.md. -->
 
-
 # Attention Is All You Need
 
 ## Summary

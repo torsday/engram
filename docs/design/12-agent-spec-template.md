@@ -20,6 +20,7 @@ Every agent specification is one page covering eight sections:
 # Agent: <Name>
 
 ## Identity
+
 - **Name:** <kebab-case agent name; matches agents/<name>/ directory>
 - **Tier:** maintenance | processing | structural | thinking | personal | temporal | pedagogical | external | meta | on-demand
 - **Phase:** v1 | v2 | v2.1 | v2.2 | v3+
@@ -27,29 +28,36 @@ Every agent specification is one page covering eight sections:
 - **Max invasiveness:** mechanical | additive | editorial | structural
 
 ## Prompt skeleton
+
 The system prompt template, with `{{placeholder}}` slots for runtime context.
 Includes: role, goals, constraints, output-format directive, confidence-rating instruction.
 
 ## Structured output schema
+
 JSON schema for the agent's structured output. Always includes `confidence` (0.0-1.0)
 and `rationale` (one paragraph). Tool-call schemas if the agent uses tools.
 
 ## Confidence formula
+
 How the per-action confidence value is computed. May be the LLM self-score alone,
 or a weighted combination with retrieval-signal agreement.
 
 ## Tools
+
 List of tools the agent may call. Each tool has: name, input type, output type,
 purpose. References definitions in `03-architecture.md`.
 
 ## Triggers
+
 What causes this agent to run. References scheduler config or event sources.
 
 ## Outputs
+
 What the agent produces (note files, sidecar updates, proposals, conversation turns,
 etc.). References file locations and formats.
 
 ## Test fixtures
+
 Reference to the integration-test fixture set that exercises this agent.
 Located at `tests/fixtures/agents/<name>/`.
 ```
@@ -59,6 +67,7 @@ Located at `tests/fixtures/agents/<name>/`.
 ## Linker
 
 ### Identity
+
 - **Name:** `linker`
 - **Tier:** maintenance
 - **Phase:** v1
@@ -73,6 +82,7 @@ wikilinks between notes. Propose connections that would help the user navigate
 their vault.
 
 # Context
+
 - User biography (if available): {{biography_excerpt}}
 - Note being analyzed:
   Title: {{note.title}}
@@ -88,6 +98,7 @@ their vault.
   {{existing_outgoing_links}}
 
 # Constraints
+
 - Propose at most 5 new wikilinks per call.
 - Do NOT propose a link to a note already in `existing_outgoing_links`.
 - Each proposed link must reference a real note ID from the `neighbors` list.
@@ -95,6 +106,7 @@ their vault.
   optimism. Watcher tracks claimed vs. actual acceptance.
 
 # Output
+
 Return ONLY a JSON object matching the LinkerOutput schema. No prose outside the JSON.
 ```
 
@@ -123,9 +135,18 @@ Return ONLY a JSON object matching the LinkerOutput schema. No prose outside the
         "type": "object",
         "required": ["target_id", "anchor_text", "insertion_context"],
         "properties": {
-          "target_id":         {"type": "string", "description": "ULID of target note"},
-          "anchor_text":       {"type": "string", "description": "Display text for the wikilink"},
-          "insertion_context": {"type": "string", "description": "Sentence in source note where link belongs"}
+          "target_id": {
+            "type": "string",
+            "description": "ULID of target note"
+          },
+          "anchor_text": {
+            "type": "string",
+            "description": "Display text for the wikilink"
+          },
+          "insertion_context": {
+            "type": "string",
+            "description": "Sentence in source note where link belongs"
+          }
         }
       }
     }
@@ -153,11 +174,11 @@ calibration_adjustment:
 
 ### Tools
 
-| Tool                   | Input                          | Output                  | Purpose                          |
-| ---------------------- | ------------------------------ | ----------------------- | -------------------------------- |
-| `hybrid_search`        | `{query: str, limit: int}`     | `Vec<Neighbor>`         | Find semantically similar notes  |
-| `read_note`            | `{id: str}`                    | `Note`                  | Read a candidate target note     |
-| `list_outgoing_links`  | `{id: str}`                    | `Vec<LinkRef>`          | Get current links from this note |
+| Tool                  | Input                      | Output          | Purpose                          |
+| --------------------- | -------------------------- | --------------- | -------------------------------- |
+| `hybrid_search`       | `{query: str, limit: int}` | `Vec<Neighbor>` | Find semantically similar notes  |
+| `read_note`           | `{id: str}`                | `Note`          | Read a candidate target note     |
+| `list_outgoing_links` | `{id: str}`                | `Vec<LinkRef>`  | Get current links from this note |
 
 ### Triggers
 
@@ -172,6 +193,7 @@ calibration_adjustment:
 ### Test fixtures
 
 `tests/fixtures/agents/linker/`:
+
 - `obvious-link/` --- two notes with high mutual relevance; expected: high-confidence link proposed
 - `redundant/` --- target already linked; expected: no proposal
 - `low-signal/` --- weak retrieval agreement; expected: low confidence → proposal not auto-land
@@ -183,6 +205,7 @@ calibration_adjustment:
 ## Gardener
 
 ### Identity
+
 - **Name:** `gardener`
 - **Tier:** maintenance
 - **Phase:** v1
@@ -201,22 +224,26 @@ stale content from the vault. Specifically:
    no recent links, no recent edits, no incoming references.
 
 # Context
+
 Note being analyzed:
-  Title: {{note.title}}
-  Type: {{note.type}}
-  Status: {{note.status}}
-  Last modified: {{note.modified_at}}
-  Incoming link count: {{note.incoming_link_count}}
-  Body:
-  {{note.body}}
+Title: {{note.title}}
+Type: {{note.type}}
+Status: {{note.status}}
+Last modified: {{note.modified_at}}
+Incoming link count: {{note.incoming_link_count}}
+Body:
+{{note.body}}
 
 # Dead-link candidates (already verified as dead by the runner):
-  {{dead_links.list}}
+
+{{dead_links.list}}
 
 # TODO candidates (already extracted by the runner):
-  {{todo_candidates.list_with_context}}
+
+{{todo_candidates.list_with_context}}
 
 # Constraints
+
 - Never propose deleting a whole note; flag it instead.
 - Never modify text other than removing dead links / resolved TODOs.
 - For TODO removal: only remove if the surrounding text makes clear the item is done.
@@ -224,6 +251,7 @@ Note being analyzed:
 - Confidence calibration: rate honestly.
 
 # Output
+
 Return ONLY a JSON object matching the GardenerOutput schema.
 ```
 
@@ -234,18 +262,21 @@ Return ONLY a JSON object matching the GardenerOutput schema.
   "type": "object",
   "required": ["confidence", "rationale", "removals", "flags"],
   "properties": {
-    "confidence":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-    "rationale":   { "type": "string" },
+    "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "rationale": { "type": "string" },
     "removals": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["kind", "location", "before_text", "after_text"],
         "properties": {
-          "kind":        { "enum": ["dead_link", "resolved_todo"] },
-          "location":    { "type": "string", "description": "Heading + line range" },
+          "kind": { "enum": ["dead_link", "resolved_todo"] },
+          "location": {
+            "type": "string",
+            "description": "Heading + line range"
+          },
           "before_text": { "type": "string" },
-          "after_text":  { "type": "string" }
+          "after_text": { "type": "string" }
         }
       }
     },
@@ -256,7 +287,7 @@ Return ONLY a JSON object matching the GardenerOutput schema.
         "required": ["note_id", "reason"],
         "properties": {
           "note_id": { "type": "string" },
-          "reason":  { "enum": ["stale", "orphaned", "decayed_evergreen"] }
+          "reason": { "enum": ["stale", "orphaned", "decayed_evergreen"] }
         }
       }
     }
@@ -277,10 +308,10 @@ Flags don't carry confidence (they're advisory, not actions).
 
 ### Tools
 
-| Tool                  | Input             | Output                | Purpose                            |
-| --------------------- | ----------------- | --------------------- | ---------------------------------- |
-| `verify_link_alive`   | `{target_id: str}`| `bool`                | Confirm a link target exists       |
-| `list_incoming_links` | `{id: str}`       | `Vec<LinkRef>`        | Backlinks for staleness assessment |
+| Tool                  | Input              | Output         | Purpose                            |
+| --------------------- | ------------------ | -------------- | ---------------------------------- |
+| `verify_link_alive`   | `{target_id: str}` | `bool`         | Confirm a link target exists       |
+| `list_incoming_links` | `{id: str}`        | `Vec<LinkRef>` | Backlinks for staleness assessment |
 
 ### Triggers
 
@@ -295,6 +326,7 @@ Flags don't carry confidence (they're advisory, not actions).
 ### Test fixtures
 
 `tests/fixtures/agents/gardener/`:
+
 - `dead-link/` --- a wikilink to a deleted note; expected: removed
 - `live-link/` --- a wikilink to an existing note; expected: untouched
 - `done-todo/` --- a TODO followed by clear "done" context; expected: removed
@@ -306,6 +338,7 @@ Flags don't carry confidence (they're advisory, not actions).
 ## Cartographer
 
 ### Identity
+
 - **Name:** `cartographer`
 - **Tier:** maintenance
 - **Phase:** v1 (continuous mode AND quarterly tag-audit mode)
@@ -320,6 +353,7 @@ job: maintain the Karpathy-style index.md and any active MOC notes. The index
 gives every note in the vault one sentence of context, sorted for navigation.
 
 # Context
+
 - Recent note changes (last 24h):
   {{recent_changes.list_with_titles}}
 
@@ -333,6 +367,7 @@ gives every note in the vault one sentence of context, sorted for navigation.
   {{orphaned_index_entries.list}}
 
 # Constraints
+
 - Index entries are exactly one line each: `- [[Title]]: <one-sentence summary>`
 - Sort by: type (evergreen first, then literature, then MOC, then archive).
   Within type: alphabetical by title.
@@ -340,6 +375,7 @@ gives every note in the vault one sentence of context, sorted for navigation.
 - Confidence calibration: rate honestly per-update.
 
 # Output
+
 Return ONLY a JSON object matching the CartographerContinuousOutput schema.
 ```
 
@@ -350,16 +386,16 @@ Return ONLY a JSON object matching the CartographerContinuousOutput schema.
   "type": "object",
   "required": ["confidence", "rationale", "index_updates"],
   "properties": {
-    "confidence":  { "type": "number" },
-    "rationale":   { "type": "string" },
+    "confidence": { "type": "number" },
+    "rationale": { "type": "string" },
     "index_updates": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["op", "title"],
         "properties": {
-          "op":      { "enum": ["add", "update", "remove"] },
-          "title":   { "type": "string" },
+          "op": { "enum": ["add", "update", "remove"] },
+          "title": { "type": "string" },
           "summary": { "type": "string" }
         }
       }
@@ -371,16 +407,17 @@ Return ONLY a JSON object matching the CartographerContinuousOutput schema.
 ### Confidence formula
 
 LLM self-score weighted by:
+
 - For `add` / `update`: did the summary use words present in the note? (+0.1 if yes; bias against hallucinated summaries)
 - For `remove`: did the runner pre-verify the target note no longer exists? (deterministic; confidence 0.99)
 
 ### Tools
 
-| Tool                 | Input             | Output       | Purpose                              |
-| -------------------- | ----------------- | ------------ | ------------------------------------ |
-| `read_note`          | `{id: str}`       | `Note`       | Read note for summarization          |
-| `read_index`         | `{}`              | `String`     | Current `index.md` contents          |
-| `list_notes`         | `{filters: ...}`  | `Vec<NoteRef>` | Full vault listing for missing-detection |
+| Tool         | Input            | Output         | Purpose                                  |
+| ------------ | ---------------- | -------------- | ---------------------------------------- |
+| `read_note`  | `{id: str}`      | `Note`         | Read note for summarization              |
+| `read_index` | `{}`             | `String`       | Current `index.md` contents              |
+| `list_notes` | `{filters: ...}` | `Vec<NoteRef>` | Full vault listing for missing-detection |
 
 ### Triggers
 
@@ -394,6 +431,7 @@ LLM self-score weighted by:
 ### Test fixtures
 
 `tests/fixtures/agents/cartographer/`:
+
 - `new-note-add/` --- verify added to index in correct position
 - `note-removed/` --- verify removed from index
 - `title-renamed/` --- verify summary preserved on title change
@@ -404,6 +442,7 @@ LLM self-score weighted by:
 ## Scribe
 
 ### Identity
+
 - **Name:** `scribe`
 - **Tier:** processing
 - **Phase:** v1
@@ -418,14 +457,16 @@ fleeting notes (quick captures, voice transcripts, share-sheet drops) so they
 become readable without changing their meaning.
 
 # Context
+
 Note being cleaned:
-  Type: {{note.type}}
-  Source: {{note.source}}     -- e.g. "voice-memo", "share-sheet", "type"
-  Captured at: {{note.captured_at}}
-  Body:
-  {{note.body}}
+Type: {{note.type}}
+Source: {{note.source}} -- e.g. "voice-memo", "share-sheet", "type"
+Captured at: {{note.captured_at}}
+Body:
+{{note.body}}
 
 # Cleanup operations allowed
+
 - Fix obvious transcription errors (e.g., "two" -> "to" in clear context)
 - Add paragraph breaks where speech run-on muddles structure
 - Fix capitalization at sentence starts
@@ -435,6 +476,7 @@ Note being cleaned:
 - Normalize tags to existing namespace (`topic/foo` not `Topic Foo`)
 
 # Constraints
+
 - NEVER change the meaning. If you would rephrase a thought into different words
   expressing a different idea, leave it alone.
 - NEVER add content the user did not say.
@@ -443,6 +485,7 @@ Note being cleaned:
 - Confidence calibration: rate honestly.
 
 # Output
+
 Return ONLY a JSON object matching the ScribeOutput schema.
 ```
 
@@ -451,11 +494,19 @@ Return ONLY a JSON object matching the ScribeOutput schema.
 ```json
 {
   "type": "object",
-  "required": ["confidence", "rationale", "cleaned_body", "frontmatter_updates"],
+  "required": [
+    "confidence",
+    "rationale",
+    "cleaned_body",
+    "frontmatter_updates"
+  ],
   "properties": {
-    "confidence":   { "type": "number" },
-    "rationale":    { "type": "string" },
-    "cleaned_body": { "type": "string", "description": "Full replacement body" },
+    "confidence": { "type": "number" },
+    "rationale": { "type": "string" },
+    "cleaned_body": {
+      "type": "string",
+      "description": "Full replacement body"
+    },
     "frontmatter_updates": {
       "type": "object",
       "additionalProperties": { "type": "string" }
@@ -467,14 +518,15 @@ Return ONLY a JSON object matching the ScribeOutput schema.
 ### Confidence formula
 
 LLM self-score weighted by:
+
 - Length-similarity check: `cleaned_body` should be 80-110% of original by character count for fleeting; 95-105% for literature. Outside this band, confidence cap at 0.7 (likely substantive change, not just cleanup).
 - Edit-distance check: word-level Levenshtein ratio > 0.6 (more than 40% of words changed) caps confidence at 0.5.
 
 ### Tools
 
-| Tool                 | Input             | Output       | Purpose                            |
-| -------------------- | ----------------- | ------------ | ---------------------------------- |
-| `list_existing_tags` | `{}`              | `Vec<String>`| Used for tag normalization         |
+| Tool                 | Input | Output        | Purpose                    |
+| -------------------- | ----- | ------------- | -------------------------- |
+| `list_existing_tags` | `{}`  | `Vec<String>` | Used for tag normalization |
 
 ### Triggers
 
@@ -489,6 +541,7 @@ LLM self-score weighted by:
 ### Test fixtures
 
 `tests/fixtures/agents/scribe/`:
+
 - `voice-memo-raw/` --- transcript with um/like/run-on; expected: cleaned, confidence high
 - `dense-prose/` --- already-clean writing; expected: minimal changes, confidence high
 - `meaning-change-attempt/` --- input that tempts rephrasing; expected: low confidence, proposal
@@ -499,6 +552,7 @@ LLM self-score weighted by:
 ## Ingestor
 
 ### Identity
+
 - **Name:** `ingestor`
 - **Tier:** processing
 - **Phase:** v1 (text, markdown, web URLs, PDFs via Claude vision, images via vision, audio via local `whisper.cpp`)
@@ -512,12 +566,14 @@ You are Ingestor's classifier. Given a file, identify what it is so the right
 extractor pipeline runs.
 
 # Input
+
 - Filename: {{file.name}}
 - MIME type: {{file.mime}}
 - File size: {{file.size_bytes}}
 - First 1KB (text-decoded if possible): {{file.preamble}}
 
 # Categories
+
 - academic_paper: scholarly article, journal paper, preprint
 - article: news, blog post, magazine
 - book_chapter: extracted from a book
@@ -532,10 +588,11 @@ extractor pipeline runs.
 - unknown: cannot determine
 
 # Output
+
 {
-  "classification": "<one of the categories>",
-  "confidence": 0.0-1.0,
-  "rationale": "<one sentence>"
+"classification": "<one of the categories>",
+"confidence": 0.0-1.0,
+"rationale": "<one sentence>"
 }
 ```
 
@@ -546,9 +603,11 @@ You are Ingestor's extractor for academic papers. Read this PDF and extract
 the structured content needed to draft a literature note.
 
 # Input
+
 [The PDF is attached as a vision input.]
 
 # What to extract
+
 - Title (exact)
 - Authors (exact)
 - Publication year
@@ -561,6 +620,7 @@ the structured content needed to draft a literature note.
 Do NOT editorialize. Do NOT speculate beyond what the paper states.
 
 # Output
+
 Return ONLY a JSON object matching the AcademicPaperExtraction schema.
 ```
 
@@ -598,6 +658,7 @@ Extractors are not "tools" in the LLM-tool-call sense; they are deterministic di
 ### Test fixtures
 
 `tests/fixtures/agents/ingestor/`:
+
 - `academic-paper.pdf/` --- expected: literature note with title/authors/abstract/claims
 - `screenshot-of-tweet.png/` --- expected: literature note with attribution
 - `web-article.html/` --- expected: readability extraction + literature note
@@ -668,7 +729,7 @@ superseded (status=superseded)
 
 The Swift app's diff-review surface (described in `03-architecture.md` §Swift app) presents the proposed diff exactly as it will appear if approved. Approval triggers `POST /proposals/:id/approve`. The runner then applies the diff via the WriteGit handle (which writes files; the user still has to `git add` separately), creates the `agent_actions` row, and updates the proposal's status.
 
-This is the proposal-flow path used in v1. Council deliberation runs *before* a proposal lands here for high-invasiveness changes, often producing automatic resolution (LAND or SHELVE) so the proposal queue becomes shorter and only contains things the council couldn't decide automatically or that exceed the human-approval invasiveness ceiling.
+This is the proposal-flow path used in v1. Council deliberation runs _before_ a proposal lands here for high-invasiveness changes, often producing automatic resolution (LAND or SHELVE) so the proposal queue becomes shorter and only contains things the council couldn't decide automatically or that exceed the human-approval invasiveness ceiling.
 
 ---
 

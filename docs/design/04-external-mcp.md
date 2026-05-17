@@ -187,7 +187,7 @@ The `api_key` is returned **once only** at the moment of approval. The server st
 
 ### `POST /mcp/clients/:id/scopes` (scope expansion)
 
-Existing client requests additional scopes. Same flow as initial registration but only the *new* scopes appear on the consent card. On approval, the existing API key gains the new scopes; no new key is issued.
+Existing client requests additional scopes. Same flow as initial registration but only the _new_ scopes appear on the consent card. On approval, the existing API key gains the new scopes; no new key is issued.
 
 ### `DELETE /mcp/clients/:id`
 

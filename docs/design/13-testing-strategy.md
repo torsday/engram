@@ -14,13 +14,13 @@ The principle: **tests assert behavior, not implementation.** A refactor that pr
 
 Engram uses five layers, each with a clear purpose. Coverage targets are at the layer level, not aggregate.
 
-| Layer                       | Crate / location                       | Purpose                                            | Target |
-| --------------------------- | -------------------------------------- | -------------------------------------------------- | ------ |
-| **Unit (pure)**             | inline `#[cfg(test)] mod tests`        | Pure functions: parsing, classification, formulas. | ≥ 90% line |
-| **Property-based**          | `tests/property/` per crate            | Invariants that must hold for *all* inputs.        | Per-property |
-| **Snapshot**                | `tests/snapshots/` per crate           | Stable outputs of complex transformations.         | Per-snapshot |
-| **Integration (in-process)**| `tests/integration/`                   | Multi-component flows using a real sqlite + temp vault. | Critical paths covered |
-| **End-to-end (vault scenarios)** | `tests/e2e/`                      | Full `engram serve` against a real vault, with mocked LLM. | All v1 acceptance criteria |
+| Layer                            | Crate / location                | Purpose                                                    | Target                     |
+| -------------------------------- | ------------------------------- | ---------------------------------------------------------- | -------------------------- |
+| **Unit (pure)**                  | inline `#[cfg(test)] mod tests` | Pure functions: parsing, classification, formulas.         | ≥ 90% line                 |
+| **Property-based**               | `tests/property/` per crate     | Invariants that must hold for _all_ inputs.                | Per-property               |
+| **Snapshot**                     | `tests/snapshots/` per crate    | Stable outputs of complex transformations.                 | Per-snapshot               |
+| **Integration (in-process)**     | `tests/integration/`            | Multi-component flows using a real sqlite + temp vault.    | Critical paths covered     |
+| **End-to-end (vault scenarios)** | `tests/e2e/`                    | Full `engram serve` against a real vault, with mocked LLM. | All v1 acceptance criteria |
 
 Tests run via `cargo test --workspace` (unit + property + snapshot + integration) and `task e2e` (end-to-end). All run in CI.
 
@@ -45,34 +45,34 @@ Test pure functions in isolation. No I/O, no side effects, no mocks needed.
 
 **Standard:** every public function in these modules has at least one test for the happy path, one for an edge case (empty input, max-size input), and one for the error path. Coverage targets ≥ 90% lines and ≥ 80% branches per module.
 
-**Anti-pattern:** **no tests that just call a function and assert non-`None`.** A test must assert *what* the result is, not just that it returned.
+**Anti-pattern:** **no tests that just call a function and assert non-`None`.** A test must assert _what_ the result is, not just that it returned.
 
 ---
 
 ## Property-based tests
 
-Engram has many invariants that should hold for *any* input. These are the natural fit for `proptest` (or `quickcheck`).
+Engram has many invariants that should hold for _any_ input. These are the natural fit for `proptest` (or `quickcheck`).
 
 **Properties to verify:**
 
-| Property | Invariant |
-|---|---|
-| Slug round-trip | `slug(title)` is deterministic; same title → same slug |
-| Slug collision detection | After applying collision-suffix, all slugs in a vault are unique |
-| ULID sortability | For two ULIDs `a` (generated at `t_a`) and `b` (generated at `t_b > t_a`), `a < b` as strings |
-| Frontmatter round-trip | `parse(serialize(frontmatter)) == frontmatter` for any valid frontmatter |
-| Sidecar round-trip | `parse(serialize(sidecar)) == sidecar` for any valid sidecar |
-| Wikilink extraction | For markdown containing `[[X]]`, X appears in the extracted link list |
-| Markdown AST round-trip | Modifying via the AST and rendering produces valid markdown |
-| Hybrid retrieval ordering | RRF result ordering is consistent across reorderings of input rankings (modulo ties) |
-| Invasiveness classifier | For any diff that adds-only, classification is `additive` or higher (never `mechanical`) |
-| Confidence formula | `confidence_final ∈ [0.0, 1.0]` for any inputs in `[0.0, 1.0]` |
-| FSRS update | A "good" review never decreases stability; an "again" review always decreases it |
-| Idempotent capture | Submitting the same capture (same ULID) twice produces one `artifacts` row |
+| Property                  | Invariant                                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| Slug round-trip           | `slug(title)` is deterministic; same title → same slug                                        |
+| Slug collision detection  | After applying collision-suffix, all slugs in a vault are unique                              |
+| ULID sortability          | For two ULIDs `a` (generated at `t_a`) and `b` (generated at `t_b > t_a`), `a < b` as strings |
+| Frontmatter round-trip    | `parse(serialize(frontmatter)) == frontmatter` for any valid frontmatter                      |
+| Sidecar round-trip        | `parse(serialize(sidecar)) == sidecar` for any valid sidecar                                  |
+| Wikilink extraction       | For markdown containing `[[X]]`, X appears in the extracted link list                         |
+| Markdown AST round-trip   | Modifying via the AST and rendering produces valid markdown                                   |
+| Hybrid retrieval ordering | RRF result ordering is consistent across reorderings of input rankings (modulo ties)          |
+| Invasiveness classifier   | For any diff that adds-only, classification is `additive` or higher (never `mechanical`)      |
+| Confidence formula        | `confidence_final ∈ [0.0, 1.0]` for any inputs in `[0.0, 1.0]`                                |
+| FSRS update               | A "good" review never decreases stability; an "again" review always decreases it              |
+| Idempotent capture        | Submitting the same capture (same ULID) twice produces one `artifacts` row                    |
 
 **Standard:** each property runs ≥ 1000 generated cases; failures are minimized via `proptest` shrinking to the smallest failing input.
 
-**Anti-pattern:** **no property tests that just exercise serialization.** Properties must encode behavior the system *promises* — invariants the user or another component relies on.
+**Anti-pattern:** **no property tests that just exercise serialization.** Properties must encode behavior the system _promises_ — invariants the user or another component relies on.
 
 ---
 
@@ -117,28 +117,28 @@ let fixture = TestFixture::new()
 
 **Critical paths covered:**
 
-| Test | What it verifies |
-|---|---|
-| `test_ingest_pdf_to_literature_note` | Drop a PDF; literature note appears in proposals; user approves; lands unstaged. |
-| `test_linker_proposes_high_confidence` | New note with strong neighbor; Linker auto-lands; `agent_actions` row created; markdown updated. |
-| `test_linker_proposes_low_confidence` | New note with weak neighbor; Linker enters proposal queue; no markdown change. |
-| `test_no_agent_commits_invariant` | Run all v1 agents against a sample vault for 10 simulated minutes. Assert: `git log --all` shows no commits authored by anything other than the test harness. |
-| `test_concurrent_agents_advisory_lock` | Two agents attempt to modify the same note. One wins the lock; the other defers. Both runs are logged correctly. |
-| `test_confidence_calibration_loop` | Run Linker 100 times; reject 30; verify Watcher's calibration record reflects 70% acceptance and proposes a prompt-tuning variant if rate drops below threshold. |
-| `test_atomic_triple_write_crash_recovery` | Begin a write; SIGKILL the process between markdown and sidecar writes; restart; verify recovery via the `write_intents` log; final state consistent. |
-| `test_git_restore_re_indexes` | Stage and discard an agent change via `git restore`; verify indexer re-reads the file, updates `notes_fts` (SQLite) and queues a LanceDB upsert to reflect the restored content. |
-| `test_lancedb_eventual_consistency_window` | Modify a note; query semantic search immediately (should still return correct results via BM25 + graph fallback); query again after 1s (LanceDB now reflects the new content). |
-| `test_lancedb_reconciliation_after_crash` | Modify a note; SIGKILL the process before async LanceDB upsert completes; restart; verify reconciliation pass detects the mismatch and re-upserts. |
-| `test_capture_idempotency` | Submit the same capture twice (same ULID); verify only one artifact and one literature note. |
-| `test_offline_capture_sync` | Simulate Swift app submitting captures while server is "down"; bring server back up; verify all captures sync once. |
-| `test_pacekeeper_throttle_state_transitions` | Force backlog growth; verify Pacekeeper transitions normal → throttled → paused; verify deferred agents stop running. |
-| `test_cost_cap_pause` | Inject usage that crosses 100% cap; verify all LLM-using agents pause; verify mechanical agents continue; verify cap warning surfaces. |
-| `test_sub_agent_invocation` | Curator invokes Synthesizer; verify lock inheritance, separate memory namespaces, parent_run_id linkage in `agent_actions`. |
-| `test_external_mcp_consent_flow` | Submit `POST /mcp/register`; assert pending; user approves via mock Swift channel; assert client receives API key once. |
-| `test_external_mcp_scope_enforcement` | Client with `notes:read:tag/travel` attempts to read a note tagged `topic/work`; assert 403. |
-| `test_ask_user_round_trip` | Client calls `ask_user`; mock user replies via test harness; client polls and receives the answer. |
-| `test_privacy_zone_blocks_cloud_llm` | Note in `notes/work/`; verify any agent processing it uses the local provider regardless of agent config. |
-| `test_schema_migration_old_vault` | Apply migrations from N-1 → N to a vault snapshot; verify no data loss; verify functional after migration. |
+| Test                                         | What it verifies                                                                                                                                                                 |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_ingest_pdf_to_literature_note`         | Drop a PDF; literature note appears in proposals; user approves; lands unstaged.                                                                                                 |
+| `test_linker_proposes_high_confidence`       | New note with strong neighbor; Linker auto-lands; `agent_actions` row created; markdown updated.                                                                                 |
+| `test_linker_proposes_low_confidence`        | New note with weak neighbor; Linker enters proposal queue; no markdown change.                                                                                                   |
+| `test_no_agent_commits_invariant`            | Run all v1 agents against a sample vault for 10 simulated minutes. Assert: `git log --all` shows no commits authored by anything other than the test harness.                    |
+| `test_concurrent_agents_advisory_lock`       | Two agents attempt to modify the same note. One wins the lock; the other defers. Both runs are logged correctly.                                                                 |
+| `test_confidence_calibration_loop`           | Run Linker 100 times; reject 30; verify Watcher's calibration record reflects 70% acceptance and proposes a prompt-tuning variant if rate drops below threshold.                 |
+| `test_atomic_triple_write_crash_recovery`    | Begin a write; SIGKILL the process between markdown and sidecar writes; restart; verify recovery via the `write_intents` log; final state consistent.                            |
+| `test_git_restore_re_indexes`                | Stage and discard an agent change via `git restore`; verify indexer re-reads the file, updates `notes_fts` (SQLite) and queues a LanceDB upsert to reflect the restored content. |
+| `test_lancedb_eventual_consistency_window`   | Modify a note; query semantic search immediately (should still return correct results via BM25 + graph fallback); query again after 1s (LanceDB now reflects the new content).   |
+| `test_lancedb_reconciliation_after_crash`    | Modify a note; SIGKILL the process before async LanceDB upsert completes; restart; verify reconciliation pass detects the mismatch and re-upserts.                               |
+| `test_capture_idempotency`                   | Submit the same capture twice (same ULID); verify only one artifact and one literature note.                                                                                     |
+| `test_offline_capture_sync`                  | Simulate Swift app submitting captures while server is "down"; bring server back up; verify all captures sync once.                                                              |
+| `test_pacekeeper_throttle_state_transitions` | Force backlog growth; verify Pacekeeper transitions normal → throttled → paused; verify deferred agents stop running.                                                            |
+| `test_cost_cap_pause`                        | Inject usage that crosses 100% cap; verify all LLM-using agents pause; verify mechanical agents continue; verify cap warning surfaces.                                           |
+| `test_sub_agent_invocation`                  | Curator invokes Synthesizer; verify lock inheritance, separate memory namespaces, parent_run_id linkage in `agent_actions`.                                                      |
+| `test_external_mcp_consent_flow`             | Submit `POST /mcp/register`; assert pending; user approves via mock Swift channel; assert client receives API key once.                                                          |
+| `test_external_mcp_scope_enforcement`        | Client with `notes:read:tag/travel` attempts to read a note tagged `topic/work`; assert 403.                                                                                     |
+| `test_ask_user_round_trip`                   | Client calls `ask_user`; mock user replies via test harness; client polls and receives the answer.                                                                               |
+| `test_privacy_zone_blocks_cloud_llm`         | Note in `notes/work/`; verify any agent processing it uses the local provider regardless of agent config.                                                                        |
+| `test_schema_migration_old_vault`            | Apply migrations from N-1 → N to a vault snapshot; verify no data loss; verify functional after migration.                                                                       |
 
 **Standard:** every test in this list is a real test that catches a real regression. Any test that's failing intermittently is fixed or removed. Every commit that fixes a bug must include the failing test that reproduces it.
 
@@ -199,15 +199,16 @@ The mock is used by integration tests AND e2e tests (run as a sidecar process fo
 
 Per layer (not aggregate; aggregate coverage % is a vanity metric):
 
-| Layer | Target |
-|---|---|
-| Unit (pure) | ≥ 90% line, ≥ 80% branch in core modules |
-| Property | ≥ 1000 cases per property; all critical invariants property-tested |
-| Snapshot | All listed snapshot targets have current snapshots |
+| Layer       | Target                                                                                    |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| Unit (pure) | ≥ 90% line, ≥ 80% branch in core modules                                                  |
+| Property    | ≥ 1000 cases per property; all critical invariants property-tested                        |
+| Snapshot    | All listed snapshot targets have current snapshots                                        |
 | Integration | All listed critical paths covered; new flows added when the system gains new capabilities |
-| E2E | One scenario per numbered scenario in `11-scenarios.md` |
+| E2E         | One scenario per numbered scenario in `11-scenarios.md`                                   |
 
 CI fails if:
+
 - Any test fails
 - Any test is `#[ignore]`'d without a tracked GitHub issue justifying it
 - Any property test reduces its case count below 1000 without justification
@@ -217,7 +218,7 @@ CI fails if:
 
 ## What we deliberately don't test
 
-- **LLM output quality.** Real LLM responses vary; testing "did the LLM produce a good response" is a moving target. We test that *the system handles the LLM's response correctly* (parses, validates, applies, retries on error). LLM quality is a Watcher/Auditor concern at runtime, not a unit-test concern.
+- **LLM output quality.** Real LLM responses vary; testing "did the LLM produce a good response" is a moving target. We test that _the system handles the LLM's response correctly_ (parses, validates, applies, retries on error). LLM quality is a Watcher/Auditor concern at runtime, not a unit-test concern.
 - **Real provider integration.** Tests don't hit Anthropic or OpenAI. The mock LLM is the contract; if the contract drifts (provider changes API), nightly real-LLM tests catch it.
 - **UI/visual regression of Swift app.** Out of scope for v1 testing infrastructure; manual TestFlight is sufficient.
 - **Performance of full retrieval against a 100K-note vault.** v1 scale ceiling is 10K notes; we test at that scale. Larger-scale benchmarks in v3+.
@@ -269,11 +270,13 @@ fn agent_main(git: impl ReadOnlyGit) {
 ## How tests evolve
 
 When a bug is reported:
+
 1. Write a failing test that reproduces it.
 2. Fix the code.
 3. The test is now part of the regression suite.
 
 When a feature is added:
+
 1. Write the integration test for the happy path before implementation.
 2. Implement.
 3. Add property/snapshot tests for invariants the feature introduces.

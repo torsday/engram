@@ -8,7 +8,7 @@
 
 [ADR 0003](0003-no-agent-commits.md) committed engram to "agents never run `git add` or `git commit`." This is the cornerstone of the git-safe autonomy story: even confident agent actions land as unstaged working-tree changes, and only the human stages or commits.
 
-The original architecture asserted this constraint but did not specify the *enforcement mechanism*. A code review of any agent's runner could find a stray `git_command.commit()` call, but only by review. The constraint needed to be unrepresentable in the type system, not a coding convention.
+The original architecture asserted this constraint but did not specify the _enforcement mechanism_. A code review of any agent's runner could find a stray `git_command.commit()` call, but only by review. The constraint needed to be unrepresentable in the type system, not a coding convention.
 
 ## Decision
 

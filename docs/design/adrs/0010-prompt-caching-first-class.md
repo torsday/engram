@@ -10,7 +10,7 @@ Engram makes a lot of LLM calls. With ~35 agents running on a 10K-note vault —
 
 Anthropic's API supports **prompt caching** (`cache_control` markers): the static prefix of a prompt is cached on the provider side for ~5 minutes; subsequent requests with the same prefix pay roughly **10% of the input-token cost** for the cached portion. OpenAI has similar mechanisms (automatic prefix caching for prompts > 1024 tokens).
 
-If engram's prompts are designed *without* caching in mind — interleaving static instructions with dynamic note context arbitrarily — the cache hit rate is near zero and the cost stays at full price. If engram's prompts are designed *for* cache friendliness from day one, the typical input cost drops by a large factor.
+If engram's prompts are designed _without_ caching in mind — interleaving static instructions with dynamic note context arbitrarily — the cache hit rate is near zero and the cost stays at full price. If engram's prompts are designed _for_ cache friendliness from day one, the typical input cost drops by a large factor.
 
 This is an architectural decision because it affects every agent's prompt structure, the prompt loader's responsibilities, the LLM provider abstraction, and the metrics we track.
 
@@ -81,14 +81,17 @@ The prompt loader (`engram-agents::prompt_loader`) returns prompts as `PromptStr
 You are Linker, an agent in the engram knowledge system. Your job: ...
 
 # Constraints
+
 - ...
 
 # Output
+
 Return ONLY a JSON object matching the LinkerOutput schema.
 
 <!-- /cache -->
 
 # Context
+
 - User biography (if available): {{biography_excerpt}}
 - Note being analyzed: {{note}}
 - Top neighbors: {{neighbors}}
@@ -100,11 +103,13 @@ Everything before `<!-- /cache -->` is the static head. Templating substitution 
 ### Metrics tracked
 
 Per-call:
+
 - `input_tokens_total`
 - `input_tokens_cached` (read from provider response)
 - `cache_hit_ratio = cached / total`
 
 Per-agent (rolling 30 days):
+
 - Mean cache hit ratio
 - Effective cost-per-call vs. uncached cost-per-call
 
@@ -112,19 +117,19 @@ Surfaced in standup and `engram status`. An agent with cache hit ratio < 50% tri
 
 ### Scope of cacheability
 
-| Content                         | Cache placement                                |
-| ------------------------------- | ---------------------------------------------- |
-| Agent identity / role           | Static head                                    |
-| Task instructions / constraints | Static head                                    |
-| Output schema                   | Static head                                    |
-| Evergreen rubric                | Static head                                    |
-| Tag namespace conventions       | Static head                                    |
-| Biographer model excerpt        | Static head (changes monthly; cache rebuilds)  |
-| Voice model excerpt             | Static head (changes monthly)                  |
-| Note being analyzed             | Dynamic tail                                   |
-| Retrieval results               | Dynamic tail                                   |
-| Recent-changes context          | Dynamic tail                                   |
-| Conversation history            | Dynamic tail                                   |
+| Content                         | Cache placement                               |
+| ------------------------------- | --------------------------------------------- |
+| Agent identity / role           | Static head                                   |
+| Task instructions / constraints | Static head                                   |
+| Output schema                   | Static head                                   |
+| Evergreen rubric                | Static head                                   |
+| Tag namespace conventions       | Static head                                   |
+| Biographer model excerpt        | Static head (changes monthly; cache rebuilds) |
+| Voice model excerpt             | Static head (changes monthly)                 |
+| Note being analyzed             | Dynamic tail                                  |
+| Retrieval results               | Dynamic tail                                  |
+| Recent-changes context          | Dynamic tail                                  |
+| Conversation history            | Dynamic tail                                  |
 
 ### Cost-estimator integration
 
