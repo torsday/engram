@@ -1,0 +1,18 @@
+[package]
+name = "engram-agents"
+description = "Agent host: scheduler, runner, identity, tool gateway, prompt loader, council deliberation engine, review queue, trust score tracker"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+engram-index = { workspace = true }
+engram-llm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+toml = { workspace = true }

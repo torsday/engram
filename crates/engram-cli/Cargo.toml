@@ -1,0 +1,23 @@
+[package]
+name = "engram-cli"
+description = "engram binary entry point with clap subcommands"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "engram"
+path = "src/main.rs"
+
+[dependencies]
+engram-core = { workspace = true }
+engram-index = { workspace = true }
+engram-agents = { workspace = true }
+engram-api = { workspace = true }
+engram-mcp = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

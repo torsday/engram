@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/engram-core",
+    "crates/engram-index",
+    "crates/engram-agents",
+    "crates/engram-rubric",
+    "crates/engram-git",
+    "crates/engram-llm",
+    "crates/engram-extract",
+    "crates/engram-api",
+    "crates/engram-mcp",
+    "crates/engram-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Chris Torstenson"]
+license = "LicenseRef-proprietary"
+
+[workspace.dependencies]
+# async runtime
+tokio = { version = "1", features = ["full"] }
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# error handling
+thiserror = "2"
+anyhow = "1"
+
+# tracing / logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# HTTP server
+axum = { version = "0.7", features = ["macros"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# markdown
+comrak = "0.29"
+
+# SQLite
+rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
+
+# git
+gix = "0.67"
+
+# file watching
+notify = "6"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# workspace crates
+engram-core = { path = "crates/engram-core" }
+engram-index = { path = "crates/engram-index" }
+engram-agents = { path = "crates/engram-agents" }
+engram-rubric = { path = "crates/engram-rubric" }
+engram-git = { path = "crates/engram-git" }
+engram-llm = { path = "crates/engram-llm" }
+engram-extract = { path = "crates/engram-extract" }
+engram-api = { path = "crates/engram-api" }
+engram-mcp = { path = "crates/engram-mcp" }

@@ -1,0 +1,15 @@
+[package]
+name = "engram-extract"
+description = "File classification and extraction dispatch: PDF, image, audio (whisper.cpp), web URL, OCR"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+engram-llm = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

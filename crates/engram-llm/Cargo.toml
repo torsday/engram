@@ -1,0 +1,16 @@
+[package]
+name = "engram-llm"
+description = "LLM provider trait and implementations: Anthropic, OpenAI, Ollama; model-tier mapping; structured output; tool-use protocol"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

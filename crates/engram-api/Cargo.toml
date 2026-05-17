@@ -1,0 +1,18 @@
+[package]
+name = "engram-api"
+description = "Axum HTTP server and SSE event stream: /ingest, /notes, /search, /proposals, /events, /council, /flows, /evals, /agents"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+engram-index = { workspace = true }
+engram-agents = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

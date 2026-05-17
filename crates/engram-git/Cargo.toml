@@ -1,0 +1,13 @@
+[package]
+name = "engram-git"
+description = "gix-backed git operations: read-only vault inspection and unstaged writes (no agent commits)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+gix = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

@@ -6,7 +6,20 @@ Your thoughts, encoded. A living knowledge base that rewrites itself.
 
 ## Status
 
-Pre-implementation. The repo currently contains design only --- no code yet. See [`docs/design/README.md`](docs/design/README.md) for the corpus index and reading order, and [`SPEC.md`](SPEC.md) for v1 acceptance criteria.
+Early implementation. The Rust workspace scaffold is in place; all crates compile but contain module stubs only. See [`docs/design/README.md`](docs/design/README.md) for the corpus index and reading order, and [`SPEC.md`](SPEC.md) for v1 acceptance criteria.
+
+## Building
+
+Requires a recent stable Rust (pinned via `rust-toolchain.toml`).
+
+```sh
+cargo build --workspace   # build all crates
+cargo test --workspace    # run all tests
+cargo clippy --workspace -- -D warnings
+cargo fmt --check
+```
+
+The binary is `engram-cli`; after building it lives at `target/debug/engram`.
 
 ## Copyright
 
