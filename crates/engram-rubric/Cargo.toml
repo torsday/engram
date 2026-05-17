@@ -1,0 +1,13 @@
+[package]
+name = "engram-rubric"
+description = "Evergreen note rubric definitions, note-type classifier, and provenance validator"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
