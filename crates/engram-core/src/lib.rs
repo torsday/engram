@@ -13,7 +13,7 @@ pub mod frontmatter {}
 pub mod wikilink {}
 
 /// Note identifiers: ULID generation and frontmatter embedding.
-pub mod note_id {}
+pub mod note_id;
 
 /// Pure-title slug normalization (unicode fold, diacritics, path safety).
 pub mod slug;

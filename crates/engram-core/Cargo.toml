@@ -14,6 +14,8 @@ comrak = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 deunicode = { workspace = true }
+ulid = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 proptest = "1"

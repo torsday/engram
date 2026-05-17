@@ -26,6 +26,10 @@ tokio = { version = "1", features = ["full"] }
 # text processing
 deunicode = "1"
 
+# identifiers
+ulid = { version = "1", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
 # serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
