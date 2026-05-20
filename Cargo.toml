@@ -11,6 +11,7 @@ members = [
     "crates/engram-api",
     "crates/engram-mcp",
     "crates/engram-cli",
+    "crates/engram-secrets",
 ]
 
 [workspace.package]
@@ -65,6 +66,12 @@ notify = "6"
 # CLI
 clap = { version = "4", features = ["derive"] }
 
+# secrets management
+secrecy = { version = "0.8", features = ["alloc"] }
+zeroize = "1"
+security-framework = "3"
+keyring = { version = "3", default-features = false, features = ["linux-native"] }
+
 # workspace crates
 engram-core = { path = "crates/engram-core" }
 engram-index = { path = "crates/engram-index" }
@@ -75,3 +82,4 @@ engram-llm = { path = "crates/engram-llm" }
 engram-extract = { path = "crates/engram-extract" }
 engram-api = { path = "crates/engram-api" }
 engram-mcp = { path = "crates/engram-mcp" }
+engram-secrets = { path = "crates/engram-secrets" }
