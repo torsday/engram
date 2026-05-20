@@ -69,6 +69,21 @@ pub enum Error {
         op: &'static str,
     },
 
+    /// Provider returned HTTP 429 with an optional `Retry-After` hint.
+    ///
+    /// The retry decorator reads [`retry_after`] and waits *at least* that
+    /// long (capped at `RetryConfig::max_delay`) before the next attempt.
+    /// When the header is absent, it falls through to the default jittered
+    /// backoff.
+    #[error("provider rate-limited (429): {message}")]
+    RateLimited {
+        /// Parsed `Retry-After` duration, if the header was present and
+        /// parseable. May be `Duration::ZERO` if the header said `0`.
+        retry_after: Option<std::time::Duration>,
+        /// Provider-supplied error message (sanitized).
+        message: String,
+    },
+
     /// Single-call wall-clock timeout. Tagged as transient — the retry
     /// wrapper will try again under the same budget.
     #[error("call timed out after {millis}ms")]
@@ -138,6 +153,7 @@ impl Error {
             // Body didn't match our wire format → upstream contract change.
             Self::Decode(_) => ErrorCategory::External,
 
+            Self::RateLimited { .. } => ErrorCategory::Transient,
             Self::EmptyResponse => ErrorCategory::Transient,
             Self::Timeout { .. } => ErrorCategory::Transient,
 

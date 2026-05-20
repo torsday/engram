@@ -126,12 +126,19 @@ impl LlmProvider for AnthropicProvider {
             .await?;
 
         let status = response.status();
+        let retry_after_hdr = parse_retry_after_header(response.headers());
         let body_text = response.text().await?;
         let latency_ms = started.elapsed().as_millis() as u64;
 
         if !status.is_success() {
             let message = parse_error_message(&body_text)
                 .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            if status.as_u16() == 429 {
+                return Err(Error::RateLimited {
+                    retry_after: retry_after_hdr,
+                    message,
+                });
+            }
             return Err(Error::Status {
                 status: status.as_u16(),
                 message,
@@ -214,9 +221,16 @@ impl LlmProvider for AnthropicProvider {
         let status = response.status();
         if !status.is_success() {
             // Body is small enough for non-streaming reads on error.
+            let retry_after_hdr = parse_retry_after_header(response.headers());
             let body_text = response.text().await?;
             let message = parse_error_message(&body_text)
                 .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            if status.as_u16() == 429 {
+                return Err(Error::RateLimited {
+                    retry_after: retry_after_hdr,
+                    message,
+                });
+            }
             return Err(Error::Status {
                 status: status.as_u16(),
                 message,
@@ -299,6 +313,29 @@ fn parse_error_message(body: &str) -> Option<String> {
         .and_then(|m| m.as_str())
         .map(str::to_string)
 }
+
+/// Parse the `Retry-After` response header into a [`Duration`].
+///
+/// RFC 7231 allows the value to be:
+/// - An integer number of seconds (`Retry-After: 30`)
+/// - An HTTP-date (`Retry-After: Wed, 21 Oct 2015 07:28:00 GMT`)
+///
+/// For simplicity we handle the integer form here (the only form Anthropic
+/// uses in practice) and return `None` for HTTP-date values (which would
+/// require a date parser and `SystemTime::now()` comparison to be useful).
+/// A missing or unparseable header also returns `None`.
+fn parse_retry_after_header(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let val = headers.get(reqwest::header::RETRY_AFTER)?;
+    let s = val.to_str().ok()?.trim();
+    // Integer seconds — the common case.
+    if let Ok(secs) = s.parse::<f64>() {
+        return Some(Duration::from_secs_f64(secs.max(0.0)));
+    }
+    // HTTP-date form — not implemented; treat as absent.
+    None
+}
+
+use std::time::Duration;
 
 // ─── wire-shape deserialization ────────────────────────────────────────────
 

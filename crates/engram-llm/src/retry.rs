@@ -126,9 +126,25 @@ where
                 if !category.is_retryable() {
                     return Err(e);
                 }
+                // If the provider gave us a Retry-After hint, respect it
+                // (capped at max_delay so a hostile header can't hold us hostage).
+                let provider_hint = match &e {
+                    Error::RateLimited {
+                        retry_after: Some(d),
+                        ..
+                    } => Some(*d),
+                    _ => None,
+                };
+
                 // Decide backoff before consuming `e` into `last_err`.
                 let next_attempt = attempt + 1;
-                let backoff = compute_backoff(config, attempt);
+                let jittered_backoff = compute_backoff(config, attempt);
+                // Use the provider hint when it is larger than the jittered
+                // backoff, but cap at max_delay so it cannot stall us forever.
+                let backoff = match provider_hint {
+                    Some(hint) => hint.max(jittered_backoff).min(config.max_delay),
+                    None => jittered_backoff,
+                };
 
                 tracing::warn!(
                     attempt,
@@ -139,6 +155,7 @@ where
                     },
                     category = %category,
                     backoff_ms = backoff.as_millis() as u64,
+                    provider_hint_ms = provider_hint.map(|d| d.as_millis() as u64),
                     error = %e,
                     "engram-llm retry: transient failure"
                 );
