@@ -102,6 +102,28 @@ pub enum Error {
         cooldown_ms: u64,
     },
 
+    /// The streaming early-exit wrapper cancelled the call after the
+    /// agent's `confidence` field arrived below the configured floor. Per
+    /// `docs/design/03-architecture.md` §Streaming structured output with
+    /// early-exit. Caller (typically Curator) treats this as a signal to
+    /// retry at a higher tier rather than as a hard failure.
+    #[error(
+        "stream cancelled early: confidence {confidence:.3} < floor {floor:.3}; \
+         saved ~{output_tokens_saved_estimated} output tokens"
+    )]
+    EarlyExit {
+        /// The parsed `confidence` value that triggered the cancel.
+        confidence: f32,
+        /// The threshold below which the wrapper cancels.
+        floor: f32,
+        /// Partial response text accumulated up to the cancel point.
+        partial: String,
+        /// Rough estimate of output tokens saved by cancelling vs. waiting
+        /// for the full response. Heuristic: `(typical_max - chars/4)` where
+        /// `typical_max` defaults to `512`.
+        output_tokens_saved_estimated: u32,
+    },
+
     /// Generic I/O error.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
@@ -145,6 +167,14 @@ impl Error {
             // "stop, surface to the caller" — not "retry forever".
             Self::RetryBudgetExhausted { .. } => ErrorCategory::Permanent,
             Self::CircuitBreakerOpen { .. } => ErrorCategory::Permanent,
+
+            // Early-exit is a *decision* by engram, not a failure of the
+            // upstream. Retrying the same call would yield the same low
+            // confidence; escalation (different model / different prompt)
+            // is the right response, which is the agent runner's job, not
+            // the retry layer's. Classify as Permanent so the retry layer
+            // surfaces it unchanged.
+            Self::EarlyExit { .. } => ErrorCategory::Permanent,
         }
     }
 }
