@@ -814,6 +814,7 @@ dependencies = [
  "engram-core",
  "engram-index",
  "engram-mcp",
+ "rusqlite",
  "thiserror 2.0.18",
  "tokio",
  "toml 0.8.23",
@@ -868,10 +869,12 @@ dependencies = [
 name = "engram-index"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "engram-core",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

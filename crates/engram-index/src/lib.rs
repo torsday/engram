@@ -1,7 +1,7 @@
 //! SQLite metadata index, FTS5 full-text search, LanceDB vector storage, and hybrid retrieval.
 
 /// SQLite connection management, schema migrations, and table access.
-pub mod sqlite {}
+pub mod sqlite;
 
 /// SQLite FTS5 full-text search index (BM25 scoring).
 pub mod fts {}
