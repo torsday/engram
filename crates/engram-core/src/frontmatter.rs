@@ -182,9 +182,7 @@ pub fn serialize_frontmatter(fm: &Frontmatter) -> String {
         .unwrap_or_else(|e| panic!("frontmatter serialization must not fail: {e}"));
     // serde_yaml::to_string already adds a trailing newline.
     // Strip the leading "---\n" that serde_yaml 0.9 prepends — we add our own delimiters.
-    let body = yaml
-        .strip_prefix("---\n")
-        .unwrap_or(&yaml);
+    let body = yaml.strip_prefix("---\n").unwrap_or(&yaml);
     format!("---\n{}---\n", body)
 }
 
@@ -302,10 +300,7 @@ mod tests {
         "};
         let fm = parse_frontmatter(md).expect("should parse");
         assert_eq!(fm.note_type, NoteType::Heretical);
-        assert_eq!(
-            fm.challenges.as_deref(),
-            Some("01JRZK3M7PQNX8BABCDE11111")
-        );
+        assert_eq!(fm.challenges.as_deref(), Some("01JRZK3M7PQNX8BABCDE11111"));
     }
 
     #[test]
@@ -335,9 +330,8 @@ mod tests {
             ("heretical", NoteType::Heretical),
             ("deliberation", NoteType::Deliberation),
         ] {
-            let md = format!(
-                "---\nid: 01JRZK3M7PQNX8BABCDE12345\ntitle: T\ntype: {type_str}\n---\n"
-            );
+            let md =
+                format!("---\nid: 01JRZK3M7PQNX8BABCDE12345\ntitle: T\ntype: {type_str}\n---\n");
             let fm = parse_frontmatter(&md).unwrap_or_else(|e| {
                 panic!("type '{type_str}' should parse: {e}");
             });
@@ -383,8 +377,7 @@ mod tests {
 
     #[test]
     fn invalid_enum_variant() {
-        let md =
-            "---\nid: 01JRZK3M7PQNX8BABCDE12345\ntitle: T\ntype: INVALID_TYPE\n---\n";
+        let md = "---\nid: 01JRZK3M7PQNX8BABCDE12345\ntitle: T\ntype: INVALID_TYPE\n---\n";
         let err = parse_frontmatter(md).unwrap_err();
         assert!(
             matches!(err, FrontmatterError::Yaml(_)),
@@ -394,7 +387,8 @@ mod tests {
 
     #[test]
     fn unknown_field_rejected() {
-        let md = "---\nid: 01JRZK3M7PQNX8BABCDE12345\ntitle: T\ntype: fleeting\nXXX_unknown: val\n---\n";
+        let md =
+            "---\nid: 01JRZK3M7PQNX8BABCDE12345\ntitle: T\ntype: fleeting\nXXX_unknown: val\n---\n";
         let err = parse_frontmatter(md).unwrap_err();
         assert!(
             matches!(err, FrontmatterError::Yaml(_)),
@@ -420,7 +414,10 @@ mod tests {
         let out = serialize_frontmatter(&fm);
         assert!(!out.contains("status:"), "status must be omitted when None");
         assert!(!out.contains("tags:"), "tags must be omitted when empty");
-        assert!(!out.contains("aliases:"), "aliases must be omitted when empty");
+        assert!(
+            !out.contains("aliases:"),
+            "aliases must be omitted when empty"
+        );
         assert!(
             !out.contains("source_url:"),
             "source_url must be omitted when None"
@@ -517,7 +514,8 @@ mod prop_tests {
     /// Non-empty strings safe for YAML scalar values (no leading `{`, `[`, etc.).
     fn arb_yaml_safe_string() -> impl Strategy<Value = String> {
         // ASCII alphanumeric + spaces + common punctuation; exclude YAML special chars
-        "[a-zA-Z0-9 _/\\-\\.]{1,40}".prop_map(|s| s.trim().to_string())
+        "[a-zA-Z0-9 _/\\-\\.]{1,40}"
+            .prop_map(|s| s.trim().to_string())
             .prop_filter("non-empty after trim", |s| !s.is_empty())
     }
 
