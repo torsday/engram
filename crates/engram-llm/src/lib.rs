@@ -36,14 +36,34 @@
 #![deny(missing_docs)]
 
 pub mod anthropic;
+pub mod circuit_breaker;
 mod error;
 mod provider;
+pub mod retry;
 mod streaming;
+pub mod timeout;
 mod types;
 
+pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider, CircuitState};
 pub use error::{Error, Result};
 pub use provider::LlmProvider;
+pub use retry::{RetryConfig, RetryProvider};
 pub use streaming::{StreamChunk, StreamedCompletion};
+pub use timeout::{TimeoutConfig, TimeoutProvider};
 pub use types::{
     CompleteOptions, Completion, EmbeddingModel, Model, ModelProvider, PromptStructured, Usage,
 };
+
+/// Compose the standard resilience stack — `CircuitBreaker(Retry(Timeout(inner)))` —
+/// using default budgets. Use [`CircuitBreakerProvider::with_config`],
+/// [`RetryProvider::with_config`], or [`TimeoutProvider::with_config`]
+/// directly when you need to tune the layers.
+pub fn resilient<P: LlmProvider>(
+    inner: P,
+    provider_name: impl Into<String>,
+) -> CircuitBreakerProvider<RetryProvider<TimeoutProvider<P>>> {
+    CircuitBreakerProvider::new(
+        RetryProvider::new(TimeoutProvider::new(inner)),
+        provider_name,
+    )
+}

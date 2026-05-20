@@ -10,10 +10,19 @@
 //!   contain prompt text or user data).
 //! - [`Error::Decode`] — provider returned 2xx but the body did not match
 //!   the expected schema. Programming error or upstream breakage.
-//! - [`Error::Schema`] — model output did not parse to the agent's
-//!   declared schema. Caller decides whether to retry, escalate, or fail.
 //! - [`Error::EmptyResponse`] — provider returned a 2xx with no usable
 //!   text content. Treated as a transient failure by callers.
+//! - [`Error::Timeout`] — the wall-clock budget for a single call expired.
+//! - [`Error::RetryBudgetExhausted`] — the retry policy exhausted its
+//!   attempts or total wall-clock budget; the last underlying error is
+//!   carried for diagnostics.
+//! - [`Error::CircuitBreakerOpen`] — the per-provider breaker is open and
+//!   short-circuited the call without making a network request.
+//!
+//! Each variant maps onto exactly one
+//! [`engram_core::error::ErrorCategory`] via [`Error::category`].
+
+use engram_core::error::ErrorCategory;
 
 /// Result alias used throughout the crate.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -60,7 +69,171 @@ pub enum Error {
         op: &'static str,
     },
 
+    /// Single-call wall-clock timeout. Tagged as transient — the retry
+    /// wrapper will try again under the same budget.
+    #[error("call timed out after {millis}ms")]
+    Timeout {
+        /// Configured timeout that elapsed, in milliseconds.
+        millis: u64,
+    },
+
+    /// The retry policy gave up: either the per-call attempt cap or the
+    /// total wall-clock budget elapsed, or the last error was non-transient.
+    ///
+    /// `last` carries the underlying failure as `Display` (boxed to keep the
+    /// enum size sane and to side-step recursion through `Box<Self>`).
+    #[error("retry budget exhausted after {attempts} attempt(s): {last}")]
+    RetryBudgetExhausted {
+        /// How many attempts (including the initial one) were made.
+        attempts: u32,
+        /// The final underlying failure, formatted for logs.
+        last: String,
+    },
+
+    /// The circuit breaker for this provider is open; the call was rejected
+    /// without performing any I/O. Retries should wait for the breaker to
+    /// move to half-open.
+    #[error("circuit breaker open for `{provider}` (cooldown remaining: {cooldown_ms}ms)")]
+    CircuitBreakerOpen {
+        /// Provider identifier whose breaker is open.
+        provider: String,
+        /// Approximate remaining cooldown until the breaker moves to
+        /// half-open, in milliseconds.
+        cooldown_ms: u64,
+    },
+
     /// Generic I/O error.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+}
+
+impl Error {
+    /// Classify this error for the retry / circuit-breaker layer.
+    ///
+    /// The mapping is intentionally conservative: anything that might
+    /// recover with another attempt is [`ErrorCategory::Transient`]; clear
+    /// upstream contract breakage is [`ErrorCategory::External`]; engram
+    /// configuration / setup issues are [`ErrorCategory::System`]; everything
+    /// else (4xx-except-429, retry budget exhausted, breaker open) is
+    /// [`ErrorCategory::Permanent`].
+    pub fn category(&self) -> ErrorCategory {
+        match self {
+            // Operator / setup problem.
+            Self::Secrets(_) => ErrorCategory::System,
+            Self::Io(_) => ErrorCategory::System,
+            Self::UnsupportedByProvider { .. } => ErrorCategory::System,
+
+            // Network — almost always transient.
+            Self::Http(e) => http_transient(e),
+
+            // HTTP status — 429 / 5xx transient, 4xx-other permanent,
+            // anything else outside [400, 600) treated as external.
+            Self::Status { status, .. } => match *status {
+                429 => ErrorCategory::Transient,
+                s if (500..600).contains(&s) => ErrorCategory::Transient,
+                s if (400..500).contains(&s) => ErrorCategory::Permanent,
+                _ => ErrorCategory::External,
+            },
+
+            // Body didn't match our wire format → upstream contract change.
+            Self::Decode(_) => ErrorCategory::External,
+
+            Self::EmptyResponse => ErrorCategory::Transient,
+            Self::Timeout { .. } => ErrorCategory::Transient,
+
+            // Once the retry policy or breaker has given up, the answer is
+            // "stop, surface to the caller" — not "retry forever".
+            Self::RetryBudgetExhausted { .. } => ErrorCategory::Permanent,
+            Self::CircuitBreakerOpen { .. } => ErrorCategory::Permanent,
+        }
+    }
+}
+
+/// Classify a [`reqwest::Error`] as transient (almost always) or external
+/// (the rare cases where the URL itself is malformed). Kept private — the
+/// distinction is only meaningful inside [`Error::category`].
+fn http_transient(e: &reqwest::Error) -> ErrorCategory {
+    if e.is_builder() {
+        // Malformed URL / invalid header value → caller bug, not retryable.
+        ErrorCategory::Permanent
+    } else {
+        ErrorCategory::Transient
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_5xx_is_transient() {
+        let e = Error::Status {
+            status: 502,
+            message: "bad gateway".into(),
+        };
+        assert_eq!(e.category(), ErrorCategory::Transient);
+    }
+
+    #[test]
+    fn http_429_is_transient() {
+        let e = Error::Status {
+            status: 429,
+            message: "rate limited".into(),
+        };
+        assert_eq!(e.category(), ErrorCategory::Transient);
+    }
+
+    #[test]
+    fn http_4xx_other_is_permanent() {
+        for status in [400, 401, 403, 404, 422] {
+            let e = Error::Status {
+                status,
+                message: "no".into(),
+            };
+            assert_eq!(
+                e.category(),
+                ErrorCategory::Permanent,
+                "status {status} should be Permanent"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_response_is_transient() {
+        assert_eq!(Error::EmptyResponse.category(), ErrorCategory::Transient);
+    }
+
+    #[test]
+    fn timeout_is_transient() {
+        assert_eq!(
+            Error::Timeout { millis: 60_000 }.category(),
+            ErrorCategory::Transient
+        );
+    }
+
+    #[test]
+    fn budget_exhausted_is_permanent() {
+        let e = Error::RetryBudgetExhausted {
+            attempts: 4,
+            last: "x".into(),
+        };
+        assert_eq!(e.category(), ErrorCategory::Permanent);
+    }
+
+    #[test]
+    fn breaker_open_is_permanent() {
+        let e = Error::CircuitBreakerOpen {
+            provider: "anthropic".into(),
+            cooldown_ms: 30_000,
+        };
+        assert_eq!(e.category(), ErrorCategory::Permanent);
+    }
+
+    #[test]
+    fn decode_is_external() {
+        assert_eq!(
+            Error::Decode("bad shape".into()).category(),
+            ErrorCategory::External
+        );
+    }
 }

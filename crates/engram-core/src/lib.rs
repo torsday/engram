@@ -28,4 +28,4 @@ pub mod sidecar;
 pub mod config;
 
 /// Shared domain error types.
-pub mod error {}
+pub mod error;
