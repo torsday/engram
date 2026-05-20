@@ -66,6 +66,9 @@ notify = "6"
 # CLI
 clap = { version = "4", features = ["derive"] }
 
+# async traits
+async-trait = "0.1"
+
 # secrets management
 secrecy = { version = "0.8", features = ["alloc"] }
 zeroize = "1"
