@@ -61,6 +61,7 @@ impl Mock {
         Completion {
             text: "ok".to_string(),
             usage: Usage::default(),
+            cost: engram_llm::Cost::unknown(),
             model_used: "mock/echo".to_string(),
             latency_ms: 0,
         }
