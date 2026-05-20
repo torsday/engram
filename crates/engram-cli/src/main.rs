@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use engram_core::config::{AgentConfig, EngramConfig};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -97,6 +99,11 @@ enum Command {
         #[command(subcommand)]
         action: SecretsAction,
     },
+    /// Manage engram configuration
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -123,6 +130,25 @@ enum FlowAction {
 enum BackupAction {
     /// Verify backup recency and remote push status
     Verify,
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Parse the config and report any errors (does not apply changes)
+    Validate {
+        /// Path to the vault root (defaults to current directory)
+        #[arg(long, default_value = ".")]
+        vault: PathBuf,
+    },
+    /// Print the loaded configuration (post-default-merge)
+    Show {
+        /// Path to the vault root (defaults to current directory)
+        #[arg(long, default_value = ".")]
+        vault: PathBuf,
+        /// Show the agent config for the named agent
+        #[arg(long)]
+        agent: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -157,5 +183,44 @@ async fn main() {
         Command::Backup { .. } => unimplemented!("engram backup"),
         Command::Migrate => unimplemented!("engram migrate"),
         Command::Secrets { .. } => unimplemented!("engram secrets"),
+        Command::Config { action } => match action {
+            ConfigAction::Validate { vault } => match EngramConfig::load(&vault) {
+                Ok(_) => {
+                    println!("✓ Config is valid.");
+                }
+                Err(e) => {
+                    eprintln!("✗ Config error: {e}");
+                    std::process::exit(1);
+                }
+            },
+            ConfigAction::Show { vault, agent } => {
+                if let Some(agent_name) = agent {
+                    let agents_dir = vault.join("agents");
+                    match AgentConfig::load(&agents_dir, &agent_name) {
+                        Ok(cfg) => {
+                            let toml_str = toml::to_string_pretty(&cfg)
+                                .expect("AgentConfig must serialize to TOML");
+                            println!("{toml_str}");
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Agent config error: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    match EngramConfig::load(&vault) {
+                        Ok(cfg) => {
+                            let toml_str = toml::to_string_pretty(&cfg)
+                                .expect("EngramConfig must serialize to TOML");
+                            println!("{toml_str}");
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Config error: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+        },
     }
 }

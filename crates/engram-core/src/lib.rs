@@ -24,5 +24,8 @@ pub mod collision;
 /// Sidecar JSON (`.engram/sidecar/<id>.json`) read/write.
 pub mod sidecar {}
 
+/// Vault and per-agent configuration loading.
+pub mod config;
+
 /// Shared domain error types.
 pub mod error {}

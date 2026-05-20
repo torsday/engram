@@ -17,6 +17,7 @@ engram-agents = { workspace = true }
 engram-api = { workspace = true }
 engram-mcp = { workspace = true }
 clap = { workspace = true }
+toml = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
