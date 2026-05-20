@@ -1,5 +1,22 @@
 //! Agent host: scheduler, runner, council deliberation, and review queue.
 
+use thiserror::Error;
+
+/// Errors produced by the backup watcher.
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum BackupError {
+    /// An external probe command (git, tmutil) failed.
+    #[error("probe failed: {0}")]
+    Probe(String),
+    /// Writing the status file failed.
+    #[error("write failed: {0}")]
+    Write(String),
+}
+
+/// Backup Watcher meta-agent: monitors git remote, filesystem snapshots, and
+/// artifact remote recency without performing any backup operations.
+pub mod backup_watcher;
+
 /// Agent identity, configuration, and lifecycle (ready → running → done).
 pub mod identity {}
 
