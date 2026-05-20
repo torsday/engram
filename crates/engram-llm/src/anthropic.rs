@@ -24,23 +24,32 @@
 //!
 //! ## Streaming
 //!
-//! Not implemented in this slice — see crate-level scope note. The trait
-//! does not yet expose a `complete_streamed` method; that arrives with the
-//! streaming follow-up.
+//! [`AnthropicProvider::complete_streamed`] consumes the `stream: true`
+//! SSE response. The SSE parser lives in the [`stream`] submodule and
+//! handles `message_start`, `content_block_start`, `content_block_delta`
+//! (text deltas), `content_block_stop`, `message_delta` (terminal usage),
+//! `message_stop`, `ping`, and `error` frames. Unknown frame types are
+//! tolerated (skipped) for forward-compat with tool-use and future block
+//! types. Tool-use blocks today produce a [`crate::StreamChunk::ToolUseMarker`]
+//! consumers can ignore.
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use reqwest::Client;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 use crate::provider::LlmProvider;
+use crate::streaming::StreamedCompletion;
 use crate::types::{
     CompleteOptions, Completion, EmbeddingModel, Model, ModelProvider, PromptStructured, Usage,
 };
+
+mod stream;
 
 /// Anthropic API version pinned in the `anthropic-version` header.
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -174,6 +183,50 @@ impl LlmProvider for AnthropicProvider {
             model_used,
             latency_ms,
         })
+    }
+
+    async fn complete_streamed(
+        &self,
+        prompt: &PromptStructured,
+        model: &Model,
+        options: &CompleteOptions,
+    ) -> Result<StreamedCompletion> {
+        self.require_anthropic(model, "complete_streamed")?;
+        let api_key = self.api_key().await?;
+        let mut body = build_messages_body(prompt, model, options);
+        body["stream"] = serde_json::Value::Bool(true);
+
+        let started = Instant::now();
+        let response = self
+            .http
+            .post(format!("{}/v1/messages", self.base_url))
+            .header("x-api-key", &api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("content-type", "application/json")
+            .header("accept", "text/event-stream")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            // Body is small enough for non-streaming reads on error.
+            let body_text = response.text().await?;
+            let message = parse_error_message(&body_text)
+                .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            return Err(Error::Status {
+                status: status.as_u16(),
+                message,
+            });
+        }
+
+        // Hand off to the SSE parser. The byte stream from reqwest is
+        // chunked; we accumulate into a small line buffer per chunk.
+        let bytes = response
+            .bytes_stream()
+            .map(|r| r.map_err(|e| Error::Decode(format!("stream chunk: {e}"))));
+        let parsed = stream::parse_anthropic_sse(bytes, started);
+        Ok(Box::pin(parsed))
     }
 
     async fn embed(&self, _text: &str, _model: &EmbeddingModel) -> Result<Vec<f32>> {
