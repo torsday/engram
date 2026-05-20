@@ -135,12 +135,17 @@ async fn complete_maps_non_2xx_to_status_error() {
         )
         .await;
 
+    // 429 now maps to RateLimited instead of Status.
     match result {
-        Err(engram_llm::Error::Status { status, message }) => {
-            assert_eq!(status, 429);
+        Err(engram_llm::Error::RateLimited {
+            retry_after,
+            message,
+        }) => {
             assert_eq!(message, "slow down");
+            // No Retry-After header in the mock response.
+            assert!(retry_after.is_none());
         }
-        other => panic!("expected Status error, got {other:?}"),
+        other => panic!("expected RateLimited error, got {other:?}"),
     }
 }
 

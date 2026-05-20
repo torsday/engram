@@ -389,3 +389,70 @@ async fn resilient_stack_retries_under_timeout_under_breaker() {
     assert_eq!(mock.calls(), 3);
     assert_eq!(breaker.state(), CircuitState::Closed);
 }
+
+// ─── Retry-After tests (#171) ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn retry_after_header_delays_next_attempt() {
+    // A 429 with Retry-After: 0.5s should cause the retry layer to wait at
+    // least 500ms before the next attempt. We inject a very tight jittered
+    // backoff (1ms) so the measured delay is almost entirely from the header.
+    let mock = Mock::new(vec![
+        Step::Err(Error::RateLimited {
+            retry_after: Some(Duration::from_millis(50)),
+            message: "rate limited".into(),
+        }),
+        Step::Ok,
+    ]);
+
+    let retry = RetryProvider::with_config(
+        ArcProvider(mock.clone()),
+        RetryConfig {
+            max_attempts: 3,
+            base: Duration::from_millis(1),
+            factor: 2,
+            max_delay: Duration::from_secs(2),
+            total_budget: Duration::from_secs(5),
+        },
+    );
+
+    let before = std::time::Instant::now();
+    let out = retry.complete(&prompt(), &model(), &opts()).await;
+    let elapsed = before.elapsed();
+
+    assert!(out.is_ok(), "expected eventual success, got {out:?}");
+    assert_eq!(mock.calls(), 2);
+    // Must have waited at least the provider-hint minus a small tolerance.
+    assert!(
+        elapsed >= Duration::from_millis(45),
+        "elapsed {elapsed:?} should be ≥ 45ms (provider hint was 50ms)"
+    );
+}
+
+#[tokio::test]
+async fn retry_after_absent_falls_back_to_jitter() {
+    // A 429 with no Retry-After header should still retry using the jittered
+    // backoff — no regression in the non-hint path.
+    let mock = Mock::new(vec![
+        Step::Err(Error::RateLimited {
+            retry_after: None,
+            message: "rate limited, no header".into(),
+        }),
+        Step::Ok,
+    ]);
+
+    let retry = RetryProvider::with_config(
+        ArcProvider(mock.clone()),
+        RetryConfig {
+            max_attempts: 3,
+            base: Duration::from_millis(1),
+            factor: 2,
+            max_delay: Duration::from_millis(5),
+            total_budget: Duration::from_secs(5),
+        },
+    );
+
+    let out = retry.complete(&prompt(), &model(), &opts()).await;
+    assert!(out.is_ok(), "expected eventual success, got {out:?}");
+    assert_eq!(mock.calls(), 2);
+}
