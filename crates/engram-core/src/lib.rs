@@ -7,7 +7,7 @@ pub mod vault {}
 pub mod markdown {}
 
 /// YAML frontmatter parsing and serialization (Obsidian-compatible).
-pub mod frontmatter {}
+pub mod frontmatter;
 
 /// Wikilink (`[[target|alias]]`) parsing and resolution.
 pub mod wikilink {}
