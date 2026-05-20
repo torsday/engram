@@ -29,3 +29,7 @@ pub mod config;
 
 /// Shared domain error types.
 pub mod error;
+
+/// Vault file watcher with debouncing, rename detection, and bounded
+/// backpressure. See module docs for the full event taxonomy.
+pub mod watcher;

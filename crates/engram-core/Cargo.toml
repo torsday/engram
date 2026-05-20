@@ -17,6 +17,8 @@ tracing = { workspace = true }
 deunicode = { workspace = true }
 ulid = { workspace = true }
 chrono = { workspace = true }
+notify = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 proptest = "1"
