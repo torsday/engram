@@ -22,7 +22,7 @@ pub mod slug;
 pub mod collision;
 
 /// Sidecar JSON (`.engram/sidecar/<id>.json`) read/write.
-pub mod sidecar {}
+pub mod sidecar;
 
 /// Vault and per-agent configuration loading.
 pub mod config;
