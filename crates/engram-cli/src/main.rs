@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use engram_agents::backup_watcher::{run_and_write, WatcherConfig};
 use engram_core::config::{AgentConfig, EngramConfig};
 use engram_index::sqlite::Migrator;
 use rusqlite::Connection;
@@ -144,7 +145,11 @@ enum FlowAction {
 #[derive(Subcommand)]
 enum BackupAction {
     /// Verify backup recency and remote push status
-    Verify,
+    Verify {
+        /// Path to the vault root (defaults to current directory)
+        #[arg(long, default_value = ".")]
+        vault: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -195,7 +200,29 @@ async fn main() {
         Command::Proposals { .. } => unimplemented!("engram proposals"),
         Command::Flow { .. } => unimplemented!("engram flow"),
         Command::Eval { .. } => unimplemented!("engram eval"),
-        Command::Backup { .. } => unimplemented!("engram backup"),
+        Command::Backup { action } => match action {
+            BackupAction::Verify { vault } => {
+                let cfg = EngramConfig::load(&vault)
+                    .map(|c| WatcherConfig {
+                        git_remote_stale_hours: c.backup.remote_stale_hours,
+                        snapshot_stale_days: c.backup.snapshot_stale_days,
+                        artifact_remote: None,
+                    })
+                    .unwrap_or_default();
+                match run_and_write(&vault, cfg) {
+                    Ok(status) => {
+                        println!("{}", status.to_markdown());
+                        if status.has_warnings() {
+                            std::process::exit(1);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("backup verify failed: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
         Command::Migrate {
             vault,
             status,

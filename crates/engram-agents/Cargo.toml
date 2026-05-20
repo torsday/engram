@@ -10,9 +10,13 @@ license.workspace = true
 engram-core = { workspace = true }
 engram-index = { workspace = true }
 engram-llm = { workspace = true }
+chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 toml = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
