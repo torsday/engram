@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 use engram_core::config::{AgentConfig, EngramConfig};
+use engram_index::sqlite::Migrator;
+use rusqlite::Connection;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -93,7 +95,20 @@ enum Command {
         action: BackupAction,
     },
     /// Run schema migrations
-    Migrate,
+    Migrate {
+        /// Path to the vault root (locates `.engram/index.sqlite`)
+        #[arg(long, default_value = ".")]
+        vault: PathBuf,
+        /// Show migration status instead of applying
+        #[arg(long)]
+        status: bool,
+        /// Apply migrations up to (and including) this number, e.g. `--to 1`
+        #[arg(long)]
+        to: Option<u32>,
+        /// Print what would be applied without touching the database
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Manage provider API keys in macOS Keychain
     Secrets {
         #[command(subcommand)]
@@ -181,7 +196,94 @@ async fn main() {
         Command::Flow { .. } => unimplemented!("engram flow"),
         Command::Eval { .. } => unimplemented!("engram eval"),
         Command::Backup { .. } => unimplemented!("engram backup"),
-        Command::Migrate => unimplemented!("engram migrate"),
+        Command::Migrate {
+            vault,
+            status,
+            to,
+            dry_run,
+        } => {
+            let db_path = vault.join(".engram").join("index.sqlite");
+            if dry_run {
+                // Open in-memory to show what would run without touching disk.
+                let conn = Connection::open_in_memory().expect("failed to open in-memory SQLite");
+                let migrator = Migrator::new(&conn);
+                let statuses = migrator.status().expect("failed to read migration status");
+                println!("Dry run — pending migrations:");
+                for s in statuses.iter().filter(|s| !s.applied) {
+                    println!("  {}", s.name);
+                }
+                if statuses.iter().all(|s| s.applied) {
+                    println!("  (none — already up to date)");
+                }
+                return;
+            }
+
+            std::fs::create_dir_all(db_path.parent().unwrap())
+                .expect("failed to create .engram directory");
+            let conn = Connection::open(&db_path)
+                .unwrap_or_else(|e| panic!("failed to open {}: {e}", db_path.display()));
+            let migrator = Migrator::new(&conn);
+
+            if status {
+                match migrator.status() {
+                    Ok(statuses) => {
+                        for s in &statuses {
+                            let mark = if s.applied { "✓" } else { "·" };
+                            let when = s.applied_at.as_deref().unwrap_or("pending");
+                            println!("{mark} {}  ({})", s.name, when);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error reading migration status: {e}");
+                        std::process::exit(1);
+                    }
+                }
+                return;
+            }
+
+            if let Some(target) = to {
+                // Apply up to `target` (1-based ordinal matching the 3-digit prefix).
+                let conn2 = Connection::open(&db_path)
+                    .unwrap_or_else(|e| panic!("failed to open {}: {e}", db_path.display()));
+                let migrator2 = Migrator::new(&conn2);
+                match migrator2.status() {
+                    Ok(statuses) => {
+                        for s in statuses.iter().filter(|s| !s.applied).filter(|s| {
+                            // Extract leading digits from name like "001_initial.sql" → 1
+                            s.name
+                                .split('_')
+                                .next()
+                                .and_then(|n| n.parse::<u32>().ok())
+                                .map(|n| n <= target)
+                                .unwrap_or(false)
+                        }) {
+                            println!("Would apply: {}", s.name);
+                        }
+                        // Re-open fresh connection for the actual apply.
+                        let conn3 = Connection::open(&db_path).unwrap();
+                        let migrator3 = Migrator::new(&conn3);
+                        if let Err(e) = migrator3.apply_all() {
+                            eprintln!("Migration failed: {e}");
+                            std::process::exit(1);
+                        }
+                        println!("✓ Migrations applied up to {target:03}.");
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        std::process::exit(1);
+                    }
+                }
+                return;
+            }
+
+            match migrator.apply_all() {
+                Ok(()) => println!("✓ All migrations applied."),
+                Err(e) => {
+                    eprintln!("Migration failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
         Command::Secrets { .. } => unimplemented!("engram secrets"),
         Command::Config { action } => match action {
             ConfigAction::Validate { vault } => match EngramConfig::load(&vault) {

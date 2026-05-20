@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 engram-core = { workspace = true }
 engram-index = { workspace = true }
+rusqlite = { workspace = true }
 engram-agents = { workspace = true }
 engram-api = { workspace = true }
 engram-mcp = { workspace = true }
