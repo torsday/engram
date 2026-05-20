@@ -21,12 +21,14 @@
 //!   resolve their API key through `engram_secrets::SecretsStore`, never
 //!   from env directly.
 //!
-//! # Scope of this slice
+//! # Scope
 //!
-//! Non-streaming `complete` + `embed` for [`anthropic::AnthropicProvider`].
-//! Streaming (`complete_streamed`) and per-call cost computation against a
-//! static price table are filed as follow-ups; the trait reserves a place
-//! for them without committing to the wire format until that slice lands.
+//! Non-streaming `complete` + `embed` shipped in #19. Streaming
+//! `complete_streamed` shipped here (#165). Per-call cost computation
+//! against a static price table is filed as a separate follow-up — the
+//! shape of the price table is a design decision that wants its own
+//! review, and streaming is the surface that actually unblocks downstream
+//! work today.
 //!
 //! [ADR 0010]: ../docs/design/adrs/0010-prompt-caching-first-class.md
 //! [ADR 0011]: ../docs/design/adrs/0011-tiered-model-escalation.md
@@ -36,10 +38,12 @@
 pub mod anthropic;
 mod error;
 mod provider;
+mod streaming;
 mod types;
 
 pub use error::{Error, Result};
 pub use provider::LlmProvider;
+pub use streaming::{StreamChunk, StreamedCompletion};
 pub use types::{
     CompleteOptions, Completion, EmbeddingModel, Model, ModelProvider, PromptStructured, Usage,
 };

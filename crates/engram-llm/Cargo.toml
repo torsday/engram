@@ -10,7 +10,9 @@ license.workspace = true
 engram-core = { workspace = true }
 engram-secrets = { workspace = true }
 async-trait = { workspace = true }
+bytes = "1"
 chrono = { workspace = true }
+futures-util = "0.3"
 reqwest = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true }

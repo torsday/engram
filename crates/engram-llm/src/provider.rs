@@ -16,6 +16,7 @@
 use async_trait::async_trait;
 
 use crate::error::Result;
+use crate::streaming::StreamedCompletion;
 use crate::types::{CompleteOptions, Completion, EmbeddingModel, Model, PromptStructured};
 
 /// An LLM provider — a backend that can complete prompts and embed text.
@@ -36,6 +37,22 @@ pub trait LlmProvider: Send + Sync {
         model: &Model,
         options: &CompleteOptions,
     ) -> Result<Completion>;
+
+    /// Complete a structured prompt with server-side streaming. Returns a
+    /// boxed `Stream<Item = Result<StreamChunk>>` that yields incremental
+    /// text deltas followed by exactly one terminal
+    /// [`crate::StreamChunk::Done`] carrying the final usage.
+    ///
+    /// Callers that want early-exit (token-budget enforcement, confidence
+    /// gates evaluated mid-response) consume the stream chunk-by-chunk and
+    /// drop it to cancel; the underlying HTTP request is aborted by the
+    /// HTTP client when the stream is dropped.
+    async fn complete_streamed(
+        &self,
+        prompt: &PromptStructured,
+        model: &Model,
+        options: &CompleteOptions,
+    ) -> Result<StreamedCompletion>;
 
     /// Embed a single text string. Returns the vector and the actual model
     /// used (for traces).

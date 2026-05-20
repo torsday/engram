@@ -882,9 +882,11 @@ name = "engram-llm"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "chrono",
  "engram-core",
  "engram-secrets",
+ "futures-util",
  "reqwest",
  "secrecy 0.8.0",
  "serde",
