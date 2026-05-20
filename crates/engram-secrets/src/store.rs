@@ -140,6 +140,26 @@ pub fn open_default(engram_dir: &Path) -> Result<CompositeStore> {
     Ok(CompositeStore::new(primary, audit))
 }
 
+/// Build a [`CompositeStore`] using the [`AgeFileStore`] as the primary
+/// backend, with the env-var fallback layered for reads.
+///
+/// Use this constructor on headless deploys (CI runners, server installs,
+/// headless Linux without D-Bus) where the OS keystore is unavailable or
+/// undesirable. The passphrase is supplied up front by the caller; engram's
+/// CLI layer (#131) is responsible for TTY-prompting it.
+///
+/// The age file lives at `<engram_dir>/secrets.age`; the audit log at
+/// `<engram_dir>/logs/secrets.jsonl`. Both parent directories are created
+/// if absent.
+pub fn open_with_age(engram_dir: &Path, passphrase: SecretString) -> Result<CompositeStore> {
+    let audit = AuditLog::open(engram_dir.join("logs").join("secrets.jsonl"))?;
+    let primary: Arc<dyn SecretsStore> = Arc::new(crate::age_file::AgeFileStore::open(
+        engram_dir.join("secrets.age"),
+        passphrase,
+    ));
+    Ok(CompositeStore::new(primary, audit))
+}
+
 #[cfg(target_os = "macos")]
 fn build_default_primary() -> Arc<dyn SecretsStore> {
     Arc::new(crate::keychain::KeychainStore::new("engram"))
