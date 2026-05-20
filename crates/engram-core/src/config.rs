@@ -166,7 +166,7 @@ impl EngramConfig {
     ///
     /// Used by the hot-reload watcher to decide which changes can be applied
     /// in place and which require a restart notice.
-    pub fn changed_sections<'a>(&self, other: &EngramConfig) -> ChangedSections {
+    pub fn changed_sections(&self, other: &EngramConfig) -> ChangedSections {
         let mut hot = Vec::new();
         let mut cold = Vec::new();
 
@@ -927,22 +927,13 @@ impl AgentBudget {
 }
 
 /// Conversation capability.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct AgentConversation {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
     pub max_rounds: u32,
-}
-
-impl Default for AgentConversation {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            max_rounds: 0,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
