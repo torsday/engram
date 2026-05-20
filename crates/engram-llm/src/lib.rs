@@ -37,6 +37,7 @@
 
 pub mod anthropic;
 pub mod circuit_breaker;
+pub mod early_exit;
 mod error;
 mod provider;
 pub mod retry;
@@ -45,6 +46,7 @@ pub mod timeout;
 mod types;
 
 pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider, CircuitState};
+pub use early_exit::{early_exit_drive, EarlyExitConfig, EarlyExitStream, StreamedOutcome};
 pub use error::{Error, Result};
 pub use provider::LlmProvider;
 pub use retry::{RetryConfig, RetryProvider};
