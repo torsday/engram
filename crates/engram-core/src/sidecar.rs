@@ -182,11 +182,10 @@ pub fn read_sidecar(id: &NoteId, vault_root: &Path) -> Result<Sidecar, SidecarEr
     })?;
 
     // Parse to Value first so we can inspect schema_version before full deserialization.
-    let mut value: Value =
-        serde_json::from_str(&raw).map_err(|source| SidecarError::Parse {
-            path: path.clone(),
-            source,
-        })?;
+    let mut value: Value = serde_json::from_str(&raw).map_err(|source| SidecarError::Parse {
+        path: path.clone(),
+        source,
+    })?;
 
     let found_version = value
         .get("schema_version")
@@ -232,7 +231,8 @@ pub fn write_sidecar(sidecar: &Sidecar, vault_root: &Path) -> Result<(), Sidecar
     // we build the tmp path manually to get "<id>.json.tmp".
     let tmp_path = path.with_file_name(format!(
         "{}.json.tmp",
-        path.file_stem().expect("sidecar path has a stem")
+        path.file_stem()
+            .expect("sidecar path has a stem")
             .to_string_lossy()
     ));
     std::fs::write(&tmp_path, &json_str).map_err(|source| SidecarError::Io {
@@ -251,11 +251,7 @@ pub fn write_sidecar(sidecar: &Sidecar, vault_root: &Path) -> Result<(), Sidecar
 ///
 /// Currently only version 1 exists, so this is a no-op unless called with
 /// future version numbers (in which case it returns `NoUpgradePath`).
-pub fn upgrade_sidecar(
-    mut value: Value,
-    from: u32,
-    to: u32,
-) -> Result<Value, SidecarError> {
+pub fn upgrade_sidecar(mut value: Value, from: u32, to: u32) -> Result<Value, SidecarError> {
     // Each arm migrates current → current+1.
     // When v2 is introduced, replace this with:
     //   let mut current = from;
@@ -266,10 +262,7 @@ pub fn upgrade_sidecar(
 
     // Stamp the new version.
     if let Value::Object(ref mut map) = value {
-        map.insert(
-            "schema_version".to_string(),
-            Value::Number(to.into()),
-        );
+        map.insert("schema_version".to_string(), Value::Number(to.into()));
     }
 
     Ok(value)
@@ -296,10 +289,12 @@ fn to_sorted_pretty_json<T: Serialize>(value: &T) -> Result<String, SidecarError
     let mut buf = Vec::new();
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"  ");
     let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-    json_value.serialize(&mut ser).map_err(|source| SidecarError::Parse {
-        path: PathBuf::from("<serialize>"),
-        source,
-    })?;
+    json_value
+        .serialize(&mut ser)
+        .map_err(|source| SidecarError::Parse {
+            path: PathBuf::from("<serialize>"),
+            source,
+        })?;
 
     // Ensure trailing newline.
     let mut s = String::from_utf8(buf).expect("serde_json produces UTF-8");
@@ -524,7 +519,10 @@ mod tests {
         )
         .unwrap();
         let err = read_sidecar(&id, tmp.path()).unwrap_err();
-        assert!(matches!(err, SidecarError::SchemaTooNew { found: 9999, .. }));
+        assert!(matches!(
+            err,
+            SidecarError::SchemaTooNew { found: 9999, .. }
+        ));
     }
 
     #[test]
@@ -591,7 +589,10 @@ mod tests {
     fn upgrade_unknown_path_returns_error() {
         let value = serde_json::json!({"id": "x", "schema_version": 1});
         let err = upgrade_sidecar(value, 1, 2).unwrap_err();
-        assert!(matches!(err, SidecarError::NoUpgradePath { from: 1, to: 2 }));
+        assert!(matches!(
+            err,
+            SidecarError::NoUpgradePath { from: 1, to: 2 }
+        ));
     }
 }
 
