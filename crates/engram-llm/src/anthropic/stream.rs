@@ -42,15 +42,18 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 use crate::streaming::StreamChunk;
-use crate::types::Usage;
+use crate::types::{Cost, Model, Usage};
 
 /// Parse an Anthropic SSE byte stream into a stream of [`StreamChunk`]s.
 ///
 /// `started` is the wall-clock instant the HTTP request was issued, used
 /// to populate the latency field of the terminal [`StreamChunk::Done`].
+/// `model` is the [`Model`] passed to the call and is used for cost
+/// computation in the terminal [`StreamChunk::Done`].
 pub(crate) fn parse_anthropic_sse<S>(
     bytes: S,
     started: Instant,
+    model: Model,
 ) -> impl Stream<Item = Result<StreamChunk>> + Send
 where
     S: Stream<Item = Result<bytes::Bytes>> + Send + 'static,
@@ -65,6 +68,7 @@ where
             buffer: String,
             running_usage: Usage,
             model_used: String,
+            model: Model,
             started: Instant,
             done_emitted: bool,
         },
@@ -77,6 +81,7 @@ where
         buffer: String::new(),
         running_usage: Usage::default(),
         model_used: String::new(),
+        model,
         started,
         done_emitted: false,
     };
@@ -87,6 +92,7 @@ where
             mut buffer,
             mut running_usage,
             mut model_used,
+            model,
             started,
             mut done_emitted,
         } = state
@@ -100,8 +106,13 @@ where
                 let raw_event = buffer[..boundary].to_string();
                 buffer.drain(..boundary + 2);
 
-                let outcome =
-                    handle_event(&raw_event, &mut running_usage, &mut model_used, started);
+                let outcome = handle_event(
+                    &raw_event,
+                    &mut running_usage,
+                    &mut model_used,
+                    &model,
+                    started,
+                );
                 match outcome {
                     EventOutcome::Skip => continue,
                     EventOutcome::Emit(chunk) => {
@@ -117,6 +128,7 @@ where
                                 buffer,
                                 running_usage,
                                 model_used,
+                                model,
                                 started,
                                 done_emitted,
                             }
@@ -167,6 +179,7 @@ fn handle_event(
     raw_event: &str,
     running_usage: &mut Usage,
     model_used: &mut String,
+    model: &Model,
     started: Instant,
 ) -> EventOutcome {
     // Extract the `data:` payload. SSE allows multiple `data:` lines per
@@ -228,11 +241,15 @@ fn handle_event(
             running_usage.output_tokens = usage.output_tokens;
             EventOutcome::Skip
         }
-        SseFrame::MessageStop => EventOutcome::Emit(StreamChunk::Done {
-            usage: *running_usage,
-            model_used: model_used.clone(),
-            latency_ms: started.elapsed().as_millis() as u64,
-        }),
+        SseFrame::MessageStop => {
+            let cost = Cost::from_usage(running_usage, model);
+            EventOutcome::Emit(StreamChunk::Done {
+                usage: *running_usage,
+                cost,
+                model_used: model_used.clone(),
+                latency_ms: started.elapsed().as_millis() as u64,
+            })
+        }
         SseFrame::ErrorFrame { error } => EventOutcome::Error(Error::Status {
             status: 0,
             message: error.message,
@@ -323,7 +340,11 @@ mod tests {
     /// canned SSE response.
     async fn run_parser(payload: &'static str) -> Vec<Result<StreamChunk>> {
         let source = stream::iter(vec![Ok(bytes::Bytes::from(payload))]);
-        let parsed = parse_anthropic_sse(source, Instant::now());
+        let parsed = parse_anthropic_sse(
+            source,
+            Instant::now(),
+            Model::anthropic("claude-3-5-haiku-20241022"),
+        );
         let mut out = Vec::new();
         let mut s = std::pin::pin!(parsed);
         while let Some(item) = s.next().await {
@@ -398,7 +419,11 @@ data: {\"type\":\"message_stop\"}\n\
             .map(|s| Ok(bytes::Bytes::from(s)))
             .collect();
         let source = stream::iter(owned);
-        let parsed = parse_anthropic_sse(source, Instant::now());
+        let parsed = parse_anthropic_sse(
+            source,
+            Instant::now(),
+            Model::anthropic("claude-3-5-haiku-20241022"),
+        );
         let mut s = std::pin::pin!(parsed);
         let mut deltas = Vec::new();
         let mut done = false;

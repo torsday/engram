@@ -1,0 +1,87 @@
+# Per-model price table for engram-llm cost computation.
+#
+# All rates are in US cents per million tokens.
+# Sources: https://docs.anthropic.com/en/docs/about-claude/models (2026-05-20)
+#          https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+#
+# cache_read_cents_per_million_tokens  — cache-hit reads (10% of base input)
+# cache_creation_cents_per_million_tokens — first write into cache (25% of input → 125% of base)
+# input_cents_per_million_tokens       — non-cached input tokens
+# output_cents_per_million_tokens      — generated output tokens
+
+[[models]]
+name = "claude-haiku-4-5"
+input_cents_per_million_tokens = 80.0
+cache_read_cents_per_million_tokens = 8.0
+cache_creation_cents_per_million_tokens = 100.0
+output_cents_per_million_tokens = 400.0
+
+[[models]]
+name = "claude-3-5-haiku-20241022"
+input_cents_per_million_tokens = 80.0
+cache_read_cents_per_million_tokens = 8.0
+cache_creation_cents_per_million_tokens = 100.0
+output_cents_per_million_tokens = 400.0
+
+[[models]]
+name = "claude-3-5-haiku-latest"
+input_cents_per_million_tokens = 80.0
+cache_read_cents_per_million_tokens = 8.0
+cache_creation_cents_per_million_tokens = 100.0
+output_cents_per_million_tokens = 400.0
+
+[[models]]
+name = "claude-sonnet-4-5"
+input_cents_per_million_tokens = 300.0
+cache_read_cents_per_million_tokens = 30.0
+cache_creation_cents_per_million_tokens = 375.0
+output_cents_per_million_tokens = 1500.0
+
+[[models]]
+name = "claude-3-7-sonnet-20250219"
+input_cents_per_million_tokens = 300.0
+cache_read_cents_per_million_tokens = 30.0
+cache_creation_cents_per_million_tokens = 375.0
+output_cents_per_million_tokens = 1500.0
+
+[[models]]
+name = "claude-3-7-sonnet-latest"
+input_cents_per_million_tokens = 300.0
+cache_read_cents_per_million_tokens = 30.0
+cache_creation_cents_per_million_tokens = 375.0
+output_cents_per_million_tokens = 1500.0
+
+[[models]]
+name = "claude-3-5-sonnet-20241022"
+input_cents_per_million_tokens = 300.0
+cache_read_cents_per_million_tokens = 30.0
+cache_creation_cents_per_million_tokens = 375.0
+output_cents_per_million_tokens = 1500.0
+
+[[models]]
+name = "claude-3-5-sonnet-latest"
+input_cents_per_million_tokens = 300.0
+cache_read_cents_per_million_tokens = 30.0
+cache_creation_cents_per_million_tokens = 375.0
+output_cents_per_million_tokens = 1500.0
+
+[[models]]
+name = "claude-opus-4-5"
+input_cents_per_million_tokens = 1500.0
+cache_read_cents_per_million_tokens = 150.0
+cache_creation_cents_per_million_tokens = 1875.0
+output_cents_per_million_tokens = 7500.0
+
+[[models]]
+name = "claude-3-opus-20240229"
+input_cents_per_million_tokens = 1500.0
+cache_read_cents_per_million_tokens = 150.0
+cache_creation_cents_per_million_tokens = 1875.0
+output_cents_per_million_tokens = 7500.0
+
+[[models]]
+name = "claude-3-opus-latest"
+input_cents_per_million_tokens = 1500.0
+cache_read_cents_per_million_tokens = 150.0
+cache_creation_cents_per_million_tokens = 1875.0
+output_cents_per_million_tokens = 7500.0
