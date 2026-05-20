@@ -4,7 +4,7 @@
 pub mod vault {}
 
 /// Markdown AST parsing and structured editing via comrak.
-pub mod markdown {}
+pub mod markdown;
 
 /// YAML frontmatter parsing and serialization (Obsidian-compatible).
 pub mod frontmatter;
