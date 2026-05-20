@@ -74,6 +74,7 @@ secrecy = { version = "0.8", features = ["alloc"] }
 zeroize = "1"
 security-framework = "3"
 keyring = { version = "3", default-features = false, features = ["linux-native"] }
+age = "0.11"
 
 # workspace crates
 engram-core = { path = "crates/engram-core" }
