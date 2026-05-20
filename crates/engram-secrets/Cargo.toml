@@ -1,0 +1,25 @@
+[package]
+name = "engram-secrets"
+description = "Secrets management: OS keychain backends, env-var fallback, audit log, zeroizing SecretString"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+secrecy = { workspace = true }
+zeroize = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
