@@ -5,7 +5,130 @@
 //! blocks, OpenAI's function calls, Ollama's local-only options) belong in
 //! the concrete provider modules, not here.
 
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
+
+// ─── Price table ─────────────────────────────────────────────────────────────
+
+/// Raw per-model entry as parsed from `prices.toml`.
+#[derive(Debug, Deserialize)]
+struct PriceEntry {
+    name: String,
+    input_cents_per_million_tokens: f64,
+    cache_read_cents_per_million_tokens: f64,
+    cache_creation_cents_per_million_tokens: f64,
+    output_cents_per_million_tokens: f64,
+}
+
+/// Top-level shape of `prices.toml`.
+#[derive(Debug, Deserialize)]
+struct PriceFile {
+    models: Vec<PriceEntry>,
+}
+
+/// Compiled price table keyed by model name.
+type PriceMap = HashMap<String, PriceEntry>;
+
+static PRICE_MAP: OnceLock<PriceMap> = OnceLock::new();
+
+fn price_map() -> &'static PriceMap {
+    PRICE_MAP.get_or_init(|| {
+        let raw = include_str!("../prices.toml");
+        let file: PriceFile =
+            toml::from_str(raw).expect("prices.toml is malformed — this is a compile-time asset");
+        file.models
+            .into_iter()
+            .map(|e| (e.name.clone(), e))
+            .collect()
+    })
+}
+
+// ─── Cost ────────────────────────────────────────────────────────────────────
+
+/// Per-call cost computed against the static price table.
+///
+/// All amounts are in US cents (not dollars) to avoid sub-cent floating-point
+/// precision loss for typical call sizes.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Cost {
+    /// Cost of non-cached input tokens.
+    pub input_cents: f64,
+    /// Cost of cache-creation tokens (billed at the create rate).
+    pub cache_create_cents: f64,
+    /// Cost of cache-read tokens (billed at the discounted rate).
+    pub cache_read_cents: f64,
+    /// Cost of output tokens.
+    pub output_cents: f64,
+    /// Sum of all four components.
+    pub total_cents: f64,
+}
+
+impl Cost {
+    /// Sentinel returned when the model is unknown — all fields zero.
+    pub fn unknown() -> Self {
+        Self {
+            input_cents: 0.0,
+            cache_create_cents: 0.0,
+            cache_read_cents: 0.0,
+            output_cents: 0.0,
+            total_cents: 0.0,
+        }
+    }
+
+    /// Compute cost from a [`Usage`] report and the [`Model`] that served it.
+    ///
+    /// Cache-read tokens are billed at `cache_read_cents_per_million_tokens`.
+    /// Cache-creation tokens are billed at `cache_creation_cents_per_million_tokens`.
+    /// The remaining input tokens (total − cached − cache_create) are billed at
+    /// the regular `input_cents_per_million_tokens`.
+    ///
+    /// If the model name is not in the price table, logs a warning (once per
+    /// process per unknown name) and returns [`Cost::unknown()`].
+    pub fn from_usage(usage: &Usage, model: &Model) -> Self {
+        let table = price_map();
+        // Strip the provider prefix if present ("anthropic/claude-...").
+        let bare_name = model.name.rsplit('/').next().unwrap_or(model.name.as_str());
+
+        let Some(entry) = table.get(bare_name) else {
+            static WARNED: OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+                OnceLock::new();
+            let warned =
+                WARNED.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+            let mut guard = warned.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.insert(bare_name.to_owned()) {
+                tracing::warn!(
+                    model = %model.name,
+                    "unknown model in price table — reporting Cost::unknown()"
+                );
+            }
+            return Self::unknown();
+        };
+
+        const M: f64 = 1_000_000.0;
+
+        let cache_read = usage.input_tokens_cached as f64;
+        let cache_create = usage.input_tokens_cache_create as f64;
+        // Non-cached input = total minus cached and cache-create.
+        let plain_input = (usage.input_tokens_total as f64 - cache_read - cache_create).max(0.0);
+        let output = usage.output_tokens as f64;
+
+        let input_cents = plain_input / M * entry.input_cents_per_million_tokens;
+        let cache_create_cents = cache_create / M * entry.cache_creation_cents_per_million_tokens;
+        let cache_read_cents = cache_read / M * entry.cache_read_cents_per_million_tokens;
+        let output_cents = output / M * entry.output_cents_per_million_tokens;
+        let total_cents = input_cents + cache_create_cents + cache_read_cents + output_cents;
+
+        Self {
+            input_cents,
+            cache_create_cents,
+            cache_read_cents,
+            output_cents,
+            total_cents,
+        }
+    }
+}
 
 /// Which provider serves a given [`Model`].
 ///
@@ -158,12 +281,14 @@ impl Usage {
 /// across content blocks; agents that want structured output parse JSON out
 /// of it themselves (the trait deliberately stays untyped — see crate-level
 /// note on object-safety).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Completion {
     /// Generated text, concatenated across the response's content blocks.
     pub text: String,
     /// Provider-reported token usage.
     pub usage: Usage,
+    /// Per-call cost computed from [`usage`] against the static price table.
+    pub cost: Cost,
     /// Model that actually served the request (`provider/model_name`),
     /// recorded for traces and post-hoc tier-escalation analysis.
     pub model_used: String,
@@ -209,5 +334,112 @@ mod tests {
         let m = Model::anthropic("claude-3-5-haiku-20241022");
         assert_eq!(m.provider, ModelProvider::Anthropic);
         assert_eq!(m.name, "claude-3-5-haiku-20241022");
+    }
+
+    // ─── Cost tests ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn cost_unknown_model_returns_zeros() {
+        let usage = Usage {
+            input_tokens_total: 1000,
+            output_tokens: 500,
+            ..Default::default()
+        };
+        let model = Model::anthropic("claude-does-not-exist");
+        let cost = Cost::from_usage(&usage, &model);
+        assert_eq!(cost.total_cents, 0.0);
+        assert_eq!(cost.input_cents, 0.0);
+        assert_eq!(cost.output_cents, 0.0);
+    }
+
+    #[test]
+    fn cost_zero_usage_is_zero() {
+        let usage = Usage::default();
+        let model = Model::anthropic("claude-3-5-haiku-20241022");
+        let cost = Cost::from_usage(&usage, &model);
+        assert_eq!(cost.total_cents, 0.0);
+        assert_eq!(
+            cost.total_cents,
+            cost.input_cents + cost.cache_create_cents + cost.cache_read_cents + cost.output_cents
+        );
+    }
+
+    #[test]
+    fn cost_plain_input_and_output_hand_computed() {
+        // claude-3-5-haiku-20241022:
+        //   input  = 80 cents / M tokens
+        //   output = 400 cents / M tokens
+        // 1M input + 1M output = 80 + 400 = 480 cents
+        let usage = Usage {
+            input_tokens_total: 1_000_000,
+            input_tokens_cached: 0,
+            input_tokens_cache_create: 0,
+            output_tokens: 1_000_000,
+        };
+        let model = Model::anthropic("claude-3-5-haiku-20241022");
+        let cost = Cost::from_usage(&usage, &model);
+        let eps = 1e-9;
+        assert!(
+            (cost.input_cents - 80.0).abs() < eps,
+            "input_cents={}",
+            cost.input_cents
+        );
+        assert!(
+            (cost.output_cents - 400.0).abs() < eps,
+            "output_cents={}",
+            cost.output_cents
+        );
+        assert!(
+            (cost.total_cents - 480.0).abs() < eps,
+            "total_cents={}",
+            cost.total_cents
+        );
+    }
+
+    #[test]
+    fn cost_cached_token_discount_applied() {
+        // claude-3-5-haiku-20241022:
+        //   cache_read = 8 cents / M tokens (10% of input rate)
+        // 500k cached reads only, no plain input, no output.
+        let usage = Usage {
+            input_tokens_total: 500_000,
+            input_tokens_cached: 500_000,
+            input_tokens_cache_create: 0,
+            output_tokens: 0,
+        };
+        let model = Model::anthropic("claude-3-5-haiku-20241022");
+        let cost = Cost::from_usage(&usage, &model);
+        // 0.5M * 8 cents/M = 4 cents
+        let eps = 1e-9;
+        assert!(
+            (cost.cache_read_cents - 4.0).abs() < eps,
+            "cache_read_cents={}",
+            cost.cache_read_cents
+        );
+        assert_eq!(cost.input_cents, 0.0);
+        assert!((cost.total_cents - 4.0).abs() < eps);
+    }
+
+    #[test]
+    fn cost_cache_create_rate() {
+        // claude-3-5-haiku-20241022:
+        //   cache_creation = 100 cents / M tokens
+        // 1M cache-create tokens = 100 cents.
+        let usage = Usage {
+            input_tokens_total: 1_000_000,
+            input_tokens_cached: 0,
+            input_tokens_cache_create: 1_000_000,
+            output_tokens: 0,
+        };
+        let model = Model::anthropic("claude-3-5-haiku-20241022");
+        let cost = Cost::from_usage(&usage, &model);
+        let eps = 1e-9;
+        assert!(
+            (cost.cache_create_cents - 100.0).abs() < eps,
+            "cache_create_cents={}",
+            cost.cache_create_cents
+        );
+        assert_eq!(cost.input_cents, 0.0);
+        assert!((cost.total_cents - 100.0).abs() < eps);
     }
 }

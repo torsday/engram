@@ -51,7 +51,8 @@ pub use retry::{RetryConfig, RetryProvider};
 pub use streaming::{StreamChunk, StreamedCompletion};
 pub use timeout::{TimeoutConfig, TimeoutProvider};
 pub use types::{
-    CompleteOptions, Completion, EmbeddingModel, Model, ModelProvider, PromptStructured, Usage,
+    CompleteOptions, Completion, Cost, EmbeddingModel, Model, ModelProvider, PromptStructured,
+    Usage,
 };
 
 /// Compose the standard resilience stack — `CircuitBreaker(Retry(Timeout(inner)))` —

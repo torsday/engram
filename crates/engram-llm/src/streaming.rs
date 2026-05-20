@@ -12,7 +12,7 @@ use std::pin::Pin;
 use futures_util::Stream;
 
 use crate::error::Result;
-use crate::types::Usage;
+use crate::types::{Cost, Usage};
 
 /// Boxed stream of streaming-completion chunks. The trait method returns
 /// this so the trait stays object-safe.
@@ -25,7 +25,7 @@ pub type StreamedCompletion = Pin<Box<dyn Stream<Item = Result<StreamChunk>> + S
 /// followed by exactly one [`StreamChunk::Done`]. Implementations must not
 /// emit a `Done` more than once; consumers may stop polling after the first
 /// `Done`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StreamChunk {
     /// Incremental text delta. Append to the running response text.
     Delta {
@@ -43,6 +43,8 @@ pub enum StreamChunk {
     Done {
         /// Final token usage. `output_tokens` is only correct after `Done`.
         usage: Usage,
+        /// Per-call cost computed from [`usage`] against the static price table.
+        cost: Cost,
         /// Model that actually served the request (`provider/model_name`).
         model_used: String,
         /// Wall-clock latency of the streamed call (handshake to last byte),

@@ -46,7 +46,8 @@ use crate::error::{Error, Result};
 use crate::provider::LlmProvider;
 use crate::streaming::StreamedCompletion;
 use crate::types::{
-    CompleteOptions, Completion, EmbeddingModel, Model, ModelProvider, PromptStructured, Usage,
+    CompleteOptions, Completion, Cost, EmbeddingModel, Model, ModelProvider, PromptStructured,
+    Usage,
 };
 
 mod stream;
@@ -177,9 +178,11 @@ impl LlmProvider for AnthropicProvider {
             "anthropic.complete ok"
         );
 
+        let cost = Cost::from_usage(&usage, model);
         Ok(Completion {
             text,
             usage,
+            cost,
             model_used,
             latency_ms,
         })
@@ -225,7 +228,7 @@ impl LlmProvider for AnthropicProvider {
         let bytes = response
             .bytes_stream()
             .map(|r| r.map_err(|e| Error::Decode(format!("stream chunk: {e}"))));
-        let parsed = stream::parse_anthropic_sse(bytes, started);
+        let parsed = stream::parse_anthropic_sse(bytes, started, model.clone());
         Ok(Box::pin(parsed))
     }
 

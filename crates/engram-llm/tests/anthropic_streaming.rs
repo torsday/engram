@@ -82,6 +82,7 @@ async fn streamed_round_trip_delivers_deltas_then_done() {
                 usage,
                 model_used,
                 latency_ms: _,
+                cost: _,
             } => {
                 done = Some((usage, model_used));
             }
