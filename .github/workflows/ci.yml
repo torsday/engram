@@ -41,3 +41,12 @@ jobs:
 
       - name: docs format check
         run: npx --yes prettier --check .
+
+  docs-drift:
+    name: docs drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: check mcp docs are up to date
+        run: bash scripts/gen-mcp-docs.sh --check
