@@ -1,7 +1,7 @@
 //! Shared types, vault I/O, and note primitives for engram.
 
 /// Vault filesystem layout and note read/write operations.
-pub mod vault {}
+pub mod vault;
 
 /// Markdown AST parsing and structured editing via comrak.
 pub mod markdown;
