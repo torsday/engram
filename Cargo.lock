@@ -918,8 +918,10 @@ version = "0.1.0"
 dependencies = [
  "engram-core",
  "engram-index",
+ "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
