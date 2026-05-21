@@ -12,7 +12,7 @@ pub mod search_notes {}
 pub mod grep_notes {}
 
 /// `read_note` — fetch a note by id, slug, or path.
-pub mod read_note {}
+pub mod read_note;
 
 /// `list_tags` — enumerate all vault tags with counts.
 pub mod list_tags {}
