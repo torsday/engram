@@ -38,6 +38,7 @@
 pub mod anthropic;
 pub mod circuit_breaker;
 mod error;
+pub mod openai;
 mod provider;
 pub mod retry;
 mod streaming;
@@ -46,6 +47,7 @@ mod types;
 
 pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider, CircuitState};
 pub use error::{Error, Result};
+pub use openai::OpenAIProvider;
 pub use provider::LlmProvider;
 pub use retry::{RetryConfig, RetryProvider};
 pub use streaming::{StreamChunk, StreamedCompletion};
