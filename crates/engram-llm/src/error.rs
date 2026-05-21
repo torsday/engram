@@ -84,6 +84,17 @@ pub enum Error {
         message: String,
     },
 
+    /// The provider endpoint could not be reached at all (connection refused,
+    /// DNS failure, etc.). Distinct from [`Error::Http`] which covers
+    /// transport-level errors that may be transient mid-stream.
+    #[error("provider `{provider}` unavailable: {message}")]
+    ProviderUnavailable {
+        /// Provider identifier (e.g. `"ollama"`).
+        provider: &'static str,
+        /// Human-readable reason.
+        message: String,
+    },
+
     /// Single-call wall-clock timeout. Tagged as transient — the retry
     /// wrapper will try again under the same budget.
     #[error("call timed out after {millis}ms")]
@@ -176,6 +187,7 @@ impl Error {
             Self::Decode(_) => ErrorCategory::External,
 
             Self::RateLimited { .. } => ErrorCategory::Transient,
+            Self::ProviderUnavailable { .. } => ErrorCategory::Transient,
             Self::EmptyResponse => ErrorCategory::Transient,
             Self::Timeout { .. } => ErrorCategory::Transient,
 
