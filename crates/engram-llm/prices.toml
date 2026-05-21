@@ -85,3 +85,64 @@ input_cents_per_million_tokens = 1500.0
 cache_read_cents_per_million_tokens = 150.0
 cache_creation_cents_per_million_tokens = 1875.0
 output_cents_per_million_tokens = 7500.0
+
+# OpenAI models
+# Sources: https://openai.com/api/pricing (2026-05-20)
+# Note: OpenAI uses "cached_tokens" for prompt cache hits (50% of input).
+# cache_creation is not separately billed; set to same as input.
+
+[[models]]
+name = "gpt-4o"
+input_cents_per_million_tokens = 250.0
+cache_read_cents_per_million_tokens = 125.0
+cache_creation_cents_per_million_tokens = 250.0
+output_cents_per_million_tokens = 1000.0
+
+[[models]]
+name = "gpt-4o-2024-11-20"
+input_cents_per_million_tokens = 250.0
+cache_read_cents_per_million_tokens = 125.0
+cache_creation_cents_per_million_tokens = 250.0
+output_cents_per_million_tokens = 1000.0
+
+[[models]]
+name = "gpt-4o-mini"
+input_cents_per_million_tokens = 15.0
+cache_read_cents_per_million_tokens = 7.5
+cache_creation_cents_per_million_tokens = 15.0
+output_cents_per_million_tokens = 60.0
+
+[[models]]
+name = "gpt-4o-mini-2024-07-18"
+input_cents_per_million_tokens = 15.0
+cache_read_cents_per_million_tokens = 7.5
+cache_creation_cents_per_million_tokens = 15.0
+output_cents_per_million_tokens = 60.0
+
+[[models]]
+name = "o1"
+input_cents_per_million_tokens = 1500.0
+cache_read_cents_per_million_tokens = 750.0
+cache_creation_cents_per_million_tokens = 1500.0
+output_cents_per_million_tokens = 6000.0
+
+[[models]]
+name = "o1-mini"
+input_cents_per_million_tokens = 110.0
+cache_read_cents_per_million_tokens = 55.0
+cache_creation_cents_per_million_tokens = 110.0
+output_cents_per_million_tokens = 440.0
+
+[[models]]
+name = "text-embedding-3-large"
+input_cents_per_million_tokens = 13.0
+cache_read_cents_per_million_tokens = 13.0
+cache_creation_cents_per_million_tokens = 13.0
+output_cents_per_million_tokens = 0.0
+
+[[models]]
+name = "text-embedding-3-small"
+input_cents_per_million_tokens = 2.0
+cache_read_cents_per_million_tokens = 2.0
+cache_creation_cents_per_million_tokens = 2.0
+output_cents_per_million_tokens = 0.0
