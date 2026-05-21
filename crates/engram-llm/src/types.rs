@@ -164,6 +164,22 @@ impl Model {
             name: name.into(),
         }
     }
+
+    /// Build an OpenAI [`Model`] with the given identifier.
+    pub fn openai(name: impl Into<String>) -> Self {
+        Self {
+            provider: ModelProvider::OpenAi,
+            name: name.into(),
+        }
+    }
+
+    /// Build an Ollama [`Model`] with the given identifier (e.g. `"llama3.2"`).
+    pub fn ollama(name: impl Into<String>) -> Self {
+        Self {
+            provider: ModelProvider::Ollama,
+            name: name.into(),
+        }
+    }
 }
 
 /// A concrete embedding model: provider + model identifier + output
