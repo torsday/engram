@@ -18,10 +18,10 @@ pub mod read_note;
 pub mod list_tags {}
 
 /// `follow_backlinks` — resolve notes linking to a given note.
-pub mod follow_backlinks {}
+pub mod follow_backlinks;
 
 /// `follow_links` — resolve outbound wikilinks from a given note.
-pub mod follow_links {}
+pub mod follow_links;
 
 /// `recent_changes` — notes modified in the last N days.
 pub mod recent_changes {}
