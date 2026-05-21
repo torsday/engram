@@ -27,7 +27,7 @@ pub mod follow_links;
 pub mod recent_changes {}
 
 /// `vault_health` — structural health check (broken links, orphans, missing sidecars).
-pub mod vault_health {}
+pub mod vault_health;
 
 /// `read_biography` — retrieve the Biographer agent's current user model.
 pub mod read_biography {}
