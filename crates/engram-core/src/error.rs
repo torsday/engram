@@ -6,6 +6,21 @@
 //! shared vocabulary for deciding what to do with a failure. That vocabulary
 //! lives here.
 //!
+//! # Why this is just `ErrorCategory` and not a unified `EngramError`
+//!
+//! The original #22 AC sketched a consolidated `EngramError` mega-enum here
+//! with sub-variants like `ProviderRateLimit`, `ContextOverflow`, etc.
+//! That consolidation was considered and **rejected** — see
+//! [ADR 0015](../../../docs/design/adrs/0015-per-crate-errors-shared-category.md).
+//!
+//! Short form: per-crate `Error` enums + this shared `ErrorCategory` is the
+//! load-bearing pattern. Domain-specific variants stay in the crates that
+//! produce them; the retry / breaker layer makes decisions through
+//! `error.category()`. A future per-crate `ErrorKind` sub-classifier (e.g.
+//! on `engram_llm::Error`) does not contradict that decision and can land
+//! without revisiting this ADR. Do not re-open the consolidation question
+//! without a concrete call site that proves the current pattern insufficient.
+//!
 //! # Categories
 //!
 //! [`ErrorCategory`] partitions failures into four classes:
