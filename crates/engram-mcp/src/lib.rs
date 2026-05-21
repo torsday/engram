@@ -9,7 +9,7 @@ pub mod server {}
 pub mod search_notes {}
 
 /// `grep_notes` — exact-string literal search.
-pub mod grep_notes {}
+pub mod grep_notes;
 
 /// `read_note` — fetch a note by id, slug, or path.
 pub mod read_note;
