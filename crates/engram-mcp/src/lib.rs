@@ -2,8 +2,11 @@
 //! Uses rmcp stdio transport. Runs in the same process as `engram serve`.
 //! See docs/design/04-external-mcp.md for the full tool surface.
 
-/// MCP server setup: tool registry and stdio transport initialization.
-pub mod server {}
+/// MCP server scaffold: transport-agnostic `Tool` trait, `ToolRegistry`,
+/// and `default_registry()` wiring the shipped vault tools.
+pub mod server;
+
+pub use server::{default_registry, Tool, ToolError, ToolMeta, ToolRegistry};
 
 /// `search_notes` — semantic hybrid search across the vault.
 pub mod search_notes {}
