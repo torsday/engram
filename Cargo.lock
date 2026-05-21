@@ -955,6 +955,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "engram-test-support"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "engram-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "ulid",
+]
+
+[[package]]
 name = "entities"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

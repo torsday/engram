@@ -12,6 +12,7 @@ members = [
     "crates/engram-mcp",
     "crates/engram-cli",
     "crates/engram-secrets",
+    "crates/engram-test-support",
 ]
 
 [workspace.package]
@@ -71,6 +72,9 @@ async-trait = "0.1"
 
 # random (jitter for retry backoff)
 rand = "0.8"
+
+# test support
+tempfile = "3"
 
 # secrets management
 secrecy = { version = "0.8", features = ["alloc"] }
