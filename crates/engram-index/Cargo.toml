@@ -16,3 +16,10 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 sha2 = "0.10"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "fts_bench"
+harness = false
