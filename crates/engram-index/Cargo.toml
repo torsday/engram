@@ -8,6 +8,8 @@ license.workspace = true
 
 [dependencies]
 engram-core = { workspace = true }
+engram-llm = { workspace = true }
+async-trait = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -21,6 +23,8 @@ sha2 = "0.10"
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
+proptest = "1"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [[bench]]
 name = "fts_bench"

@@ -20,8 +20,8 @@ pub mod link_graph {}
 /// Tag graph and hierarchical tag resolution.
 pub mod tag_graph {}
 
-/// Embedding pipeline: local ONNX (bge-m3) and cloud OpenAI fallback.
-pub mod embeddings {}
+/// Embedding pipeline: cache lookups, content-hash keying, provider dispatch.
+pub mod embeddings;
 
 /// Hybrid retrieval: BM25 + dense ANN + RRF fusion + cross-encoder rerank + graph expansion.
 pub mod search {}
