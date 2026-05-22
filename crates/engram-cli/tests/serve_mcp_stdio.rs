@@ -25,14 +25,18 @@ fn engram_bin() -> PathBuf {
 }
 
 fn send_line(stdin: &mut impl Write, msg: &str) {
-    stdin.write_all(msg.as_bytes()).expect("write to engram stdin");
+    stdin
+        .write_all(msg.as_bytes())
+        .expect("write to engram stdin");
     stdin.write_all(b"\n").expect("write newline");
     stdin.flush().expect("flush");
 }
 
 fn recv_line(reader: &mut impl BufRead) -> String {
     let mut line = String::new();
-    reader.read_line(&mut line).expect("read from engram stdout");
+    reader
+        .read_line(&mut line)
+        .expect("read from engram stdout");
     line.trim().to_owned()
 }
 
@@ -48,7 +52,12 @@ fn mcp_stdio_initialize_and_list_tools() {
 
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut child = Command::new(&bin)
-        .args(["serve", "--mcp-stdio", "--vault", tmp.path().to_str().unwrap()])
+        .args([
+            "serve",
+            "--mcp-stdio",
+            "--vault",
+            tmp.path().to_str().unwrap(),
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null()) // tracing goes to stderr; swallow it here
@@ -96,11 +105,14 @@ fn mcp_stdio_initialize_and_list_tools() {
         "expected at least one tool, got none: {list}"
     );
     // All tools in the default registry should be present.
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
-    for expected in &["grep_notes", "read_note", "follow_backlinks", "follow_links", "vault_health"] {
+    let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
+    for expected in &[
+        "grep_notes",
+        "read_note",
+        "follow_backlinks",
+        "follow_links",
+        "vault_health",
+    ] {
         assert!(
             names.contains(expected),
             "tool {expected} missing from list: {names:?}"
@@ -134,7 +146,10 @@ impl WaitTimeout for std::process::Child {
 
 #[cfg(not(unix))]
 impl WaitTimeout for std::process::Child {
-    fn wait_timeout(&mut self, _dur: Duration) -> std::io::Result<Option<std::process::ExitStatus>> {
+    fn wait_timeout(
+        &mut self,
+        _dur: Duration,
+    ) -> std::io::Result<Option<std::process::ExitStatus>> {
         self.wait().map(Some)
     }
 }
