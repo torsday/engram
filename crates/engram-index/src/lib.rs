@@ -6,6 +6,11 @@ pub mod sqlite;
 /// SQLite FTS5 full-text search index (BM25 scoring).
 pub mod fts;
 
+/// Atomic markdown + sidecar + SQLite writes via the `write_intents` log,
+/// POSIX atomic-rename, and startup-time orphan recovery. See module docs
+/// and `docs/design/03-architecture.md` §Atomic writes.
+pub mod atomic_writes;
+
 /// LanceDB embedded vector store at `.engram/vectors/`.
 pub mod vectors {}
 

@@ -24,6 +24,10 @@ static MIGRATIONS: &[(&str, &str)] = &[
         "002_indexes_and_views.sql",
         include_str!("../migrations/002_indexes_and_views.sql"),
     ),
+    (
+        "003_write_intents.sql",
+        include_str!("../migrations/003_write_intents.sql"),
+    ),
 ];
 
 /// Highest migration ordinal supported by this binary.
