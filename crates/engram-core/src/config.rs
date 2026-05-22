@@ -410,7 +410,7 @@ impl PrivacyConfig {
 ///
 /// **Restart-required** — controls whether the MCP stdio server starts
 /// automatically when `engram serve` launches (without `--mcp-stdio`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct McpConfig {
     /// Whether the MCP stdio server is enabled when running `engram serve`.
@@ -419,12 +419,6 @@ pub struct McpConfig {
     /// override at runtime regardless of this value.
     #[serde(default)]
     pub enabled: bool,
-}
-
-impl Default for McpConfig {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
 }
 
 // ---------------------------------------------------------------------------
