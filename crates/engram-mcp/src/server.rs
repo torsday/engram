@@ -238,6 +238,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(ReadNoteTool);
     r.register(FollowBacklinksTool);
     r.register(FollowLinksTool);
+    r.register(ListTagsTool);
     r
 }
 
@@ -421,6 +422,41 @@ impl Tool for FollowLinksTool {
         let parsed = parse_input::<crate::follow_links::FollowLinksInput>(input)?;
         let out =
             crate::follow_links::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
+
+// ── list_tags ─────────────────────────────────────────────────────────────
+
+struct ListTagsTool;
+
+impl Tool for ListTagsTool {
+    fn name(&self) -> &'static str {
+        "list_tags"
+    }
+    fn description(&self) -> &'static str {
+        "Enumerate all vault tags with usage counts, first-used, and last-used dates."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "prefix": {
+                    "type": "string",
+                    "description": "Only return tags starting with this prefix (case-insensitive)."
+                },
+                "min_count": {
+                    "type": "integer",
+                    "default": 1,
+                    "minimum": 0,
+                    "description": "Minimum usage count filter."
+                }
+            }
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = parse_input::<crate::list_tags::ListTagsInput>(input)?;
+        let out = crate::list_tags::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }

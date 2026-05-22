@@ -131,6 +131,47 @@ Exactly one of `id`, `slug`, or `path` must be present.
 
 ---
 
+`list_tags` MCP tool — enumerate all vault tags with usage counts.
+
+Returns every distinct tag in the `tags` table together with its usage
+count, the earliest note creation date it appears on (`first_used`), and
+the latest (`last_used`). Results can be filtered by prefix and a minimum
+count threshold.
+
+## Input schema
+
+```json
+{
+  "prefix":    "evergreen",   // optional — only tags starting with this prefix
+  "min_count": 1              // optional, default 1
+}
+```
+
+## Output schema
+
+```json
+{
+  "tags": [
+    {
+      "tag":        "evergreen",
+      "count":      42,
+      "first_used": "2024-01-01T00:00:00Z",
+      "last_used":  "2025-06-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+## Error codes
+
+| code                   | meaning                               |
+|------------------------|---------------------------------------|
+| `bad_input`            | Negative min_count or other bad input |
+| `vault_not_configured` | SQLite DB not found / not accessible  |
+| `internal_error`       | Unexpected SQLite failure             |
+
+---
+
 `follow_backlinks` MCP tool — notes that wikilink to the given note (incoming).
 
 ## Input schema
