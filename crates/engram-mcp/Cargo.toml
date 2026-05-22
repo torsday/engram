@@ -11,6 +11,7 @@ engram-core = { workspace = true }
 engram-index = { workspace = true }
 rmcp = { workspace = true }
 rusqlite = { workspace = true }
+chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

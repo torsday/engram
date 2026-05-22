@@ -263,6 +263,53 @@ underlying data populates once the index runs.
 
 ---
 
+`recent_changes` MCP tool — notes modified within a time window.
+
+Returns vault notes changed since a given ISO-8601 timestamp, optionally
+filtered by author kind (human, agent, or any) and ordered by recency.
+
+The data is sourced from two tables:
+- `notes` — captures human-authored creates and modifies (`created_at`,
+  `modified_at`)
+- `agent_actions` — captures agent-proposed writes (`wrote_at`)
+
+## Input schema
+
+```json
+{
+  "since":  "2024-01-01T00:00:00Z",  // optional, default: 24h ago
+  "limit":  50,                       // optional, default: 50
+  "author": "any"                     // optional: "human"|"agent"|"any"
+}
+```
+
+## Output schema
+
+```json
+{
+  "changes": [
+    {
+      "note_id":     "01JXXXXXXXXXXXXXXXXXXXXXXX",
+      "path":        "notes/some-note.md",
+      "change_type": "modified",
+      "at":          "2024-06-01T12:00:00Z",
+      "author":      "agent",
+      "agent_name":  "linker"
+    }
+  ]
+}
+```
+
+## Error codes
+
+| code                   | meaning                               |
+|------------------------|---------------------------------------|
+| `bad_input`            | Unrecognised `author` value, bad date  |
+| `vault_not_configured` | SQLite DB not found / not accessible  |
+| `internal_error`       | Unexpected SQLite failure             |
+
+---
+
 `vault_health` MCP tool — diagnostic summary of vault state.
 
 Returns note counts by type, index health, agent activity, recent
