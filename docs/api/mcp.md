@@ -13,6 +13,40 @@ stdio transport (configured in `~/.config/claude/claude_desktop_config.json`).
 
 ---
 
+`rmcp` stdio adapter that binds the transport-agnostic
+[`ToolRegistry`](crate::ToolRegistry) to the actual MCP wire protocol.
+
+# Surface
+
+- [`EngramMcpServer`] — a `rmcp::handler::server::ServerHandler`
+  implementation that delegates `initialize` / `tools/list` /
+  `tools/call` to the engram registry.
+- [`serve_stdio`] — convenience entry point that wires the server to
+  `rmcp::transport::io::stdio()`. CLI subcommands and tests call this.
+
+Tools (`grep_notes`, `read_note`, …) live in their own modules and
+register themselves through [`crate::default_registry`]. This adapter
+never re-implements tool logic; it translates between the MCP wire
+types and the registry's JSON-in / JSON-out shape.
+
+# Error mapping
+
+A successful tool dispatch produces a `CallToolResult::success` with
+a single `text` content block containing the JSON-encoded result and
+`structured_content` carrying the same value parsed. A
+[`ToolError`](crate::ToolError) produces a `CallToolResult::error`
+whose content text is `"<code>: <message>"` — clients can match on
+the `code` prefix. The `is_error` flag is set, which is the MCP
+signal Claude Desktop / Code use to surface the failure.
+
+Why not return a JSON-RPC error (`McpError`) for tool failures?
+Because per the MCP spec, errors specific to a tool's execution —
+"not found", "bad input" — belong in `CallToolResult { is_error: true }`,
+not in the JSON-RPC error channel. The latter is reserved for
+protocol-level failures (method not found, etc.).
+
+---
+
 `grep_notes` MCP tool — exact-string or regex lookup across vault markdown.
 
 Distinct from `search_notes` — no embeddings, no ranking, no relevance
