@@ -32,12 +32,29 @@ fn send_line(stdin: &mut impl Write, msg: &str) {
     stdin.flush().expect("flush");
 }
 
-fn recv_line(reader: &mut impl BufRead) -> String {
-    let mut line = String::new();
-    reader
-        .read_line(&mut line)
-        .expect("read from engram stdout");
-    line.trim().to_owned()
+/// Read lines from the server until we get one that is non-empty and
+/// looks like a JSON-RPC *response* (has an `"id"` field). Skips blank
+/// lines and server-sent notifications (which have `"method"` but no `"id"`).
+fn recv_response(reader: &mut impl BufRead) -> serde_json::Value {
+    loop {
+        let mut line = String::new();
+        let n = reader
+            .read_line(&mut line)
+            .expect("read from engram stdout");
+        if n == 0 {
+            panic!("engram stdout closed before receiving a response");
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let v: serde_json::Value =
+            serde_json::from_str(trimmed).expect("engram stdout must be JSON");
+        // Skip notifications (they have "method" but no "id").
+        if v.get("id").is_some() {
+            return v;
+        }
+    }
 }
 
 #[test]
@@ -74,17 +91,15 @@ fn mcp_stdio_initialize_and_list_tools() {
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci-test","version":"0"}}}"#,
     );
 
-    let raw = recv_line(&mut reader);
-    assert!(!raw.is_empty(), "no response to initialize");
-    let init: serde_json::Value = serde_json::from_str(&raw).expect("initialize response JSON");
-    assert_eq!(init["id"], 1, "id mismatch");
+    let init = recv_response(&mut reader);
+    assert_eq!(init["id"], 1, "id mismatch on initialize response");
     let caps = &init["result"]["capabilities"];
     assert!(
         !caps["tools"].is_null(),
         "tools capability not advertised: {init}"
     );
 
-    // Notify initialized
+    // Notify initialized (no response expected from server).
     send_line(
         &mut stdin,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
@@ -96,14 +111,14 @@ fn mcp_stdio_initialize_and_list_tools() {
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
     );
 
-    let raw2 = recv_line(&mut reader);
-    let list: serde_json::Value = serde_json::from_str(&raw2).expect("tools/list response JSON");
-    assert_eq!(list["id"], 2, "id mismatch");
+    let list = recv_response(&mut reader);
+    assert_eq!(list["id"], 2, "id mismatch on tools/list response");
     let tools = list["result"]["tools"].as_array().expect("tools array");
     assert!(
         !tools.is_empty(),
         "expected at least one tool, got none: {list}"
     );
+
     // All tools in the default registry should be present.
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     for expected in &[
@@ -124,7 +139,7 @@ fn mcp_stdio_initialize_and_list_tools() {
     let _ = child.wait_timeout(Duration::from_secs(5));
 }
 
-// Pull in wait_timeout without adding a new dep — it's in std for unix.
+// Minimal wait_timeout for process cleanup.
 trait WaitTimeout {
     fn wait_timeout(&mut self, dur: Duration) -> std::io::Result<Option<std::process::ExitStatus>>;
 }
