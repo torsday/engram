@@ -32,6 +32,10 @@ pub mod scheduler {}
 /// Agent runner: prompt loading (hot-reload), tool dispatch, structured output parsing.
 pub mod runner {}
 
+/// Prompt loader — splits `agents/<name>/prompt.md` on the cache-boundary
+/// marker into a `PromptStructured` per ADR 0010.
+pub mod prompt_loader;
+
 /// Tool gateway: validates tool calls against agent permissions and the git-write boundary.
 pub mod tool_gateway {}
 
