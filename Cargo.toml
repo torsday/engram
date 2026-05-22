@@ -70,6 +70,9 @@ clap = { version = "4", features = ["derive"] }
 # async traits
 async-trait = "0.1"
 
+# MCP wire protocol
+rmcp = { version = "1.7", features = ["server", "macros", "transport-io"] }
+
 # random (jitter for retry backoff)
 rand = "0.8"
 

@@ -6,6 +6,10 @@
 /// and `default_registry()` wiring the shipped vault tools.
 pub mod server;
 
+/// rmcp stdio adapter binding [`ToolRegistry`] to the MCP wire protocol.
+pub mod rmcp_adapter;
+
+pub use rmcp_adapter::{serve_stdio, EngramMcpServer, ServeError};
 pub use server::{default_registry, Tool, ToolError, ToolMeta, ToolRegistry};
 
 /// `search_notes` — semantic hybrid search across the vault.

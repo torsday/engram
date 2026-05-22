@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 engram-core = { workspace = true }
 engram-index = { workspace = true }
+rmcp = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -18,3 +19,5 @@ regex = "1"
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util"] }
+rmcp = { workspace = true, features = ["client"] }
