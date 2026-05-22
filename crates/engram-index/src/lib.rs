@@ -11,8 +11,8 @@ pub mod fts;
 /// and `docs/design/03-architecture.md` §Atomic writes.
 pub mod atomic_writes;
 
-/// LanceDB embedded vector store at `.engram/vectors/`.
-pub mod vectors {}
+/// LanceDB embedded vector store at `<vault_root>/vectors/`.
+pub mod vector_store;
 
 /// Wikilink and backlink graph stored in SQLite.
 pub mod link_graph {}
