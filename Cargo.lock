@@ -937,11 +937,13 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "toml 0.8.23",
  "tracing",
+ "ulid",
 ]
 
 [[package]]
@@ -1033,9 +1035,11 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "ulid",
 ]
 
 [[package]]
@@ -1064,10 +1068,12 @@ dependencies = [
 name = "engram-mcp"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "engram-core",
  "engram-index",
  "regex",
  "rmcp",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

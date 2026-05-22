@@ -15,10 +15,12 @@ tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
+ulid = { workspace = true }
 sha2 = "0.10"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"
 
 [[bench]]
 name = "fts_bench"
