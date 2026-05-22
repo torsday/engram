@@ -5,11 +5,10 @@
 //! This exercises the full CLI wiring (flag parsing, config loading,
 //! `serve_stdio` call) that unit tests cannot reach.
 //!
-//! Wire protocol: rmcp uses LSP-style Content-Length framing over stdio:
-//!   `Content-Length: <n>\r\n\r\n<n bytes of JSON>`
-//! Both the send helpers and recv_response implement this framing.
+//! Wire protocol: rmcp uses newline-delimited JSON over stdio.
+//! Each message is a single JSON object followed by `\n`.
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -26,37 +25,28 @@ fn engram_bin() -> PathBuf {
     p
 }
 
-/// Send a JSON-RPC message using Content-Length framing.
+/// Send a JSON-RPC message as a newline-terminated line.
 fn send_msg(stdin: &mut impl Write, msg: &str) {
-    write!(stdin, "Content-Length: {}\r\n\r\n{}", msg.len(), msg).expect("write to engram stdin");
+    writeln!(stdin, "{}", msg).expect("write to engram stdin");
     stdin.flush().expect("flush");
 }
 
-/// Read one Content-Length framed message from the server.
-/// Returns the JSON body as a parsed Value, skipping server-sent
-/// notifications (messages that have `"method"` but no `"id"`).
-fn recv_response(reader: &mut BufReader<impl Read>) -> serde_json::Value {
+/// Read one newline-delimited JSON message from the server.
+/// Returns the parsed Value, skipping server-sent notifications
+/// (messages that have `"method"` but no `"id"`).
+fn recv_response(reader: &mut BufReader<impl std::io::Read>) -> serde_json::Value {
     loop {
-        // Read headers until blank line.
-        let mut content_length: Option<usize> = None;
-        loop {
-            let mut header = String::new();
-            let n = reader.read_line(&mut header).expect("read header line");
-            if n == 0 {
-                panic!("engram stdout closed while reading headers");
-            }
-            let trimmed = header.trim_end_matches(['\r', '\n']);
-            if trimmed.is_empty() {
-                break; // blank line = end of headers
-            }
-            if let Some(val) = trimmed.strip_prefix("Content-Length:") {
-                content_length = Some(val.trim().parse().expect("parse Content-Length"));
-            }
+        let mut line = String::new();
+        let n = reader.read_line(&mut line).expect("read response line");
+        if n == 0 {
+            panic!("engram stdout closed unexpectedly");
         }
-        let len = content_length.expect("no Content-Length header in server message");
-        let mut body = vec![0u8; len];
-        reader.read_exact(&mut body).expect("read JSON body");
-        let v: serde_json::Value = serde_json::from_slice(&body).expect("server body must be JSON");
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let v: serde_json::Value =
+            serde_json::from_str(trimmed).expect("server response must be JSON");
         // Skip notifications (have "method", no "id").
         if v.get("id").is_some() {
             return v;
