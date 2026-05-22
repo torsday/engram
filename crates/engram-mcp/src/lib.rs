@@ -31,7 +31,7 @@ pub mod follow_backlinks;
 pub mod follow_links;
 
 /// `recent_changes` — notes modified in the last N days.
-pub mod recent_changes {}
+pub mod recent_changes;
 
 /// `vault_health` — structural health check (broken links, orphans, missing sidecars).
 pub mod vault_health;

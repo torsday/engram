@@ -239,6 +239,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(FollowBacklinksTool);
     r.register(FollowLinksTool);
     r.register(ListTagsTool);
+    r.register(RecentChangesTool);
     r
 }
 
@@ -461,6 +462,48 @@ impl Tool for ListTagsTool {
     }
 }
 
+// ── recent_changes ────────────────────────────────────────────────────────
+
+struct RecentChangesTool;
+
+impl Tool for RecentChangesTool {
+    fn name(&self) -> &'static str {
+        "recent_changes"
+    }
+    fn description(&self) -> &'static str {
+        "Return vault notes changed within a time window, optionally filtered by author (human/agent) and change type."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "since": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO-8601 lower bound (default: 24 h ago)."
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "minimum": 1,
+                    "description": "Maximum number of entries to return."
+                },
+                "author": {
+                    "type": "string",
+                    "enum": ["human", "agent", "any"],
+                    "default": "any",
+                    "description": "Filter by author kind."
+                }
+            }
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = parse_input::<crate::recent_changes::RecentChangesInput>(input)?;
+        let out =
+            crate::recent_changes::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
