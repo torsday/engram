@@ -39,6 +39,7 @@ pub mod anthropic;
 pub mod circuit_breaker;
 pub mod early_exit;
 mod error;
+pub mod escalating;
 #[cfg(feature = "mock-llm")]
 pub mod mock;
 pub mod ollama;
@@ -52,6 +53,7 @@ mod types;
 pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider, CircuitState};
 pub use early_exit::{early_exit_drive, EarlyExitConfig, EarlyExitStream, StreamedOutcome};
 pub use error::{Error, Result};
+pub use escalating::{EscalatingProvider, EscalationConfig, EscalationReason, SchemaValidator};
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
 pub use provider::LlmProvider;
