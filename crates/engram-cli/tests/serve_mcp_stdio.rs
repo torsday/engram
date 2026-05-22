@@ -4,53 +4,60 @@
 //!
 //! This exercises the full CLI wiring (flag parsing, config loading,
 //! `serve_stdio` call) that unit tests cannot reach.
+//!
+//! Wire protocol: rmcp uses LSP-style Content-Length framing over stdio:
+//!   `Content-Length: <n>\r\n\r\n<n bytes of JSON>`
+//! Both the send helpers and recv_response implement this framing.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 /// Path to the compiled `engram` binary under test.
 fn engram_bin() -> PathBuf {
-    // `cargo test` sets CARGO_BIN_EXE_engram when the binary is declared.
-    // Fall back to the typical debug-build location.
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_engram") {
         return PathBuf::from(p);
     }
     let mut p = std::env::current_exe().expect("current_exe");
-    p.pop(); // remove test binary name
-    p.pop(); // remove "deps"
+    p.pop(); // test binary name
+    p.pop(); // "deps"
     p.push("engram");
     p
 }
 
-fn send_line(stdin: &mut impl Write, msg: &str) {
-    stdin
-        .write_all(msg.as_bytes())
-        .expect("write to engram stdin");
-    stdin.write_all(b"\n").expect("write newline");
+/// Send a JSON-RPC message using Content-Length framing.
+fn send_msg(stdin: &mut impl Write, msg: &str) {
+    write!(stdin, "Content-Length: {}\r\n\r\n{}", msg.len(), msg).expect("write to engram stdin");
     stdin.flush().expect("flush");
 }
 
-/// Read lines from the server until we get one that is non-empty and
-/// looks like a JSON-RPC *response* (has an `"id"` field). Skips blank
-/// lines and server-sent notifications (which have `"method"` but no `"id"`).
-fn recv_response(reader: &mut impl BufRead) -> serde_json::Value {
+/// Read one Content-Length framed message from the server.
+/// Returns the JSON body as a parsed Value, skipping server-sent
+/// notifications (messages that have `"method"` but no `"id"`).
+fn recv_response(reader: &mut BufReader<impl Read>) -> serde_json::Value {
     loop {
-        let mut line = String::new();
-        let n = reader
-            .read_line(&mut line)
-            .expect("read from engram stdout");
-        if n == 0 {
-            panic!("engram stdout closed before receiving a response");
+        // Read headers until blank line.
+        let mut content_length: Option<usize> = None;
+        loop {
+            let mut header = String::new();
+            let n = reader.read_line(&mut header).expect("read header line");
+            if n == 0 {
+                panic!("engram stdout closed while reading headers");
+            }
+            let trimmed = header.trim_end_matches(['\r', '\n']);
+            if trimmed.is_empty() {
+                break; // blank line = end of headers
+            }
+            if let Some(val) = trimmed.strip_prefix("Content-Length:") {
+                content_length = Some(val.trim().parse().expect("parse Content-Length"));
+            }
         }
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let v: serde_json::Value =
-            serde_json::from_str(trimmed).expect("engram stdout must be JSON");
-        // Skip notifications (they have "method" but no "id").
+        let len = content_length.expect("no Content-Length header in server message");
+        let mut body = vec![0u8; len];
+        reader.read_exact(&mut body).expect("read JSON body");
+        let v: serde_json::Value = serde_json::from_slice(&body).expect("server body must be JSON");
+        // Skip notifications (have "method", no "id").
         if v.get("id").is_some() {
             return v;
         }
@@ -61,8 +68,6 @@ fn recv_response(reader: &mut impl BufRead) -> serde_json::Value {
 fn mcp_stdio_initialize_and_list_tools() {
     let bin = engram_bin();
     if !bin.exists() {
-        // The binary hasn't been built yet (e.g., in doc-only CI runs).
-        // Skip gracefully rather than failing with a confusing error.
         eprintln!("skipping: engram binary not found at {}", bin.display());
         return;
     }
@@ -77,7 +82,7 @@ fn mcp_stdio_initialize_and_list_tools() {
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null()) // tracing goes to stderr; swallow it here
+        .stderr(Stdio::null())
         .spawn()
         .expect("spawn engram serve --mcp-stdio");
 
@@ -86,7 +91,7 @@ fn mcp_stdio_initialize_and_list_tools() {
     let mut reader = BufReader::new(stdout);
 
     // ── initialize ────────────────────────────────────────────────────────
-    send_line(
+    send_msg(
         &mut stdin,
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci-test","version":"0"}}}"#,
     );
@@ -99,14 +104,14 @@ fn mcp_stdio_initialize_and_list_tools() {
         "tools capability not advertised: {init}"
     );
 
-    // Notify initialized (no response expected from server).
-    send_line(
+    // Notify initialized (one-way; no response expected).
+    send_msg(
         &mut stdin,
         r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
     );
 
     // ── tools/list ────────────────────────────────────────────────────────
-    send_line(
+    send_msg(
         &mut stdin,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
     );
@@ -114,12 +119,8 @@ fn mcp_stdio_initialize_and_list_tools() {
     let list = recv_response(&mut reader);
     assert_eq!(list["id"], 2, "id mismatch on tools/list response");
     let tools = list["result"]["tools"].as_array().expect("tools array");
-    assert!(
-        !tools.is_empty(),
-        "expected at least one tool, got none: {list}"
-    );
+    assert!(!tools.is_empty(), "expected at least one tool: {list}");
 
-    // All tools in the default registry should be present.
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     for expected in &[
         "grep_notes",
@@ -130,16 +131,14 @@ fn mcp_stdio_initialize_and_list_tools() {
     ] {
         assert!(
             names.contains(expected),
-            "tool {expected} missing from list: {names:?}"
+            "tool {expected} missing: {names:?}"
         );
     }
 
-    // Clean up: close stdin to signal EOF → server exits.
     drop(stdin);
     let _ = child.wait_timeout(Duration::from_secs(5));
 }
 
-// Minimal wait_timeout for process cleanup.
 trait WaitTimeout {
     fn wait_timeout(&mut self, dur: Duration) -> std::io::Result<Option<std::process::ExitStatus>>;
 }
