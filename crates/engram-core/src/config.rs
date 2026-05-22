@@ -133,6 +133,12 @@ pub struct EngramConfig {
     /// **Hot-reloadable.**
     #[serde(default)]
     pub artifacts: ArtifactsConfig,
+
+    /// MCP server configuration.
+    ///
+    /// **Restart-required.**
+    #[serde(default)]
+    pub mcp: McpConfig,
 }
 
 impl EngramConfig {
@@ -393,6 +399,31 @@ impl PrivacyConfig {
             "notes/medical/".to_owned(),
             "notes/journal/".to_owned(),
         ]
+    }
+}
+
+// ---------------------------------------------------------------------------
+// McpConfig
+// ---------------------------------------------------------------------------
+
+/// MCP server configuration.
+///
+/// **Restart-required** — controls whether the MCP stdio server starts
+/// automatically when `engram serve` launches (without `--mcp-stdio`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct McpConfig {
+    /// Whether the MCP stdio server is enabled when running `engram serve`.
+    ///
+    /// Defaults to `false` (opt-in). Pass `--mcp-stdio` on the CLI to
+    /// override at runtime regardless of this value.
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self { enabled: false }
     }
 }
 

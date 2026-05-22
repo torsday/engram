@@ -36,6 +36,36 @@ cargo install engram-cli
 engram status
 ```
 
+## Claude Desktop / Claude Code integration
+
+Engram exposes its vault tools to Claude via the [MCP protocol](https://modelcontextprotocol.io).
+Add the following block to your `claude_desktop_config.json`
+(`~/Library/Application\ Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "engram": {
+      "command": "engram",
+      "args": ["serve", "--mcp-stdio", "--vault", "/absolute/path/to/your/vault"]
+    }
+  }
+}
+```
+
+Claude Desktop will launch `engram serve --mcp-stdio` as a subprocess and communicate
+over stdin/stdout. All tracing output goes to stderr so it won't interfere with the
+JSON-RPC channel.
+
+You can also enable MCP by default in your vault config (`.engram/config.toml`):
+
+```toml
+[mcp]
+enabled = true
+```
+
+See **[`docs/api/mcp.md`](docs/api/mcp.md)** for the full tool reference.
+
 ## First run
 
 See **[`docs/first-run.md`](docs/first-run.md)** for the guided setup wizard.
