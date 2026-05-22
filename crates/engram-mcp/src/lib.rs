@@ -22,7 +22,7 @@ pub mod grep_notes;
 pub mod read_note;
 
 /// `list_tags` — enumerate all vault tags with counts.
-pub mod list_tags {}
+pub mod list_tags;
 
 /// `follow_backlinks` — resolve notes linking to a given note.
 pub mod follow_backlinks;
