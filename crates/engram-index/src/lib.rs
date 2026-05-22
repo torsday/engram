@@ -26,5 +26,9 @@ pub mod tag_graph {}
 /// Embedding pipeline: cache lookups, content-hash keying, provider dispatch.
 pub mod embeddings;
 
+/// SQLite ↔ LanceDB reconciliation: detects drift, stale vectors, and
+/// orphans; re-embeds and corrects via the embedding pipeline.
+pub mod reconcile;
+
 /// Hybrid retrieval: BM25 + dense ANN + RRF fusion + cross-encoder rerank + graph expansion.
 pub mod search {}

@@ -563,7 +563,7 @@ mod tests {
             .await
             .unwrap();
         assert!(res.text.contains("echo"));
-        assert!(res.text.contains("hello world") || res.text.len() > 0);
+        assert!(res.text.contains("hello world") || !res.text.is_empty());
     }
 
     // ── Template mode ────────────────────────────────────────────────────────

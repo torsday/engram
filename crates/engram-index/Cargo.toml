@@ -28,6 +28,7 @@ futures = "0.3"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+engram-llm = { workspace = true, features = ["mock-llm"] }
 tempfile = "3"
 proptest = "1"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
