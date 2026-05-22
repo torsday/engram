@@ -23,6 +23,11 @@ toml = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
+[features]
+# Enable the deterministic mock LLM provider for tests. Never enabled in
+# release builds — prevents accidental use of mock responses in production.
+mock-llm = []
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wiremock = "0.6"

@@ -39,6 +39,8 @@ pub mod anthropic;
 pub mod circuit_breaker;
 pub mod early_exit;
 mod error;
+#[cfg(feature = "mock-llm")]
+pub mod mock;
 pub mod ollama;
 pub mod openai;
 mod provider;
