@@ -17,6 +17,9 @@ pub enum BackupError {
 /// artifact remote recency without performing any backup operations.
 pub mod backup_watcher;
 
+/// Per-note advisory lock manager (prevents concurrent agent writes to the same note).
+pub mod locks;
+
 /// Agent identity, configuration, and lifecycle (ready → running → done).
 pub mod identity {}
 
