@@ -9,8 +9,10 @@ license.workspace = true
 [dependencies]
 engram-core = { workspace = true }
 engram-index = { workspace = true }
-engram-llm = { workspace = true }
 rusqlite = { workspace = true }
+ulid = { workspace = true }
+sha2 = "0.10"
+engram-llm = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

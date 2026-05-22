@@ -20,6 +20,9 @@ pub mod backup_watcher;
 /// Per-note advisory lock manager (prevents concurrent agent writes to the same note).
 pub mod locks;
 
+/// Agent action log: records every unstaged agent write and reconciles human
+/// decisions (`staged`, `rejected`, `amended`) when `.git/index` changes.
+pub mod action_log;
 /// Agent identity, configuration, and lifecycle (ready → running → done).
 pub mod identity {}
 
