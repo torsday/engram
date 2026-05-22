@@ -194,7 +194,11 @@ enum SecretsAction {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().init();
+    // Always send tracing output to stderr so it never corrupts stdout-based
+    // transports (e.g. `engram serve --mcp-stdio` uses stdout for JSON-RPC).
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let cli = Cli::parse();
     match cli.command {
         Command::Serve {
@@ -204,12 +208,6 @@ async fn main() {
             let cfg = EngramConfig::load(&vault).unwrap_or_default();
             let run_mcp = mcp_stdio || cfg.mcp.enabled;
             if run_mcp {
-                // MCP stdio mode: JSON-RPC on stdin/stdout; tracing to stderr.
-                // Re-init subscriber so it writes to stderr (default writes to
-                // stdout which would corrupt the MCP stream).
-                let _ = tracing_subscriber::fmt()
-                    .with_writer(std::io::stderr)
-                    .try_init();
                 let registry = std::sync::Arc::new(engram_mcp::default_registry());
                 if let Err(e) = engram_mcp::serve_stdio(registry, vault).await {
                     eprintln!("engram serve --mcp-stdio: {e}");
