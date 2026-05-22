@@ -972,6 +972,8 @@ dependencies = [
  "engram-index",
  "engram-mcp",
  "rusqlite",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "toml 0.8.23",

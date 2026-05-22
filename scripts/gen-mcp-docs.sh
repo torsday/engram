@@ -51,8 +51,29 @@ Engram exposes a set of MCP (Model Context Protocol) tools that Claude Desktop
 and Claude Code can call directly. These tools let Claude read your vault, search
 notes, inspect links, and check system health — all without leaving your machine.
 
-The MCP server starts automatically with `engram serve` and is available on the
-stdio transport (configured in `~/.config/claude/claude_desktop_config.json`).
+## Starting the MCP server
+
+Run `engram serve --mcp-stdio --vault /path/to/vault` to start the server.
+Claude Desktop launches this automatically — add it to
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "engram": {
+      "command": "engram",
+      "args": ["serve", "--mcp-stdio", "--vault", "/absolute/path/to/vault"]
+    }
+  }
+}
+```
+
+To enable MCP by default via `.engram/config.toml`:
+
+```toml
+[mcp]
+enabled = true   # default false; --mcp-stdio flag overrides this
+```
 
 > **Auto-generated** — this file is regenerated from source by
 > `scripts/gen-mcp-docs.sh`. Do not edit by hand; run the script and commit the

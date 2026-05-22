@@ -22,6 +22,17 @@ enum Command {
     Serve {
         #[arg(long, default_value = "7842")]
         port: u16,
+        /// Run the MCP stdio server instead of the HTTP daemon.
+        ///
+        /// When set, engram reads JSON-RPC on stdin and writes on stdout.
+        /// Tracing output goes to stderr. The process exits when stdin
+        /// closes (Claude Desktop will launch and terminate this process).
+        /// Overrides the `[mcp].enabled` config key.
+        #[arg(long)]
+        mcp_stdio: bool,
+        /// Vault root directory (default: current working directory).
+        #[arg(long, default_value = ".")]
+        vault: PathBuf,
     },
     /// Rebuild the metadata index from vault contents
     Reindex {
@@ -183,10 +194,29 @@ enum SecretsAction {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt().init();
+    // Always send tracing output to stderr so it never corrupts stdout-based
+    // transports (e.g. `engram serve --mcp-stdio` uses stdout for JSON-RPC).
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let cli = Cli::parse();
     match cli.command {
-        Command::Serve { .. } => unimplemented!("engram serve"),
+        Command::Serve {
+            mcp_stdio, vault, ..
+        } => {
+            // Load config — absent file uses all defaults.
+            let cfg = EngramConfig::load(&vault).unwrap_or_default();
+            let run_mcp = mcp_stdio || cfg.mcp.enabled;
+            if run_mcp {
+                let registry = std::sync::Arc::new(engram_mcp::default_registry());
+                if let Err(e) = engram_mcp::serve_stdio(registry, vault).await {
+                    eprintln!("engram serve --mcp-stdio: {e}");
+                    std::process::exit(1);
+                }
+            } else {
+                unimplemented!("engram serve (HTTP daemon not yet implemented)");
+            }
+        }
         Command::Reindex { .. } => unimplemented!("engram reindex"),
         Command::Ingest { .. } => unimplemented!("engram ingest"),
         Command::Run { .. } => unimplemented!("engram run"),
