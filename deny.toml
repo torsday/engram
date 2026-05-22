@@ -26,7 +26,14 @@ version = 2
 # Ignore unmaintained notices for transitive deps until we can upgrade them.
 # bincode 1.x (via syntect): RUSTSEC-2025-0141
 # yaml-rust (via serde_yaml 0.9): RUSTSEC-2024-0320
-ignore = ["RUSTSEC-2025-0141", "RUSTSEC-2024-0320"]
+# encoding (via syntect → lance): RUSTSEC-2021-0153
+# paste (via lance transitive): RUSTSEC-2024-0436
+ignore = [
+    "RUSTSEC-2025-0141",
+    "RUSTSEC-2024-0320",
+    "RUSTSEC-2021-0153",
+    "RUSTSEC-2024-0436",
+]
 
 [sources]
 unknown-registry = "warn"
