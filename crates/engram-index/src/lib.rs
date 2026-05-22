@@ -11,6 +11,9 @@ pub mod fts;
 /// and `docs/design/03-architecture.md` §Atomic writes.
 pub mod atomic_writes;
 
+/// In-flight request deduplication for council retrieval calls.
+pub mod coalesce;
+
 /// LanceDB embedded vector store at `<vault_root>/vectors/`.
 pub mod vector_store;
 
