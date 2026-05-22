@@ -47,7 +47,12 @@ Add the following block to your `claude_desktop_config.json`
   "mcpServers": {
     "engram": {
       "command": "engram",
-      "args": ["serve", "--mcp-stdio", "--vault", "/absolute/path/to/your/vault"]
+      "args": [
+        "serve",
+        "--mcp-stdio",
+        "--vault",
+        "/absolute/path/to/your/vault"
+      ]
     }
   }
 }
