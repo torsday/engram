@@ -10,6 +10,7 @@ license.workspace = true
 engram-core = { workspace = true }
 engram-index = { workspace = true }
 engram-llm = { workspace = true }
+rusqlite = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
