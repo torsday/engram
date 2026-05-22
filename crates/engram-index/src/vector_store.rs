@@ -38,7 +38,7 @@ use arrow_array::{
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use engram_llm::EmbeddingModel;
 use futures::TryStreamExt;
-use lancedb::query::{ExecutableQuery, QueryBase};
+use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use lancedb::{connect, DistanceType, Table};
 use thiserror::Error;
 
@@ -225,6 +225,28 @@ impl LanceStore {
         let n = self.table.count_rows(None).await?;
         Ok(n)
     }
+
+    /// Scan the table and return `(id, content_hash)` pairs for every row.
+    ///
+    /// Used by the reconciler ([`crate::reconcile`]) to diff against
+    /// SQLite's authoritative note set without materializing the embedding
+    /// vectors themselves. Selecting only the two narrow columns keeps the
+    /// scan cheap even on large vaults.
+    ///
+    /// Ordering is unspecified.
+    pub async fn scan_id_hash(&self) -> Result<Vec<(String, String)>> {
+        let mut stream = self
+            .table
+            .query()
+            .select(Select::columns(&["id", "content_hash"]))
+            .execute()
+            .await?;
+        let mut out = Vec::new();
+        while let Some(batch) = stream.try_next().await? {
+            extend_id_hash(&batch, &mut out);
+        }
+        Ok(out)
+    }
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────
@@ -259,6 +281,20 @@ fn build_batch(items: &[VectorUpsert], dim: usize) -> Result<RecordBatch> {
         vec![Arc::new(ids), Arc::new(hashes), Arc::new(embeddings)],
     )
     .map_err(Error::Arrow)
+}
+
+fn extend_id_hash(batch: &RecordBatch, out: &mut Vec<(String, String)>) {
+    let id_col = batch
+        .column_by_name("id")
+        .expect("scan must include id column")
+        .as_string::<i32>();
+    let hash_col = batch
+        .column_by_name("content_hash")
+        .expect("scan must include content_hash column")
+        .as_string::<i32>();
+    for i in 0..batch.num_rows() {
+        out.push((id_col.value(i).to_string(), hash_col.value(i).to_string()));
+    }
 }
 
 fn extend_hits(batch: &RecordBatch, hits: &mut Vec<AnnHit>) {
