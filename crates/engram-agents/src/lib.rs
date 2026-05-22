@@ -45,7 +45,7 @@ pub mod review_queue {}
 pub mod trust {}
 
 /// Agent memory store: per-agent working context between runs.
-pub mod memory {}
+pub mod memory;
 
 /// Conversation engine: bounded Pair-Thinking sessions.
 pub mod conversation {}
