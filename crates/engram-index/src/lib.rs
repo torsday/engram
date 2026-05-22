@@ -4,7 +4,7 @@
 pub mod sqlite;
 
 /// SQLite FTS5 full-text search index (BM25 scoring).
-pub mod fts {}
+pub mod fts;
 
 /// LanceDB embedded vector store at `.engram/vectors/`.
 pub mod vectors {}
