@@ -29,8 +29,9 @@ pub mod identity {}
 /// Agent scheduler: triggers (file-watch, cron, on-demand) and concurrency limits.
 pub mod scheduler {}
 
-/// Agent runner: prompt loading (hot-reload), tool dispatch, structured output parsing.
-pub mod runner {}
+/// Agent runner: on-demand invocation, `agent_runs` row writing, correlation
+/// IDs. Scheduler / file-change dispatch / cron loop land in follow-ups.
+pub mod runner;
 
 /// Prompt loader — splits `agents/<name>/prompt.md` on the cache-boundary
 /// marker into a `PromptStructured` per ADR 0010.
