@@ -2356,6 +2356,7 @@ dependencies = [
  "futures-util",
  "rand 0.8.6",
  "reqwest",
+ "rusqlite",
  "secrecy 0.8.0",
  "serde",
  "serde_json",
