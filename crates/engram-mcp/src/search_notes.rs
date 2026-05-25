@@ -115,13 +115,22 @@ pub struct ToolError {
 
 impl ToolError {
     fn bad_input(msg: impl Into<String>) -> Self {
-        Self { code: "bad_input".into(), message: msg.into() }
+        Self {
+            code: "bad_input".into(),
+            message: msg.into(),
+        }
     }
     fn vault_not_configured(msg: impl Into<String>) -> Self {
-        Self { code: "vault_not_configured".into(), message: msg.into() }
+        Self {
+            code: "vault_not_configured".into(),
+            message: msg.into(),
+        }
     }
     fn search_error(msg: impl Into<String>) -> Self {
-        Self { code: "search_error".into(), message: msg.into() }
+        Self {
+            code: "search_error".into(),
+            message: msg.into(),
+        }
     }
 }
 
@@ -150,9 +159,8 @@ pub fn handle(vault_root: &Path, input: SearchNotesInput) -> Result<SearchNotesO
         )));
     }
 
-    let conn = Connection::open(&db_path).map_err(|e| {
-        ToolError::vault_not_configured(format!("could not open engram.db: {e}"))
-    })?;
+    let conn = Connection::open(&db_path)
+        .map_err(|e| ToolError::vault_not_configured(format!("could not open engram.db: {e}")))?;
 
     let filter: SearchFilter = input.filter.into();
     let results = hybrid_search(&conn, &input.query, input.k, &filter).map_err(|e| match e {
@@ -212,7 +220,11 @@ mod tests {
     #[test]
     fn empty_query_returns_bad_input() {
         let (dir, _db) = setup_vault();
-        let input = SearchNotesInput { query: "  ".into(), k: 10, filter: FilterInput::default() };
+        let input = SearchNotesInput {
+            query: "  ".into(),
+            k: 10,
+            filter: FilterInput::default(),
+        };
         let err = handle(dir.path(), input).unwrap_err();
         assert_eq!(err.code, "bad_input");
     }
@@ -220,7 +232,11 @@ mod tests {
     #[test]
     fn k_zero_returns_bad_input() {
         let (dir, _db) = setup_vault();
-        let input = SearchNotesInput { query: "forty".into(), k: 0, filter: FilterInput::default() };
+        let input = SearchNotesInput {
+            query: "forty".into(),
+            k: 0,
+            filter: FilterInput::default(),
+        };
         let err = handle(dir.path(), input).unwrap_err();
         assert_eq!(err.code, "bad_input");
     }
@@ -228,7 +244,11 @@ mod tests {
     #[test]
     fn missing_db_returns_vault_not_configured() {
         let dir = TempDir::new().unwrap();
-        let input = SearchNotesInput { query: "test".into(), k: 5, filter: FilterInput::default() };
+        let input = SearchNotesInput {
+            query: "test".into(),
+            k: 5,
+            filter: FilterInput::default(),
+        };
         let err = handle(dir.path(), input).unwrap_err();
         assert_eq!(err.code, "vault_not_configured");
     }
@@ -259,7 +279,10 @@ mod tests {
         let input = SearchNotesInput {
             query: "forty".into(),
             k: 10,
-            filter: FilterInput { note_type: Some("evergreen".into()), ..Default::default() },
+            filter: FilterInput {
+                note_type: Some("evergreen".into()),
+                ..Default::default()
+            },
         };
         let out = handle(dir.path(), input).unwrap();
         assert_eq!(out.results.len(), 1);
