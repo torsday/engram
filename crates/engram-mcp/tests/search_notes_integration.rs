@@ -232,7 +232,9 @@ async fn search_notes_schema_validates() {
 
     // List tools and check search_notes schema is an object with required fields.
     client
-        .send(parse_msg(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#))
+        .send(parse_msg(
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+        ))
         .await
         .unwrap();
 

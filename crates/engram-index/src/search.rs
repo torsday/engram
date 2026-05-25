@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use rusqlite::{Connection, types::ToSql};
+use rusqlite::{types::ToSql, Connection};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -115,7 +115,9 @@ pub fn hybrid_search(
     // RRF accumulator: note_id → (accumulated_score, from_bm25, from_ann)
     let mut scores: HashMap<String, (f64, bool, bool)> = HashMap::new();
     for (rank, hit) in bm25_hits.iter().enumerate() {
-        let e = scores.entry(hit.note_id.clone()).or_insert((0.0, false, false));
+        let e = scores
+            .entry(hit.note_id.clone())
+            .or_insert((0.0, false, false));
         e.0 += rrf_score(rank);
         e.1 = true;
     }
@@ -143,7 +145,11 @@ pub fn hybrid_search(
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results.truncate(k);
     Ok(results)
 }
@@ -270,8 +276,20 @@ mod tests {
     #[test]
     fn basic_bm25_hit() {
         let conn = open_migrated();
-        insert_note(&conn, "n1", "Atomic Habits", "Small changes compound over time.", "evergreen");
-        insert_note(&conn, "n2", "Deep Work", "Focus is the new currency.", "evergreen");
+        insert_note(
+            &conn,
+            "n1",
+            "Atomic Habits",
+            "Small changes compound over time.",
+            "evergreen",
+        );
+        insert_note(
+            &conn,
+            "n2",
+            "Deep Work",
+            "Focus is the new currency.",
+            "evergreen",
+        );
 
         let results = hybrid_search(&conn, "compound", 10, &SearchFilter::default()).unwrap();
         assert_eq!(results.len(), 1);
@@ -305,10 +323,25 @@ mod tests {
     #[test]
     fn filter_by_note_type() {
         let conn = open_migrated();
-        insert_note(&conn, "e1", "Evergreen Note", "compound interest principle", "evergreen");
-        insert_note(&conn, "f1", "Fleeting Note", "compound idea today", "fleeting");
+        insert_note(
+            &conn,
+            "e1",
+            "Evergreen Note",
+            "compound interest principle",
+            "evergreen",
+        );
+        insert_note(
+            &conn,
+            "f1",
+            "Fleeting Note",
+            "compound idea today",
+            "fleeting",
+        );
 
-        let filter = SearchFilter { note_type: Some("evergreen".into()), ..Default::default() };
+        let filter = SearchFilter {
+            note_type: Some("evergreen".into()),
+            ..Default::default()
+        };
         let results = hybrid_search(&conn, "compound", 10, &filter).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].note_id, "e1");
@@ -317,11 +350,26 @@ mod tests {
     #[test]
     fn filter_by_tag() {
         let conn = open_migrated();
-        insert_note(&conn, "t1", "Tagged Note", "compound systems thinking", "evergreen");
-        insert_note(&conn, "t2", "Untagged Note", "compound unrelated content", "evergreen");
+        insert_note(
+            &conn,
+            "t1",
+            "Tagged Note",
+            "compound systems thinking",
+            "evergreen",
+        );
+        insert_note(
+            &conn,
+            "t2",
+            "Untagged Note",
+            "compound unrelated content",
+            "evergreen",
+        );
         insert_tag(&conn, "t1", "systems");
 
-        let filter = SearchFilter { tag: Some("systems".into()), ..Default::default() };
+        let filter = SearchFilter {
+            tag: Some("systems".into()),
+            ..Default::default()
+        };
         let results = hybrid_search(&conn, "compound", 10, &filter).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].note_id, "t1");
@@ -365,7 +413,13 @@ mod tests {
     #[test]
     fn result_fields_populated() {
         let conn = open_migrated();
-        insert_note(&conn, "fld-1", "Field Test", "The answer is forty-two.", "evergreen");
+        insert_note(
+            &conn,
+            "fld-1",
+            "Field Test",
+            "The answer is forty-two.",
+            "evergreen",
+        );
         let results = hybrid_search(&conn, "forty", 5, &SearchFilter::default()).unwrap();
         assert_eq!(results.len(), 1);
         let r = &results[0];

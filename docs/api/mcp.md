@@ -68,6 +68,53 @@ protocol-level failures (method not found, etc.).
 
 ---
 
+`search_notes` MCP tool — hybrid semantic search over the vault.
+
+Wraps [`engram_index::search::hybrid_search`] as an MCP tool. This
+module is a pure translation surface: no retrieval logic lives here.
+
+## Input schema
+
+```json
+{
+  "query": "<string>",                   // required
+  "k":     10,                           // optional, default 10
+  "filter": {                            // optional
+    "tag":       "<string>",
+    "type":      "<note_type>",
+    "since":     "<ISO-8601 timestamp>",
+    "author":    "<string>"
+  }
+}
+```
+
+## Output schema
+
+```json
+{
+  "results": [
+    {
+      "note_id":    "<ULID>",
+      "title":      "<string>",
+      "path":       "<vault-relative path>",
+      "snippet":    "<excerpt with <b>…</b> markers>",
+      "score":      0.015,
+      "provenance": "bm25" | "dense" | "both"
+    }
+  ]
+}
+```
+
+## Error codes
+
+| code                   | meaning                                        |
+|------------------------|------------------------------------------------|
+| `bad_input`            | Empty query or unparseable input JSON          |
+| `vault_not_configured` | Vault root is not a directory or DB is missing |
+| `search_error`         | SQLite / FTS5 error during search              |
+
+---
+
 `grep_notes` MCP tool — exact-string or regex lookup across vault markdown.
 
 Distinct from `search_notes` — no embeddings, no ranking, no relevance

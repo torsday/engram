@@ -308,8 +308,8 @@ impl Tool for SearchNotesTool {
     }
     fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
         let parsed = parse_input::<crate::search_notes::SearchNotesInput>(input)?;
-        let out = crate::search_notes::handle(vault_root, parsed)
-            .map_err(|e| adapt_tool_error!(e))?;
+        let out =
+            crate::search_notes::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }
