@@ -234,6 +234,7 @@ impl ToolRegistry {
 /// [`ToolRegistry::list`] to enumerate.
 pub fn default_registry() -> ToolRegistry {
     let mut r = ToolRegistry::new();
+    r.register(SearchNotesTool);
     r.register(GrepNotesTool);
     r.register(ReadNoteTool);
     r.register(FollowBacklinksTool);
@@ -264,6 +265,53 @@ macro_rules! adapt_tool_error {
             message: e.message,
         }
     }};
+}
+
+// ── search_notes ─────────────────────────────────────────────────────────
+
+struct SearchNotesTool;
+
+impl Tool for SearchNotesTool {
+    fn name(&self) -> &'static str {
+        "search_notes"
+    }
+    fn description(&self) -> &'static str {
+        "Hybrid semantic search (BM25 + RRF) across vault notes. Returns ranked results with snippets and provenance."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "required": ["query"],
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language or FTS5-syntax search query."
+                },
+                "k": {
+                    "type": "integer",
+                    "default": 10,
+                    "minimum": 1,
+                    "description": "Maximum number of results to return."
+                },
+                "filter": {
+                    "type": "object",
+                    "description": "Optional metadata filters.",
+                    "properties": {
+                        "tag":    { "type": "string", "description": "Only notes with this tag." },
+                        "type":   { "type": "string", "description": "Only notes of this note_type." },
+                        "since":  { "type": "string", "format": "date-time", "description": "Only notes modified at or after this ISO-8601 timestamp." },
+                        "author": { "type": "string", "description": "Only notes created by this author." }
+                    }
+                }
+            }
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = parse_input::<crate::search_notes::SearchNotesInput>(input)?;
+        let out = crate::search_notes::handle(vault_root, parsed)
+            .map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
 }
 
 // ── grep_notes ──────────────────────────────────────────────────────────
@@ -587,9 +635,10 @@ mod tests {
     }
 
     #[test]
-    fn default_registry_includes_the_four_shipped_tools() {
+    fn default_registry_includes_the_shipped_tools() {
         let r = default_registry();
         for expected in [
+            "search_notes",
             "grep_notes",
             "read_note",
             "follow_backlinks",

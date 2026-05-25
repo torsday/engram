@@ -31,4 +31,4 @@ pub mod embeddings;
 pub mod reconcile;
 
 /// Hybrid retrieval: BM25 + dense ANN + RRF fusion + cross-encoder rerank + graph expansion.
-pub mod search {}
+pub mod search;
