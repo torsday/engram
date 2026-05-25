@@ -27,4 +27,4 @@ pub mod tag_graph {}
 pub mod embeddings;
 
 /// Hybrid retrieval: BM25 + dense ANN + RRF fusion + cross-encoder rerank + graph expansion.
-pub mod search {}
+pub mod search;

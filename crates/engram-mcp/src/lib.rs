@@ -13,7 +13,7 @@ pub use rmcp_adapter::{serve_stdio, EngramMcpServer, ServeError};
 pub use server::{default_registry, Tool, ToolError, ToolMeta, ToolRegistry};
 
 /// `search_notes` — semantic hybrid search across the vault.
-pub mod search_notes {}
+pub mod search_notes;
 
 /// `grep_notes` — exact-string literal search.
 pub mod grep_notes;
