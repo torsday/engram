@@ -40,6 +40,7 @@ pub mod circuit_breaker;
 pub mod early_exit;
 mod error;
 pub mod escalating;
+pub mod estimator;
 #[cfg(feature = "mock-llm")]
 pub mod mock;
 pub mod ollama;
@@ -54,6 +55,9 @@ pub use circuit_breaker::{CircuitBreakerConfig, CircuitBreakerProvider, CircuitS
 pub use early_exit::{early_exit_drive, EarlyExitConfig, EarlyExitStream, StreamedOutcome};
 pub use error::{Error, Result};
 pub use escalating::{EscalatingProvider, EscalationConfig, EscalationReason, SchemaValidator};
+pub use estimator::{
+    estimate_cost, CalibrationStore, DefaultEstimator, EstimatedCost, TokenEstimate, TokenEstimator,
+};
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
 pub use provider::LlmProvider;
