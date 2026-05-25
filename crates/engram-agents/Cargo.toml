@@ -20,6 +20,9 @@ tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 toml = { workspace = true }
+async-trait = { workspace = true }
 
 [dev-dependencies]
+engram-llm = { workspace = true, features = ["mock-llm"] }
 tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
