@@ -49,11 +49,11 @@ Hybrid semantic search (BM25 + Reciprocal Rank Fusion) across vault notes.
 
 **Error codes:**
 
-| code | meaning |
-|------|---------|
-| `bad_input` | Empty query or invalid input |
+| code                   | meaning                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `bad_input`            | Empty query or invalid input                              |
 | `vault_not_configured` | `engram.db` not found at `<vault_root>/.engram/engram.db` |
-| `search_error` | SQLite/FTS5 error during search |
+| `search_error`         | SQLite/FTS5 error during search                           |
 
 ---
 
