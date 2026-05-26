@@ -33,6 +33,12 @@ pub mod scheduler {}
 /// IDs. Scheduler / file-change dispatch / cron loop land in follow-ups.
 pub mod runner;
 
+/// Invasiveness classifier — deterministic, no-LLM verdict over a diff
+/// summary per `01-agents-and-council.md` §Invasiveness classifier.
+/// Consumed by the decision-matrix slice (`confidence × invasiveness`
+/// auto-land gate).
+pub mod invasiveness;
+
 /// Prompt loader — splits `agents/<name>/prompt.md` on the cache-boundary
 /// marker into a `PromptStructured` per ADR 0010.
 pub mod prompt_loader;
