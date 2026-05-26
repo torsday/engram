@@ -39,6 +39,15 @@ pub mod runner;
 /// auto-land gate).
 pub mod invasiveness;
 
+/// Conservative text-level walker that produces a `DiffSummary` from a
+/// before/after content pair. Handles the easy cases (identical
+/// content, pure whitespace normalization, pure line insertion);
+/// everything else falls through to `modifies_existing_text_blocks`
+/// → Editorial (safe). The full markdown-AST walker (link removal,
+/// frontmatter critical-field detection, additive-kind safety) is a
+/// separate slice.
+pub mod diff_walker;
+
 /// Prompt loader — splits `agents/<name>/prompt.md` on the cache-boundary
 /// marker into a `PromptStructured` per ADR 0010.
 pub mod prompt_loader;
