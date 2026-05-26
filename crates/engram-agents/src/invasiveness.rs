@@ -107,7 +107,8 @@ impl Invasiveness {
 /// - `is_pure_metadata_normalization`: the only changes are tag
 ///   dedup, frontmatter key reordering, or trailing-whitespace trim
 ///   (the spec's three Mechanical-class kinds)
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DiffSummary {
     /// File create or delete.
     pub creates_or_deletes_files: bool,

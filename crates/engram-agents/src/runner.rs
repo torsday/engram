@@ -65,6 +65,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info_span, Instrument};
 
+use crate::invasiveness::{classify, DiffSummary, Invasiveness};
 use crate::locks::{LockError, LockManager};
 use crate::prompt_loader::{self, PromptLoadError};
 
@@ -250,10 +251,23 @@ pub struct AgentConfig {
     /// [`RunOutcome::NoAction`]. Default `0.85`.
     #[serde(default = "default_confidence_threshold")]
     pub confidence_threshold: f32,
+    /// Invasiveness ceiling per `01-agents-and-council.md` §Invasiveness
+    /// ceilings. When the response includes a `diff_summary`, the
+    /// runner calls [`crate::invasiveness::classify`] and only allows
+    /// [`RunOutcome::AutoLand`] if `verdict <= max_invasiveness`.
+    /// Responses without a `diff_summary` skip this gate (back-compat
+    /// with agents that don't yet structure their output that way).
+    /// Default `Editorial` — moderate ceiling per the spec.
+    #[serde(default = "default_max_invasiveness")]
+    pub max_invasiveness: Invasiveness,
 }
 
 fn default_confidence_threshold() -> f32 {
     0.85
+}
+
+fn default_max_invasiveness() -> Invasiveness {
+    Invasiveness::Editorial
 }
 
 impl AgentConfig {
@@ -287,6 +301,11 @@ pub struct RunReport {
     pub cost_cents: f64,
     /// Confidence parsed out of the response, if present.
     pub confidence: Option<f32>,
+    /// Invasiveness verdict produced by classifying the response's
+    /// `diff_summary` field, if present. `None` when the response
+    /// didn't include a `diff_summary` (the gate is then bypassed —
+    /// see `AgentConfig::max_invasiveness` docs).
+    pub invasiveness: Option<Invasiveness>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
@@ -442,58 +461,77 @@ impl AgentRunner {
             tokio::spawn(async move { provider.complete(&final_prompt, &model, &options).await });
         let join_result = join_handle.await;
 
-        let (outcome, input_tokens, output_tokens, cost_cents, confidence, response_text) =
-            match join_result {
-                Ok(Ok(completion)) => {
-                    let confidence = parse_confidence(&completion.text);
-                    let outcome = match confidence {
-                        Some(c) if c >= config.confidence_threshold => RunOutcome::AutoLand,
-                        _ => RunOutcome::NoAction,
-                    };
-                    (
-                        outcome,
-                        completion.usage.input_tokens_total,
-                        completion.usage.output_tokens,
-                        completion.cost.total_cents,
-                        confidence,
-                        completion.text,
-                    )
-                }
-                Ok(Err(e)) => {
-                    // Provider returned an error — record as Errored and
-                    // surface the message in the response slot so the
-                    // agent_runs row is a complete trail.
-                    (
-                        RunOutcome::Errored,
-                        0,
-                        0,
-                        0.0,
-                        None,
-                        format!("provider error: {e}"),
-                    )
-                }
-                Err(join_err) if join_err.is_panic() => {
-                    // Provider task panicked — best-effort extract the
-                    // payload's string for diagnostics. The runner's own
-                    // task remains healthy.
-                    let payload = join_err.into_panic();
-                    let msg = panic_payload_to_string(payload);
-                    (RunOutcome::Panicked, 0, 0, 0.0, None, msg)
-                }
-                Err(join_err) => {
-                    // Cancellation — `tokio::spawn` futures are not
-                    // cancelled by the runner; if this ever fires it's a
-                    // runtime-shutdown signal. Treat as Errored.
-                    (
-                        RunOutcome::Errored,
-                        0,
-                        0,
-                        0.0,
-                        None,
-                        format!("provider task cancelled: {join_err}"),
-                    )
-                }
-            };
+        let (
+            outcome,
+            input_tokens,
+            output_tokens,
+            cost_cents,
+            confidence,
+            invasiveness,
+            response_text,
+        ) = match join_result {
+            Ok(Ok(completion)) => {
+                let confidence = parse_confidence(&completion.text);
+                let invasiveness = parse_diff_summary(&completion.text).map(|d| classify(&d));
+                // Auto-land requires BOTH gates to pass:
+                //   confidence ≥ threshold  AND  invasiveness ≤ max
+                // If the response didn't include a diff_summary, only
+                // the confidence gate applies — back-compat for agents
+                // whose output schema doesn't yet structure the diff.
+                let confidence_ok = confidence.is_some_and(|c| c >= config.confidence_threshold);
+                let invasiveness_ok = invasiveness.is_none_or(|v| v <= config.max_invasiveness);
+                let outcome = if confidence_ok && invasiveness_ok {
+                    RunOutcome::AutoLand
+                } else {
+                    RunOutcome::NoAction
+                };
+                (
+                    outcome,
+                    completion.usage.input_tokens_total,
+                    completion.usage.output_tokens,
+                    completion.cost.total_cents,
+                    confidence,
+                    invasiveness,
+                    completion.text,
+                )
+            }
+            Ok(Err(e)) => {
+                // Provider returned an error — record as Errored and
+                // surface the message in the response slot so the
+                // agent_runs row is a complete trail.
+                (
+                    RunOutcome::Errored,
+                    0,
+                    0,
+                    0.0,
+                    None,
+                    None,
+                    format!("provider error: {e}"),
+                )
+            }
+            Err(join_err) if join_err.is_panic() => {
+                // Provider task panicked — best-effort extract the
+                // payload's string for diagnostics. The runner's own
+                // task remains healthy.
+                let payload = join_err.into_panic();
+                let msg = panic_payload_to_string(payload);
+                (RunOutcome::Panicked, 0, 0, 0.0, None, None, msg)
+            }
+            Err(join_err) => {
+                // Cancellation — `tokio::spawn` futures are not
+                // cancelled by the runner; if this ever fires it's a
+                // runtime-shutdown signal. Treat as Errored.
+                (
+                    RunOutcome::Errored,
+                    0,
+                    0,
+                    0.0,
+                    None,
+                    None,
+                    format!("provider task cancelled: {join_err}"),
+                )
+            }
+        };
 
         // Both `Errored` (provider-returned Err) and `Panicked` (provider
         // unwinding panic) count as failures for the boolean flag. `Deferred`
@@ -527,6 +565,7 @@ impl AgentRunner {
             output_tokens,
             cost_cents,
             confidence,
+            invasiveness,
             response_text,
         })
     }
@@ -593,6 +632,7 @@ impl AgentRunner {
             output_tokens: 0,
             cost_cents: 0.0,
             confidence: None,
+            invasiveness: None,
             response_text: reason,
         })
     }
@@ -652,6 +692,17 @@ fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
     } else {
         "provider panicked (non-string payload)".to_string()
     }
+}
+
+/// Best-effort extraction of `diff_summary` (a serialized
+/// [`DiffSummary`]) from a JSON response body. Non-JSON, missing-field,
+/// and parse-error cases return `None` so the invasiveness gate is
+/// bypassed (back-compat with agents that don't yet structure their
+/// output that way).
+fn parse_diff_summary(text: &str) -> Option<DiffSummary> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let field = v.get("diff_summary")?;
+    serde_json::from_value(field.clone()).ok()
 }
 
 /// Best-effort extraction of `confidence` (number in `[0, 1]`) from a JSON
@@ -1177,6 +1228,165 @@ trigger = "on_demand""#,
         assert!(s.contains("owned String panic"));
         let s = panic_payload_to_string(Box::new(42_u64));
         assert!(s.contains("non-string payload"));
+    }
+
+    /// High confidence + Structural verdict → NoAction (the
+    /// invasiveness gate blocks auto-land even at high confidence).
+    /// Mirrors the spec table: file create/delete always requires
+    /// human approval, never auto-lands.
+    #[tokio::test]
+    async fn structural_verdict_blocks_autoland_at_high_confidence() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(
+            r#"{"confidence": 0.95, "diff_summary": {"creates_or_deletes_files": true}}"#,
+        )]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            report.invasiveness,
+            Some(Invasiveness::Structural),
+            "diff classified as Structural"
+        );
+        assert_eq!(
+            report.outcome,
+            RunOutcome::NoAction,
+            "high confidence ALONE is not enough — Structural always blocks"
+        );
+    }
+
+    /// Mechanical verdict + high confidence → AutoLand. Both gates pass.
+    #[tokio::test]
+    async fn mechanical_verdict_lands_at_high_confidence() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "gardener",
+            r#"name = "gardener"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(
+            r#"{"confidence": 0.95, "diff_summary": {"is_pure_metadata_normalization": true}}"#,
+        )]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("gardener", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.invasiveness, Some(Invasiveness::Mechanical));
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+    }
+
+    /// A response with no `diff_summary` field bypasses the
+    /// invasiveness gate entirely — back-compat for agents whose output
+    /// schema doesn't yet structure the diff. Only the confidence gate
+    /// applies.
+    #[tokio::test]
+    async fn missing_diff_summary_bypasses_invasiveness_gate() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.95}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.invasiveness, None);
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+    }
+
+    /// `max_invasiveness = mechanical` ceiling: even an Additive
+    /// verdict blocks AutoLand. Documents the per-agent gate.
+    #[tokio::test]
+    async fn per_agent_ceiling_blocks_above_threshold_verdict() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "witness",
+            r#"name = "witness"
+trigger = "on_demand"
+confidence_threshold = 0.7
+max_invasiveness = "mechanical""#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        // Additive diff: new safe-kind block only.
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(
+            r#"{"confidence": 0.95, "diff_summary": {"adds_new_blocks_only": true, "additive_only_safe_kinds": true}}"#,
+        )]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("witness", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.invasiveness, Some(Invasiveness::Additive));
+        assert_eq!(
+            report.outcome,
+            RunOutcome::NoAction,
+            "Additive > Mechanical ceiling; auto-land blocked"
+        );
+    }
+
+    /// Malformed `diff_summary` (wrong shape) gracefully falls through
+    /// to "no verdict" rather than failing the run.
+    #[tokio::test]
+    async fn malformed_diff_summary_bypasses_gate_gracefully() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(
+            r#"{"confidence": 0.95, "diff_summary": "not an object"}"#,
+        )]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            report.invasiveness, None,
+            "unparseable summary → no verdict"
+        );
+        // Confidence gate still applies (and passes here), so AutoLand.
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
     }
 
     #[tokio::test]
