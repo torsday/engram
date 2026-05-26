@@ -132,6 +132,16 @@ pub enum AtomicWriteError {
         /// Intent id for diagnostics.
         intent: IntentId,
     },
+
+    /// `write_sidecar` was called on a session begun in markdown-only
+    /// mode. The session's contract excludes the sidecar entirely;
+    /// callers should either drop the sidecar write or use the
+    /// paired-mode [`AtomicWriteSession::begin`] constructor.
+    #[error("cannot write sidecar: intent {intent} was begun in markdown-only mode")]
+    SidecarNotPermitted {
+        /// Intent id for diagnostics.
+        intent: IntentId,
+    },
 }
 
 /// Crate-local `Result` alias.
@@ -154,21 +164,55 @@ pub type Result<T> = std::result::Result<T, AtomicWriteError>;
 /// `atomic_write_sessions` row remain — [`recover_orphaned`] cleans
 /// those up on the next startup. (A `tracing::warn!` flags the case so it doesn't
 /// pass silently in tests / dev.)
+/// Commit contract for an [`AtomicWriteSession`].
+///
+/// `Paired` requires both a markdown and a sidecar write before
+/// `commit()` succeeds — the original behaviour from migration 003,
+/// used by the curator's atomic markdown + sidecar + SQLite flow per
+/// ADR 0014.
+///
+/// `MarkdownOnly` skips the sidecar entirely — the constructor takes
+/// no sidecar path, `commit()` succeeds without a sidecar write,
+/// `rollback()` doesn't try to clean a sidecar tmp file, and
+/// [`recover_orphaned`] reads the session's `mode` column and applies
+/// the right semantics. Used by the agent runtime (#27) for its
+/// AutoLand write path, where sidecar generation is its own future
+/// slice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionMode {
+    /// Markdown + sidecar; commit requires both.
+    Paired,
+    /// Markdown only; sidecar is not part of the contract.
+    MarkdownOnly,
+}
+
+// `SessionMode` is purely runtime — the persisted form is the
+// `mode` TEXT column written as `'paired'` / `'markdown_only'`
+// inline in the INSERT statements. Keeping it that way avoids
+// an indirection that an `as_sql` helper would add.
+
 pub struct AtomicWriteSession {
     /// Owned ULID; once consumed by `commit`/`rollback` the session is
     /// invalid for further calls.
     intent_id: IntentId,
     /// Caller-provided agent name. Free-form.
     agent_id: String,
-    /// Final destinations.
+    /// Commit contract — see [`SessionMode`].
+    mode: SessionMode,
+    /// Final destination for the markdown body. Always set.
     target_path: PathBuf,
-    target_sidecar: PathBuf,
-    /// `.tmp` destinations. Computed once at `begin`.
+    /// `.tmp` destination for the markdown body. Always set.
     tmp_path: PathBuf,
-    tmp_sidecar: PathBuf,
-    /// Tracks which writes have happened — `commit` refuses if either is
-    /// missing.
+    /// Final destination for the sidecar JSON. `None` in markdown-only mode.
+    target_sidecar: Option<PathBuf>,
+    /// `.tmp` destination for the sidecar JSON. `None` in markdown-only mode.
+    tmp_sidecar: Option<PathBuf>,
+    /// Tracks whether the markdown write has happened — `commit` refuses
+    /// without it in either mode.
     wrote_markdown: bool,
+    /// Tracks whether the sidecar write has happened. In Paired mode
+    /// `commit` refuses without it; in MarkdownOnly mode it stays
+    /// `false` and is ignored.
     wrote_sidecar: bool,
     /// Suppresses the drop warning when commit/rollback completes.
     finalised: bool,
@@ -202,8 +246,8 @@ impl AtomicWriteSession {
 
         conn.execute(
             "INSERT INTO atomic_write_sessions \
-             (intent_id, agent_id, target_path, target_sidecar, expected_diff_hash, status, started_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, 'begun', ?6)",
+             (intent_id, agent_id, target_path, target_sidecar, expected_diff_hash, status, started_at, mode) \
+             VALUES (?1, ?2, ?3, ?4, ?5, 'begun', ?6, 'paired')",
             params![
                 intent_id.as_str(),
                 &agent_id,
@@ -217,14 +261,74 @@ impl AtomicWriteSession {
         Ok(Self {
             intent_id,
             agent_id,
+            mode: SessionMode::Paired,
             target_path,
-            target_sidecar,
             tmp_path,
-            tmp_sidecar,
+            target_sidecar: Some(target_sidecar),
+            tmp_sidecar: Some(tmp_sidecar),
             wrote_markdown: false,
             wrote_sidecar: false,
             finalised: false,
         })
+    }
+
+    /// Begin a markdown-only session. Same as [`begin`] but no sidecar
+    /// path is required: `commit()` succeeds with just `write_markdown`,
+    /// `rollback()` doesn't try to clean a sidecar tmp, and
+    /// [`recover_orphaned`] reads the session's `mode` column to apply
+    /// the right semantics.
+    ///
+    /// The `target_sidecar` column in `atomic_write_sessions` is set to
+    /// an empty string for markdown-only sessions — recovery checks
+    /// `mode` first and ignores the sidecar column in that case.
+    ///
+    /// Used by the agent runtime (#27) for AutoLand writes where sidecar
+    /// generation is its own future slice.
+    pub fn begin_markdown_only(
+        conn: &Connection,
+        agent_id: impl Into<String>,
+        target_path: impl Into<PathBuf>,
+        expected_diff_hash: impl Into<String>,
+    ) -> Result<Self> {
+        let agent_id = agent_id.into();
+        let target_path = target_path.into();
+        let expected_diff_hash = expected_diff_hash.into();
+        let intent_id = IntentId::new();
+
+        let tmp_path = tmp_name(&target_path, &intent_id);
+
+        let started_at = chrono::DateTime::<chrono::Utc>::from(SystemTime::now()).to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO atomic_write_sessions \
+             (intent_id, agent_id, target_path, target_sidecar, expected_diff_hash, status, started_at, mode) \
+             VALUES (?1, ?2, ?3, '', ?4, 'begun', ?5, 'markdown_only')",
+            params![
+                intent_id.as_str(),
+                &agent_id,
+                target_path.to_string_lossy(),
+                &expected_diff_hash,
+                &started_at,
+            ],
+        )?;
+
+        Ok(Self {
+            intent_id,
+            agent_id,
+            mode: SessionMode::MarkdownOnly,
+            target_path,
+            tmp_path,
+            target_sidecar: None,
+            tmp_sidecar: None,
+            wrote_markdown: false,
+            wrote_sidecar: false,
+            finalised: false,
+        })
+    }
+
+    /// The commit contract this session was begun with.
+    pub fn mode(&self) -> SessionMode {
+        self.mode
     }
 
     /// The ULID assigned to this session.
@@ -242,15 +346,24 @@ impl AtomicWriteSession {
 
     /// Serialize and write the sidecar JSON to its temporary file, fsync,
     /// and mark it as having been written.
+    ///
+    /// Errors with [`AtomicWriteError::SidecarNotPermitted`] when the
+    /// session was begun in markdown-only mode.
     pub fn write_sidecar(&mut self, json: &Value) -> Result<()> {
+        let tmp_sidecar =
+            self.tmp_sidecar
+                .as_ref()
+                .ok_or_else(|| AtomicWriteError::SidecarNotPermitted {
+                    intent: self.intent_id.clone(),
+                })?;
         // Pretty-print so a human reading the file on disk sees the same
         // shape Obsidian-side tools would dump; the exact serialization
         // shouldn't affect correctness.
         let bytes = serde_json::to_vec_pretty(json).map_err(|e| AtomicWriteError::Io {
-            path: self.tmp_sidecar.clone(),
+            path: tmp_sidecar.clone(),
             source: std::io::Error::other(e.to_string()),
         })?;
-        write_tmp_fsync(&self.tmp_sidecar, &bytes)?;
+        write_tmp_fsync(tmp_sidecar, &bytes)?;
         self.wrote_sidecar = true;
         Ok(())
     }
@@ -275,7 +388,7 @@ impl AtomicWriteSession {
                 intent: self.intent_id.clone(),
             });
         }
-        if !self.wrote_sidecar {
+        if matches!(self.mode, SessionMode::Paired) && !self.wrote_sidecar {
             return Err(AtomicWriteError::NothingToCommit {
                 what: "sidecar",
                 intent: self.intent_id.clone(),
@@ -283,7 +396,11 @@ impl AtomicWriteSession {
         }
 
         atomic_rename(&self.tmp_path, &self.target_path)?;
-        atomic_rename(&self.tmp_sidecar, &self.target_sidecar)?;
+        // Sidecar rename only when paired; markdown-only sessions
+        // never wrote a sidecar tmp.
+        if let (Some(tmp_sc), Some(target_sc)) = (&self.tmp_sidecar, &self.target_sidecar) {
+            atomic_rename(tmp_sc, target_sc)?;
+        }
 
         let committed_at = chrono::DateTime::<chrono::Utc>::from(SystemTime::now()).to_rfc3339();
         txn.execute(
@@ -311,11 +428,13 @@ impl AtomicWriteSession {
                 source: e,
             })?;
         }
-        if self.tmp_sidecar.exists() {
-            std::fs::remove_file(&self.tmp_sidecar).map_err(|e| AtomicWriteError::Io {
-                path: self.tmp_sidecar.clone(),
-                source: e,
-            })?;
+        if let Some(tmp_sidecar) = &self.tmp_sidecar {
+            if tmp_sidecar.exists() {
+                std::fs::remove_file(tmp_sidecar).map_err(|e| AtomicWriteError::Io {
+                    path: tmp_sidecar.clone(),
+                    source: e,
+                })?;
+            }
         }
 
         conn.execute(
@@ -373,7 +492,7 @@ impl RecoveryReport {
 /// (no `begun` rows → empty report).
 pub fn recover_orphaned(conn: &Connection) -> Result<RecoveryReport> {
     let mut stmt = conn.prepare(
-        "SELECT intent_id, target_path, target_sidecar FROM atomic_write_sessions \
+        "SELECT intent_id, target_path, target_sidecar, mode FROM atomic_write_sessions \
          WHERE status='begun' ORDER BY started_at ASC",
     )?;
     let rows = stmt
@@ -382,6 +501,7 @@ pub fn recover_orphaned(conn: &Connection) -> Result<RecoveryReport> {
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
             ))
         })?
         .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -390,39 +510,61 @@ pub fn recover_orphaned(conn: &Connection) -> Result<RecoveryReport> {
     let mut report = RecoveryReport::default();
     let now = chrono::DateTime::<chrono::Utc>::from(SystemTime::now()).to_rfc3339();
 
-    for (intent_id_str, target_path_str, target_sidecar_str) in rows {
+    for (intent_id_str, target_path_str, target_sidecar_str, mode_str) in rows {
         let intent_id = IntentId(intent_id_str);
         let target_path = PathBuf::from(&target_path_str);
-        let target_sidecar = PathBuf::from(&target_sidecar_str);
         let tmp_path = tmp_name(&target_path, &intent_id);
-        let tmp_sidecar = tmp_name(&target_sidecar, &intent_id);
+        let is_paired = mode_str.as_str() == "paired";
 
-        if tmp_path.exists() && tmp_sidecar.exists() {
-            // Both present → replay the renames.
+        // Build optional sidecar paths only when the session was paired
+        // — markdown-only sessions stored an empty target_sidecar at
+        // begin() time and have no companion tmp file.
+        let (target_sidecar, tmp_sidecar): (Option<PathBuf>, Option<PathBuf>) = if is_paired {
+            let target_sidecar = PathBuf::from(&target_sidecar_str);
+            let tmp_sidecar = tmp_name(&target_sidecar, &intent_id);
+            (Some(target_sidecar), Some(tmp_sidecar))
+        } else {
+            (None, None)
+        };
+
+        // "Tmp(s) present" → ready to commit. For paired mode this
+        // requires BOTH .tmp files; for markdown-only just the markdown.
+        let ready_to_commit = if is_paired {
+            tmp_path.exists() && tmp_sidecar.as_ref().is_some_and(|p| p.exists())
+        } else {
+            tmp_path.exists()
+        };
+
+        if ready_to_commit {
             atomic_rename(&tmp_path, &target_path)?;
-            atomic_rename(&tmp_sidecar, &target_sidecar)?;
+            if let (Some(tmp_sc), Some(target_sc)) = (&tmp_sidecar, &target_sidecar) {
+                atomic_rename(tmp_sc, target_sc)?;
+            }
             conn.execute(
                 "UPDATE atomic_write_sessions SET status='committed', committed_at=?2 WHERE intent_id=?1",
                 params![intent_id.as_str(), &now],
             )?;
             tracing::info!(
                 intent = %intent_id,
+                mode = %mode_str,
                 "engram-index atomic_writes: recovered orphan intent → committed"
             );
             report.committed.push(intent_id);
         } else {
-            // Either or both missing → rollback. Remove any survivor.
+            // Rollback: remove any survivor tmp(s).
             if tmp_path.exists() {
                 std::fs::remove_file(&tmp_path).map_err(|e| AtomicWriteError::Io {
                     path: tmp_path.clone(),
                     source: e,
                 })?;
             }
-            if tmp_sidecar.exists() {
-                std::fs::remove_file(&tmp_sidecar).map_err(|e| AtomicWriteError::Io {
-                    path: tmp_sidecar.clone(),
-                    source: e,
-                })?;
+            if let Some(tmp_sc) = &tmp_sidecar {
+                if tmp_sc.exists() {
+                    std::fs::remove_file(tmp_sc).map_err(|e| AtomicWriteError::Io {
+                        path: tmp_sc.clone(),
+                        source: e,
+                    })?;
+                }
             }
             conn.execute(
                 "UPDATE atomic_write_sessions SET status='rolled_back' WHERE intent_id=?1",
@@ -430,6 +572,7 @@ pub fn recover_orphaned(conn: &Connection) -> Result<RecoveryReport> {
             )?;
             tracing::info!(
                 intent = %intent_id,
+                mode = %mode_str,
                 "engram-index atomic_writes: recovered orphan intent → rolled_back"
             );
             report.rolled_back.push(intent_id);
@@ -749,5 +892,166 @@ mod tests {
         let b = IntentId::new();
         assert_ne!(a, b, "two fresh ULIDs must differ");
         assert_eq!(a.as_str().len(), 26);
+    }
+
+    // ── markdown-only mode ───────────────────────────────────────────
+
+    #[test]
+    fn markdown_only_commit_succeeds_without_sidecar_write() {
+        let mut conn = fresh_db();
+        let p = vault_paths();
+        let mut s = AtomicWriteSession::begin_markdown_only(&conn, "linker", &p.md, "deadbeef")
+            .expect("begin_markdown_only");
+        assert_eq!(s.mode(), SessionMode::MarkdownOnly);
+        s.write_markdown("# only the body\n").unwrap();
+        let intent = s.intent_id().clone();
+        let mut txn = conn.transaction().unwrap();
+        s.commit(&mut txn).unwrap();
+        txn.commit().unwrap();
+
+        assert!(p.md.exists(), "final markdown must exist");
+        assert!(
+            !p.sidecar.exists(),
+            "sidecar must NOT exist in markdown-only mode"
+        );
+
+        let (status, mode): (String, String) = conn
+            .query_row(
+                "SELECT status, mode FROM atomic_write_sessions WHERE intent_id=?1",
+                params![intent.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(status, "committed");
+        assert_eq!(mode, "markdown_only");
+    }
+
+    #[test]
+    fn markdown_only_commit_without_markdown_still_errors() {
+        // The markdown-only relaxation removes the sidecar requirement
+        // but NOT the markdown requirement — a session that never
+        // wrote markdown is still NothingToCommit.
+        let mut conn = fresh_db();
+        let p = vault_paths();
+        let s = AtomicWriteSession::begin_markdown_only(&conn, "linker", &p.md, "x").unwrap();
+        let mut txn = conn.transaction().unwrap();
+        let err = s.commit(&mut txn).unwrap_err();
+        assert!(matches!(
+            err,
+            AtomicWriteError::NothingToCommit {
+                what: "markdown",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn markdown_only_write_sidecar_errors() {
+        let conn = fresh_db();
+        let p = vault_paths();
+        let mut s = AtomicWriteSession::begin_markdown_only(&conn, "linker", &p.md, "x").unwrap();
+        let err = s.write_sidecar(&json!({})).unwrap_err();
+        assert!(matches!(err, AtomicWriteError::SidecarNotPermitted { .. }));
+    }
+
+    #[test]
+    fn markdown_only_rollback_does_not_touch_sidecar() {
+        let conn = fresh_db();
+        let p = vault_paths();
+        let mut s = AtomicWriteSession::begin_markdown_only(&conn, "linker", &p.md, "x").unwrap();
+        s.write_markdown("body\n").unwrap();
+        let intent = s.intent_id().clone();
+        // Pre-existing sidecar at the expected path should be left
+        // alone — markdown-only never owns it.
+        std::fs::create_dir_all(p.sidecar.parent().unwrap()).unwrap();
+        std::fs::write(&p.sidecar, "pre-existing").unwrap();
+
+        s.rollback(&conn).unwrap();
+
+        let status: String = conn
+            .query_row(
+                "SELECT status FROM atomic_write_sessions WHERE intent_id=?1",
+                params![intent.as_str()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(status, "rolled_back");
+        // Markdown tmp gone, pre-existing sidecar untouched.
+        let tmp_path = tmp_name(&p.md, &intent);
+        assert!(!tmp_path.exists());
+        assert_eq!(std::fs::read_to_string(&p.sidecar).unwrap(), "pre-existing");
+    }
+
+    #[test]
+    fn recovery_replays_markdown_only_orphan() {
+        // Simulate a process death after write_markdown but before
+        // commit on a markdown-only session: the row is `begun`, the
+        // .tmp file is on disk, recover_orphaned should rename and
+        // mark committed.
+        let conn = fresh_db();
+        let p = vault_paths();
+        {
+            let mut s =
+                AtomicWriteSession::begin_markdown_only(&conn, "linker", &p.md, "x").unwrap();
+            s.write_markdown("orphaned body\n").unwrap();
+            s.finalised = true; // suppress the drop warning; we're simulating death
+        }
+        let report = recover_orphaned(&conn).unwrap();
+        assert_eq!(report.committed.len(), 1);
+        assert_eq!(report.rolled_back.len(), 0);
+        assert!(p.md.exists());
+        assert_eq!(std::fs::read_to_string(&p.md).unwrap(), "orphaned body\n");
+        assert!(
+            !p.sidecar.exists(),
+            "recovery must not create a sidecar for markdown-only sessions"
+        );
+    }
+
+    #[test]
+    fn recovery_rolls_back_markdown_only_orphan_with_missing_tmp() {
+        let conn = fresh_db();
+        let p = vault_paths();
+        {
+            // Begin but never write — .tmp missing.
+            let s = AtomicWriteSession::begin_markdown_only(&conn, "linker", &p.md, "x").unwrap();
+            std::mem::forget(s); // simulate death between begin and write_markdown
+        }
+        let report = recover_orphaned(&conn).unwrap();
+        assert_eq!(report.committed.len(), 0);
+        assert_eq!(report.rolled_back.len(), 1);
+    }
+
+    #[test]
+    fn mixed_mode_recovery_classifies_each_correctly() {
+        // One paired-mode orphan (both .tmps present) → committed.
+        // One markdown-only orphan (just .md.tmp present) → committed.
+        // Recovery walks both correctly using the `mode` column.
+        let conn = fresh_db();
+        let dir1 = tempfile::tempdir().unwrap();
+        let dir2 = tempfile::tempdir().unwrap();
+
+        // Paired session.
+        let md1 = dir1.path().join("a.md");
+        let sc1 = dir1.path().join(".engram/sidecar/a.json");
+        {
+            let mut s = AtomicWriteSession::begin(&conn, "ag", &md1, &sc1, "h1").unwrap();
+            s.write_markdown("paired body\n").unwrap();
+            s.write_sidecar(&json!({"id": "1"})).unwrap();
+            s.finalised = true;
+        }
+
+        // Markdown-only session.
+        let md2 = dir2.path().join("b.md");
+        {
+            let mut s = AtomicWriteSession::begin_markdown_only(&conn, "ag", &md2, "h2").unwrap();
+            s.write_markdown("md-only body\n").unwrap();
+            s.finalised = true;
+        }
+
+        let report = recover_orphaned(&conn).unwrap();
+        assert_eq!(report.committed.len(), 2);
+        assert!(md1.exists());
+        assert!(sc1.exists());
+        assert!(md2.exists());
     }
 }

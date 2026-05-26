@@ -1,0 +1,28 @@
+-- Migration 005: atomic_write_sessions.mode column
+--
+-- Distinguishes paired (markdown + sidecar) and markdown-only sessions
+-- so the recovery pass in atomic_writes::recover_orphaned can correctly
+-- handle each.
+--
+-- Background: the original AtomicWriteSession (migration 003) required
+-- both a markdown write and a sidecar write to land together — the
+-- right semantic for the curator's "atomic markdown + sidecar +
+-- SQLite" flow per ADR 0014. The agent runtime (#27) needs to write
+-- only markdown for its first AutoLand pass; sidecar generation is its
+-- own substantial design problem that doesn't need to block first
+-- writes.
+--
+-- The new `mode` column carries the session's commit contract:
+--
+-- - `paired`         — markdown + sidecar; commit fails without both
+--                      writes; recovery checks both .tmp files
+-- - `markdown_only`  — markdown only; commit succeeds without a
+--                      sidecar write; recovery ignores the sidecar
+--                      column entirely
+--
+-- Default is `paired` so historical rows (and any new rows from
+-- callers that haven't migrated to the new constructor) get the
+-- original behaviour. New `begin_markdown_only` constructor sets it
+-- explicitly to `markdown_only`.
+
+ALTER TABLE atomic_write_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'paired';
