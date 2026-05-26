@@ -676,6 +676,33 @@ impl AgentRunner {
             .map(|c| validate_change_path(&self.vault_root, &c.path))
             .collect();
 
+        // Path-rejection gate: an AutoLand that would write to any
+        // rejected path is downgraded to NoAction. This is the third
+        // gate, layered on top of confidence + invasiveness — together
+        // the three gates make `outcome == AutoLand` a strong signal
+        // for the future write-side slice: "every proposed path is
+        // safe to write at." Coarse-grained (any rejection blocks the
+        // whole run) because per-entry write-side partial-success
+        // semantics are their own design problem; if it turns out we
+        // need partial application a future slice can refine.
+        let outcome = if matches!(outcome, RunOutcome::AutoLand)
+            && path_validation
+                .iter()
+                .any(|v| matches!(v, PathValidation::Rejected(_)))
+        {
+            let rejected_count = path_validation
+                .iter()
+                .filter(|v| matches!(v, PathValidation::Rejected(_)))
+                .count();
+            tracing::warn!(
+                rejected = rejected_count,
+                "downgrading AutoLand → NoAction: {rejected_count} proposed path(s) rejected"
+            );
+            RunOutcome::NoAction
+        } else {
+            outcome
+        };
+
         // Both `Errored` (provider-returned Err) and `Panicked` (provider
         // unwinding panic) count as failures for the boolean flag. `Deferred`
         // is a resource conflict, not a failure.
@@ -2229,6 +2256,157 @@ confidence_threshold = 0.7"#,
 
         assert!(report.proposed_changes.is_empty());
         assert!(report.path_validation.is_empty());
+    }
+
+    /// AutoLand requires every proposed path to validate. A high-
+    /// confidence response with one valid + one rejected path now
+    /// resolves to NoAction (the path-validation gate downgrades).
+    /// Closes the loop between path validation and the auto-land
+    /// decision.
+    #[tokio::test]
+    async fn rejected_path_downgrades_autoland_to_no_action() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "proposed_changes": [
+                    {"path": "notes/good.md", "new_content": "body"},
+                    {"path": "../escape.md", "new_content": "body"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            report.outcome,
+            RunOutcome::NoAction,
+            "high confidence ALONE is not enough — any rejected path downgrades AutoLand"
+        );
+        // Confidence and invasiveness were both satisfied; the path
+        // validation gate is what blocked AutoLand.
+        assert_eq!(report.confidence, Some(0.95));
+        // path_validation is still index-aligned and surfaces the bad
+        // entry so the caller can diagnose.
+        assert_eq!(report.path_validation.len(), 2);
+        assert_eq!(report.path_validation[0], PathValidation::Ok);
+        assert!(matches!(
+            report.path_validation[1],
+            PathValidation::Rejected(_)
+        ));
+    }
+
+    /// A run with no proposed_changes still resolves to AutoLand at
+    /// high confidence — the path-validation gate is a no-op when
+    /// nothing was proposed.
+    #[tokio::test]
+    async fn empty_proposed_changes_does_not_block_autoland() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        // High confidence, no proposed_changes — should AutoLand.
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.95}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert!(report.proposed_changes.is_empty());
+        assert!(report.path_validation.is_empty());
+    }
+
+    /// A run with ALL proposed paths Ok at high confidence resolves
+    /// to AutoLand. All three gates (confidence, invasiveness, paths)
+    /// pass together.
+    #[tokio::test]
+    async fn all_valid_paths_at_high_confidence_autolands() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "proposed_changes": [
+                    {"path": "notes/one.md", "new_content": "body"},
+                    {"path": "notes/two.md", "new_content": "body"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert_eq!(report.path_validation.len(), 2);
+        assert!(report
+            .path_validation
+            .iter()
+            .all(|v| matches!(v, PathValidation::Ok)));
+    }
+
+    /// Rejection ALSO blocks AutoLand for a low-confidence run — the
+    /// run is already NoAction; the gate is a no-op in that case but
+    /// the rejections still surface in path_validation for
+    /// diagnostics.
+    #[tokio::test]
+    async fn no_action_with_rejections_still_surfaces_rejections() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.9"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.3,
+                "proposed_changes": [
+                    {"path": "../outside.md", "new_content": "x"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::NoAction);
+        assert!(matches!(
+            report.path_validation[0],
+            PathValidation::Rejected(_)
+        ));
     }
 
     #[tokio::test]
