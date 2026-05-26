@@ -65,6 +65,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info_span, Instrument};
 
+use crate::locks::{LockError, LockManager};
 use crate::prompt_loader::{self, PromptLoadError};
 
 /// Errors raised by [`AgentRunner::run_agent`].
@@ -128,6 +129,12 @@ pub enum RunOutcome {
     CouncilConvened,
     /// The provider returned an error or the response was malformed.
     Errored,
+    /// Could not acquire the per-note lock (another agent holds it). The
+    /// caller may retry later. No provider call was made and no cost was
+    /// incurred. Surfaced to Pacekeeper in v2.1 per #27 implementation
+    /// notes; today the agent layer can re-queue or drop on its own
+    /// schedule.
+    Deferred,
 }
 
 impl RunOutcome {
@@ -137,6 +144,7 @@ impl RunOutcome {
             Self::NoAction => "no_action",
             Self::CouncilConvened => "council_convened",
             Self::Errored => "errored",
+            Self::Deferred => "deferred",
         }
     }
 }
@@ -287,6 +295,7 @@ pub struct AgentRunner {
     provider: Arc<dyn LlmProvider>,
     model: Model,
     agents_dir: PathBuf,
+    locks: LockManager,
 }
 
 impl AgentRunner {
@@ -299,17 +308,24 @@ impl AgentRunner {
     /// - `model` — the concrete `Model` to invoke for this runner
     ///   (per-tier selection is the escalating wrapper's job)
     /// - `agents_dir` — root of the `agents/` directory tree on disk
+    /// - `locks` — per-note advisory lock manager; the runner acquires a
+    ///   lock for any trigger that names a note (`OnDemand` with `note_id`,
+    ///   `FileChange`) and holds it across the provider call. On
+    ///   acquisition failure the run returns [`RunOutcome::Deferred`]
+    ///   without contacting the provider
     pub fn new(
         sqlite: Arc<Mutex<Connection>>,
         provider: Arc<dyn LlmProvider>,
         model: Model,
         agents_dir: PathBuf,
+        locks: LockManager,
     ) -> Self {
         Self {
             sqlite,
             provider,
             model,
             agents_dir,
+            locks,
         }
     }
 
@@ -372,6 +388,29 @@ impl AgentRunner {
                 ],
             )?;
         }
+
+        // Acquire the per-note advisory lock for triggers that name a
+        // note. `LockManager::acquire` is sync (std::thread::sleep in its
+        // jittered backoff); run it on a blocking task so we don't stall
+        // the async executor when contended. On AcquisitionFailed we mark
+        // the run Deferred without contacting the provider — no tokens
+        // burned, no cost incurred.
+        //
+        // The guard binds the lock to this task; the RAII Drop releases
+        // it when the function returns (including panic unwind). Drop the
+        // guard explicitly after the provider call so the borrow is clear
+        // to future maintainers, even though it would drop at scope end.
+        let _lock_guard = match trigger.note_id() {
+            Some(note_id) => match self.try_acquire_note_lock(note_id, name).await {
+                Ok(guard) => Some(guard),
+                Err(reason) => {
+                    return self
+                        .finalize_deferred(&run_id, &correlation_id, name, reason)
+                        .await;
+                }
+            },
+            None => None,
+        };
 
         // Render the dynamic tail with the trigger's context. Today this
         // is a minimal `{{trigger}}` / `{{note_id}}` substitution; future
@@ -452,6 +491,72 @@ impl AgentRunner {
             cost_cents,
             confidence,
             response_text,
+        })
+    }
+
+    /// Attempt to acquire the per-note advisory lock. `LockManager::acquire`
+    /// is synchronous (it does its own jittered-backoff retries via
+    /// `std::thread::sleep`), so we wrap the call in `spawn_blocking` to
+    /// keep the async executor responsive when there's contention.
+    async fn try_acquire_note_lock(
+        &self,
+        note_id: &str,
+        holder: &str,
+    ) -> Result<crate::locks::LockGuard, String> {
+        let locks = self.locks.clone();
+        let note_id_owned = note_id.to_string();
+        let holder_owned = holder.to_string();
+        let result =
+            tokio::task::spawn_blocking(move || locks.acquire(&note_id_owned, &holder_owned, None))
+                .await
+                .map_err(|join_err| format!("lock-acquire task panicked: {join_err}"))?;
+        result.map_err(|e| match e {
+            LockError::AcquisitionFailed {
+                current_holder,
+                expires_at,
+                ..
+            } => format!("lock held by `{current_holder}` until {expires_at}; deferred"),
+            LockError::Sqlite(msg) => format!("lock sqlite error: {msg}"),
+        })
+    }
+
+    /// Write the terminal `agent_runs` row for a deferred run (no
+    /// provider call made) and return the `RunReport`.
+    async fn finalize_deferred(
+        &self,
+        run_id: &str,
+        correlation_id: &str,
+        name: &str,
+        reason: String,
+    ) -> Result<RunReport, RunnerError> {
+        let completed_at = Utc::now().to_rfc3339();
+        {
+            let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+            conn.execute(
+                "UPDATE agent_runs SET completed_at = ?1, outcome = ?2, \
+                 input_tokens = ?3, output_tokens = ?4, cost_cents = ?5, errored = ?6 \
+                 WHERE id = ?7",
+                rusqlite::params![
+                    completed_at,
+                    RunOutcome::Deferred.as_sql(),
+                    0_i64,
+                    0_i64,
+                    0.0_f64,
+                    0_i64,
+                    run_id,
+                ],
+            )?;
+        }
+        Ok(RunReport {
+            run_id: run_id.to_string(),
+            correlation_id: correlation_id.to_string(),
+            agent: name.to_string(),
+            outcome: RunOutcome::Deferred,
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_cents: 0.0,
+            confidence: None,
+            response_text: reason,
         })
     }
 
@@ -616,6 +721,46 @@ mod tests {
         Arc::new(Mutex::new(conn))
     }
 
+    /// Default LockManager for tests — fast retries so the contended-lock
+    /// test resolves in tens of milliseconds rather than the production
+    /// default's 300+ ms.
+    fn test_locks(sqlite: &Arc<Mutex<Connection>>) -> LockManager {
+        LockManager::new(
+            Arc::clone(sqlite),
+            crate::locks::LockConfig {
+                ttl_secs: 60,
+                max_retries: 2,
+                retry_base_ms: 5,
+            },
+        )
+    }
+
+    /// Insert a minimal `notes` row so the `note_locks` foreign-key
+    /// constraint is satisfied for lock-acquisition tests.
+    fn insert_note_stub(sqlite: &Arc<Mutex<Connection>>, note_id: &str) {
+        let conn = sqlite.lock().unwrap();
+        conn.execute(
+            "INSERT INTO notes (id, path, title, note_type, content) \
+             VALUES (?1, ?2, ?3, 'evergreen', '')",
+            rusqlite::params![note_id, format!("{note_id}.md"), note_id],
+        )
+        .unwrap();
+    }
+
+    fn make_runner(
+        sqlite: &Arc<Mutex<Connection>>,
+        provider: Arc<dyn LlmProvider>,
+        agents_dir: &Path,
+    ) -> AgentRunner {
+        AgentRunner::new(
+            Arc::clone(sqlite),
+            provider,
+            test_model(),
+            agents_dir.to_path_buf(),
+            test_locks(sqlite),
+        )
+    }
+
     fn write_agent(root: &Path, name: &str, config_toml: &str, prompt_body: &str) {
         let dir = root.join(name);
         std::fs::create_dir_all(&dir).unwrap();
@@ -670,12 +815,7 @@ confidence_threshold = 0.7"#,
         );
         let sqlite = setup_sqlite();
         let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let report = runner
             .run_agent("linker", TriggerContext::OnDemand { note_id: None })
@@ -712,12 +852,7 @@ confidence_threshold = 0.7"#,
         );
         let sqlite = setup_sqlite();
         let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.4}"#)]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let report = runner
             .run_agent("linker", TriggerContext::OnDemand { note_id: None })
@@ -742,12 +877,7 @@ trigger = "on_demand""#,
         );
         let sqlite = setup_sqlite();
         let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"value": 42}"#)]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let report = runner
             .run_agent("linker", TriggerContext::OnDemand { note_id: None })
@@ -770,12 +900,7 @@ trigger = "on_demand""#,
         );
         let sqlite = setup_sqlite();
         let provider = Arc::new(ScriptedProvider::new(vec![Err("boom")]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let report = runner
             .run_agent("linker", TriggerContext::OnDemand { note_id: None })
@@ -800,17 +925,129 @@ trigger = "on_demand""#,
         assert_eq!(row.output_tokens, Some(0));
     }
 
+    /// When two runs target the same note ID and arrive close enough that the
+    /// LockManager's backoff retries don't outlast the first holder, the
+    /// second run resolves as Deferred — no provider call made, cost zero,
+    /// `agent_runs.outcome = 'deferred'`.
+    #[tokio::test]
+    async fn concurrent_runs_on_same_note_one_is_deferred() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "file_change""#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        insert_note_stub(&sqlite, "01HK00000000000000000000LL");
+
+        // Manually acquire the lock first to guarantee contention — we
+        // don't want test-timing to decide which of two racing runs wins.
+        let locks = test_locks(&sqlite);
+        let _held = locks
+            .acquire("01HK00000000000000000000LL", "other-holder", None)
+            .expect("pre-acquire");
+
+        // Now invoke the runner against that note. Both `OnDemand` with a
+        // note_id and `FileChange` should defer; exercise both.
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent(
+                "linker",
+                TriggerContext::FileChange {
+                    note_id: "01HK00000000000000000000LL".to_string(),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::Deferred);
+        assert_eq!(report.cost_cents, 0.0);
+        assert_eq!(report.input_tokens, 0);
+        assert_eq!(report.output_tokens, 0);
+        assert!(report.response_text.contains("held by `other-holder`"));
+
+        let row = agent_runs_row(&sqlite, &report.run_id);
+        assert_eq!(row.outcome.as_deref(), Some("deferred"));
+        assert_eq!(row.errored, 0, "deferred is not an error");
+        assert!(row.completed_at.is_some());
+    }
+
+    /// Triggers with no note_id (Cron, Council, OnDemand{None}) bypass lock
+    /// acquisition entirely — no contention possible because there's no
+    /// note to lock.
+    #[tokio::test]
+    async fn cron_trigger_does_not_attempt_lock() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "cron""#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        insert_note_stub(&sqlite, "01HK00000000000000000000UN");
+        // Pre-hold a lock on an unrelated note — the cron-triggered run
+        // should ignore it and proceed.
+        let _held = test_locks(&sqlite)
+            .acquire("01HK00000000000000000000UN", "other-holder", None)
+            .expect("pre-acquire");
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.95}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::Cron)
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert_eq!(report.input_tokens, 100);
+    }
+
+    /// After a successful run releases the note lock (RAII Drop), a
+    /// follow-up run on the same note acquires cleanly.
+    #[tokio::test]
+    async fn lock_releases_after_run_so_next_run_succeeds() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "file_change""#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        insert_note_stub(&sqlite, "01HK00000000000000000000RL");
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(r#"{"confidence": 0.95}"#),
+            Ok(r#"{"confidence": 0.95}"#),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+        let trigger = || TriggerContext::FileChange {
+            note_id: "01HK00000000000000000000RL".to_string(),
+        };
+
+        let first = runner.run_agent("linker", trigger()).await.unwrap();
+        assert_eq!(first.outcome, RunOutcome::AutoLand);
+
+        let second = runner.run_agent("linker", trigger()).await.unwrap();
+        assert_eq!(
+            second.outcome,
+            RunOutcome::AutoLand,
+            "second run on same note must succeed after first guard drops"
+        );
+    }
+
     #[tokio::test]
     async fn missing_agent_dir_errors_before_db_write() {
         let tmp = tempdir().unwrap();
         let sqlite = setup_sqlite();
         let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let err = runner
             .run_agent("nope", TriggerContext::OnDemand { note_id: None })
@@ -838,12 +1075,7 @@ trigger = "on_demand""#,
         );
         let sqlite = setup_sqlite();
         let provider = Arc::new(ScriptedProvider::new(vec![]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let err = runner
             .run_agent("linker", TriggerContext::OnDemand { note_id: None })
@@ -870,13 +1102,9 @@ trigger = "file_change""#,
             DEMO_PROMPT,
         );
         let sqlite = setup_sqlite();
+        insert_note_stub(&sqlite, "01HK000000000000000000000A");
         let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.95}"#)]));
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
-            provider,
-            test_model(),
-            tmp.path().to_path_buf(),
-        );
+        let runner = make_runner(&sqlite, provider, tmp.path());
 
         let report = runner
             .run_agent(
@@ -949,11 +1177,10 @@ trigger = "on_demand""#,
         let provider = Arc::new(CapturingProvider {
             captured: StdMutex::new(None),
         });
-        let runner = AgentRunner::new(
-            Arc::clone(&sqlite),
+        let runner = make_runner(
+            &sqlite,
             Arc::clone(&provider) as Arc<dyn LlmProvider>,
-            test_model(),
-            tmp.path().to_path_buf(),
+            tmp.path(),
         );
 
         let report = runner
