@@ -26,8 +26,11 @@ pub mod action_log;
 /// Agent identity, configuration, and lifecycle (ready → running → done).
 pub mod identity {}
 
-/// Agent scheduler: triggers (file-watch, cron, on-demand) and concurrency limits.
-pub mod scheduler {}
+/// Agent scheduler: spawns one tokio task per `Cron`-trigger agent
+/// (interval-based) and one per `FileChange`-trigger agent
+/// (broadcast-subscribed). Graceful shutdown via `CancellationToken`.
+/// See [`scheduler::SchedulerHandle`].
+pub mod scheduler;
 
 /// Agent runner: on-demand invocation, `agent_runs` row writing, correlation
 /// IDs. Scheduler / file-change dispatch / cron loop land in follow-ups.

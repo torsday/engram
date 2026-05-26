@@ -263,6 +263,13 @@ pub struct AgentConfig {
     /// Default `Editorial` — moderate ceiling per the spec.
     #[serde(default = "default_max_invasiveness")]
     pub max_invasiveness: Invasiveness,
+    /// Tick period for the [`crate::scheduler`] cron loop when this
+    /// agent's `trigger == Cron`. Ignored for other trigger kinds.
+    /// Default `60` seconds — matches the v1 design's "minute-scale
+    /// background work" cadence. Set to a small value (e.g. `1`) in
+    /// tests that drive the scheduler with `tokio::time::pause`.
+    #[serde(default = "default_cron_interval_secs")]
+    pub cron_interval_secs: u64,
 }
 
 fn default_confidence_threshold() -> f32 {
@@ -271,6 +278,10 @@ fn default_confidence_threshold() -> f32 {
 
 fn default_max_invasiveness() -> Invasiveness {
     Invasiveness::Editorial
+}
+
+fn default_cron_interval_secs() -> u64 {
+    60
 }
 
 impl AgentConfig {
@@ -1112,6 +1123,19 @@ impl AgentRunner {
     /// The list of agents is itself returned via `Result` so that
     /// directory-scan failures (permissions, missing root) surface
     /// loudly.
+    /// Peek at an agent's `(trigger_kind, cron_interval_secs)` without
+    /// running it. Used by the scheduler to decide which dispatcher
+    /// to spawn for each configured agent. Goes through the same
+    /// hot-reload cache the runner uses for `run_agent`, so a
+    /// successful call warms the cache for the imminent first run.
+    pub fn peek_trigger_and_period(&self, name: &str) -> Result<(TriggerKind, u64), RunnerError> {
+        let cached = self.load_cached(name)?;
+        Ok((
+            cached.config.trigger.clone(),
+            cached.config.cron_interval_secs,
+        ))
+    }
+
     pub fn health_check(&self) -> Result<Vec<AgentHealth>, RunnerError> {
         let names = self.list_configured_agents()?;
         let mut report = Vec::with_capacity(names.len());
