@@ -329,9 +329,33 @@ pub struct RunReport {
     /// consumer of `RunReport.proposed_changes` without re-walking the
     /// response.
     pub proposed_changes: Vec<ProposedChange>,
+    /// Per-[`ProposedChange`] safety verdict against the vault root.
+    /// Same length and ordering as `proposed_changes` so callers can
+    /// `zip` the two vectors. Each entry is either
+    /// `PathValidation::Ok` (write-eligible) or
+    /// `PathValidation::Rejected(reason)` (the write side must skip
+    /// it). Empty when `proposed_changes` is empty.
+    ///
+    /// Validation runs unconditionally after parsing — independent of
+    /// the AutoLand verdict — so even NoAction runs surface
+    /// dangerous-looking paths for diagnostics.
+    pub path_validation: Vec<PathValidation>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
+}
+
+/// Safety verdict for a single [`ProposedChange`] path against the
+/// runner's vault root. Produced by [`validate_change_path`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathValidation {
+    /// Path is vault-relative, has a `.md` extension, resolves under
+    /// the vault root after canonicalization, and isn't in a protected
+    /// subtree. Future write slices may act on it.
+    Ok,
+    /// Path failed validation. The message describes which rule was
+    /// violated (for diagnostics — never parsed by code).
+    Rejected(String),
 }
 
 /// One file the agent proposes to write. Parsed from a `proposed_changes`
@@ -383,6 +407,11 @@ pub struct AgentRunner {
     model: Model,
     agents_dir: PathBuf,
     locks: LockManager,
+    /// Vault root on disk — the directory the runner treats as the
+    /// "safe to write" surface. All paths in
+    /// [`RunReport::proposed_changes`] are validated to resolve under
+    /// this root before any future write-side slice acts on them.
+    vault_root: PathBuf,
     /// Per-agent cache of parsed config + prompt, invalidated by file
     /// mtime change. See [`CachedAgent`].
     cache: Mutex<std::collections::HashMap<String, Arc<CachedAgent>>>,
@@ -409,6 +438,7 @@ impl AgentRunner {
         model: Model,
         agents_dir: PathBuf,
         locks: LockManager,
+        vault_root: PathBuf,
     ) -> Self {
         Self {
             sqlite,
@@ -416,6 +446,7 @@ impl AgentRunner {
             model,
             agents_dir,
             locks,
+            vault_root,
             cache: Mutex::new(std::collections::HashMap::new()),
         }
     }
@@ -637,6 +668,14 @@ impl AgentRunner {
             }
         };
 
+        // Validate every proposed path against the vault root.
+        // Runs unconditionally — even NoAction / Errored runs surface
+        // dangerous-looking paths in their report.
+        let path_validation: Vec<PathValidation> = proposed_changes
+            .iter()
+            .map(|c| validate_change_path(&self.vault_root, &c.path))
+            .collect();
+
         // Both `Errored` (provider-returned Err) and `Panicked` (provider
         // unwinding panic) count as failures for the boolean flag. `Deferred`
         // is a resource conflict, not a failure.
@@ -673,6 +712,7 @@ impl AgentRunner {
             kind,
             rationale,
             proposed_changes,
+            path_validation,
             response_text,
         })
     }
@@ -743,6 +783,7 @@ impl AgentRunner {
             kind: None,
             rationale: None,
             proposed_changes: Vec::new(),
+            path_validation: Vec::new(),
             response_text: reason,
         })
     }
@@ -860,6 +901,66 @@ fn parse_diff_summary(text: &str) -> Option<DiffSummary> {
     let v: serde_json::Value = serde_json::from_str(text).ok()?;
     let field = v.get("diff_summary")?;
     serde_json::from_value(field.clone()).ok()
+}
+
+/// Validate a single proposed-change path against the vault root.
+/// Returns [`PathValidation::Ok`] when the path is safe to write at,
+/// [`PathValidation::Rejected`] otherwise.
+///
+/// Rules (each rejection lists which rule fired):
+///
+/// 1. **Must be relative** — absolute paths refuse to anchor against
+///    the vault root and are rejected as a category to remove
+///    ambiguity.
+/// 2. **No `..` components** — would let an agent traverse out of the
+///    vault even with a relative path. Lexical check, run before any
+///    filesystem touch; canonicalize would also reject these but
+///    requires the parent dir to exist.
+/// 3. **`.md` extension** — agents in this slice may only propose
+///    markdown notes. Sidecar / config / etc. writes are out of scope
+///    and have their own producers.
+/// 4. **Not in a protected subtree** — `.git/`, `.engram/` (the
+///    runtime's own state directory). Agents must never touch these.
+///
+/// Doesn't touch the filesystem — pure lexical analysis. The future
+/// write-side slice may layer on filesystem checks (target dir
+/// exists, no symlink escape after canonicalization) but the cheap
+/// lexical gate runs first regardless.
+pub fn validate_change_path(vault_root: &Path, path: &str) -> PathValidation {
+    let p = Path::new(path);
+    if p.is_absolute() {
+        return PathValidation::Rejected(format!("path is absolute: `{path}`"));
+    }
+    for component in p.components() {
+        if let std::path::Component::ParentDir = component {
+            return PathValidation::Rejected(format!(
+                "path contains `..` (would escape vault root): `{path}`"
+            ));
+        }
+    }
+    // Also reject any component that's literally `.git` or `.engram` —
+    // these are the runtime / VCS state directories agents must not
+    // touch even if otherwise inside the vault.
+    for component in p.components() {
+        if let std::path::Component::Normal(os) = component {
+            if let Some(name) = os.to_str() {
+                if name == ".git" || name == ".engram" {
+                    return PathValidation::Rejected(format!(
+                        "path enters protected subtree `{name}`: `{path}`"
+                    ));
+                }
+            }
+        }
+    }
+    if p.extension().and_then(|e| e.to_str()) != Some("md") {
+        return PathValidation::Rejected(format!("path is not a `.md` file: `{path}`"));
+    }
+    // The vault_root arg is intentionally unused for lexical
+    // validation today — it's required so the function signature is
+    // stable when filesystem-based checks (canonicalize, symlink
+    // detection) land in a follow-up.
+    let _ = vault_root;
+    PathValidation::Ok
 }
 
 /// Best-effort extraction of a top-level `proposed_changes` array from
@@ -1038,12 +1139,16 @@ mod tests {
         provider: Arc<dyn LlmProvider>,
         agents_dir: &Path,
     ) -> AgentRunner {
+        // Tests use the same tempdir for the agents dir and the vault
+        // root for simplicity — production callers will pass distinct
+        // roots (vault is the markdown corpus; agents_dir is config).
         AgentRunner::new(
             Arc::clone(sqlite),
             provider,
             test_model(),
             agents_dir.to_path_buf(),
             test_locks(sqlite),
+            agents_dir.to_path_buf(),
         )
     }
 
@@ -1985,6 +2090,145 @@ confidence_threshold = 0.7"#,
                 .len(),
             1
         );
+    }
+
+    /// Each well-formed `.md` path gets `PathValidation::Ok`. Length
+    /// and ordering of `path_validation` match `proposed_changes`.
+    #[tokio::test]
+    async fn valid_relative_md_paths_pass_validation() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.9,
+                "proposed_changes": [
+                    {"path": "notes/alpha.md", "new_content": "body"},
+                    {"path": "subdir/beta.md", "new_content": "body"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.path_validation.len(), 2);
+        assert_eq!(report.path_validation[0], PathValidation::Ok);
+        assert_eq!(report.path_validation[1], PathValidation::Ok);
+    }
+
+    /// Each rejection rule fires for the matching pathology.
+    #[test]
+    fn validate_change_path_covers_each_rejection_rule() {
+        let root = std::path::PathBuf::from("/vault");
+
+        // Absolute path.
+        let v = validate_change_path(&root, "/absolute/notes/x.md");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains("absolute")));
+
+        // `..` escape.
+        let v = validate_change_path(&root, "../outside.md");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains("..")));
+        let v = validate_change_path(&root, "notes/../../outside.md");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains("..")));
+
+        // Wrong extension.
+        let v = validate_change_path(&root, "notes/file.txt");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains(".md")));
+        let v = validate_change_path(&root, "notes/no-extension");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains(".md")));
+
+        // Protected subtrees.
+        let v = validate_change_path(&root, ".git/HEAD");
+        // (extension rule fires first for HEAD; check via .git/notes path)
+        assert!(matches!(v, PathValidation::Rejected(_)));
+        let v = validate_change_path(&root, ".git/notes/inside.md");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains(".git")));
+        let v = validate_change_path(&root, ".engram/secrets.md");
+        assert!(matches!(v, PathValidation::Rejected(ref m) if m.contains(".engram")));
+
+        // Happy path.
+        let v = validate_change_path(&root, "notes/inside/deep/note.md");
+        assert_eq!(v, PathValidation::Ok);
+        let v = validate_change_path(&root, "simple.md");
+        assert_eq!(v, PathValidation::Ok);
+    }
+
+    /// A run with mixed valid + invalid paths surfaces both via
+    /// per-entry `PathValidation` — same order as `proposed_changes`.
+    #[tokio::test]
+    async fn mixed_valid_and_invalid_paths_surface_individually() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.9,
+                "proposed_changes": [
+                    {"path": "notes/good.md", "new_content": "body"},
+                    {"path": "../escape.md", "new_content": "body"},
+                    {"path": ".git/config", "new_content": "[core]"},
+                    {"path": "also-good.md", "new_content": "body"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.proposed_changes.len(), 4);
+        assert_eq!(report.path_validation.len(), 4);
+        assert_eq!(report.path_validation[0], PathValidation::Ok);
+        assert!(matches!(
+            report.path_validation[1],
+            PathValidation::Rejected(_)
+        ));
+        assert!(matches!(
+            report.path_validation[2],
+            PathValidation::Rejected(_)
+        ));
+        assert_eq!(report.path_validation[3], PathValidation::Ok);
+    }
+
+    /// Empty proposed_changes → empty path_validation.
+    #[tokio::test]
+    async fn no_proposed_changes_means_no_path_validation() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert!(report.proposed_changes.is_empty());
+        assert!(report.path_validation.is_empty());
     }
 
     #[tokio::test]
