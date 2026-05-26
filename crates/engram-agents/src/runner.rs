@@ -265,6 +265,11 @@ pub struct RunReport {
     pub input_tokens: u32,
     /// Output tokens reported by the provider.
     pub output_tokens: u32,
+    /// Total per-invocation cost in US cents, computed by the provider
+    /// from `usage` against the static price table. `0.0` when the
+    /// provider's model is not in the price table (e.g. test mocks) or
+    /// when the call errored before producing a [`Cost`].
+    pub cost_cents: f64,
     /// Confidence parsed out of the response, if present.
     pub confidence: Option<f32>,
     /// Raw response text (kept so callers can route to action-log /
@@ -385,7 +390,7 @@ impl AgentRunner {
             .complete(&final_prompt, &self.model, &CompleteOptions::default())
             .await;
 
-        let (outcome, input_tokens, output_tokens, confidence, response_text) =
+        let (outcome, input_tokens, output_tokens, cost_cents, confidence, response_text) =
             match completion_result {
                 Ok(completion) => {
                     let confidence = parse_confidence(&completion.text);
@@ -397,6 +402,7 @@ impl AgentRunner {
                         outcome,
                         completion.usage.input_tokens_total,
                         completion.usage.output_tokens,
+                        completion.cost.total_cents,
                         confidence,
                         completion.text,
                     )
@@ -409,18 +415,30 @@ impl AgentRunner {
                         RunOutcome::Errored,
                         0,
                         0,
+                        0.0,
                         None,
                         format!("provider error: {e}"),
                     )
                 }
             };
 
+        let errored = matches!(outcome, RunOutcome::Errored) as i64;
         let completed_at = Utc::now().to_rfc3339();
         {
             let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
             conn.execute(
-                "UPDATE agent_runs SET completed_at = ?1, outcome = ?2 WHERE id = ?3",
-                rusqlite::params![completed_at, outcome.as_sql(), run_id],
+                "UPDATE agent_runs SET completed_at = ?1, outcome = ?2, \
+                 input_tokens = ?3, output_tokens = ?4, cost_cents = ?5, errored = ?6 \
+                 WHERE id = ?7",
+                rusqlite::params![
+                    completed_at,
+                    outcome.as_sql(),
+                    input_tokens as i64,
+                    output_tokens as i64,
+                    cost_cents,
+                    errored,
+                    run_id,
+                ],
             )?;
         }
 
@@ -431,6 +449,7 @@ impl AgentRunner {
             outcome,
             input_tokens,
             output_tokens,
+            cost_cents,
             confidence,
             response_text,
         })
@@ -552,7 +571,13 @@ mod tests {
                         output_tokens: 25,
                         ..Default::default()
                     },
-                    cost: Cost::unknown(),
+                    cost: Cost {
+                        input_cents: 1.0,
+                        cache_create_cents: 0.0,
+                        cache_read_cents: 0.0,
+                        output_cents: 2.0,
+                        total_cents: 3.0,
+                    },
                     model_used: format!("mock/{}", model.name),
                     latency_ms: 1,
                 }),
@@ -600,20 +625,33 @@ mod tests {
 
     const DEMO_PROMPT: &str = "You are a tester.\n\n<!-- /cache -->\n\nTrigger: {{trigger}}\nNote: {{note_id}}\nCorrelation: {{correlation_id}}\n";
 
-    fn agent_runs_row(
-        sqlite: &Arc<Mutex<Connection>>,
-        run_id: &str,
-    ) -> (String, Option<String>, Option<String>) {
+    /// Helper: snapshot the lifecycle columns of one `agent_runs` row.
+    struct PersistedRun {
+        agent_name: String,
+        completed_at: Option<String>,
+        outcome: Option<String>,
+        input_tokens: Option<i64>,
+        output_tokens: Option<i64>,
+        cost_cents: Option<f64>,
+        errored: i64,
+    }
+
+    fn agent_runs_row(sqlite: &Arc<Mutex<Connection>>, run_id: &str) -> PersistedRun {
         let conn = sqlite.lock().unwrap();
         conn.query_row(
-            "SELECT agent_name, completed_at, outcome FROM agent_runs WHERE id = ?1",
+            "SELECT agent_name, completed_at, outcome, input_tokens, output_tokens, \
+             cost_cents, errored FROM agent_runs WHERE id = ?1",
             rusqlite::params![run_id],
             |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                ))
+                Ok(PersistedRun {
+                    agent_name: row.get(0)?,
+                    completed_at: row.get(1)?,
+                    outcome: row.get(2)?,
+                    input_tokens: row.get(3)?,
+                    output_tokens: row.get(4)?,
+                    cost_cents: row.get(5)?,
+                    errored: row.get(6)?,
+                })
             },
         )
         .unwrap()
@@ -648,11 +686,17 @@ confidence_threshold = 0.7"#,
         assert_eq!(report.confidence, Some(0.9));
         assert_eq!(report.input_tokens, 100);
         assert_eq!(report.output_tokens, 25);
+        // Mock provider returns Cost { total_cents: 3.0, .. } per call.
+        assert_eq!(report.cost_cents, 3.0);
 
-        let (name, completed, outcome) = agent_runs_row(&sqlite, &report.run_id);
-        assert_eq!(name, "linker");
-        assert!(completed.is_some());
-        assert_eq!(outcome.as_deref(), Some("auto_land"));
+        let row = agent_runs_row(&sqlite, &report.run_id);
+        assert_eq!(row.agent_name, "linker");
+        assert!(row.completed_at.is_some());
+        assert_eq!(row.outcome.as_deref(), Some("auto_land"));
+        assert_eq!(row.input_tokens, Some(100));
+        assert_eq!(row.output_tokens, Some(25));
+        assert_eq!(row.cost_cents, Some(3.0));
+        assert_eq!(row.errored, 0);
     }
 
     #[tokio::test]
@@ -681,8 +725,9 @@ confidence_threshold = 0.7"#,
             .unwrap();
 
         assert_eq!(report.outcome, RunOutcome::NoAction);
-        let (_, _, outcome) = agent_runs_row(&sqlite, &report.run_id);
-        assert_eq!(outcome.as_deref(), Some("no_action"));
+        let row = agent_runs_row(&sqlite, &report.run_id);
+        assert_eq!(row.outcome.as_deref(), Some("no_action"));
+        assert_eq!(row.errored, 0);
     }
 
     #[tokio::test]
@@ -738,13 +783,21 @@ trigger = "on_demand""#,
             .unwrap();
 
         assert_eq!(report.outcome, RunOutcome::Errored);
+        assert_eq!(report.cost_cents, 0.0);
         assert!(report.response_text.contains("boom"));
-        let (_, completed, outcome) = agent_runs_row(&sqlite, &report.run_id);
+        let row = agent_runs_row(&sqlite, &report.run_id);
         assert!(
-            completed.is_some(),
+            row.completed_at.is_some(),
             "completed_at must be set even on provider error"
         );
-        assert_eq!(outcome.as_deref(), Some("errored"));
+        assert_eq!(row.outcome.as_deref(), Some("errored"));
+        assert_eq!(
+            row.errored, 1,
+            "errored bool must be set for filter queries"
+        );
+        assert_eq!(row.cost_cents, Some(0.0));
+        assert_eq!(row.input_tokens, Some(0));
+        assert_eq!(row.output_tokens, Some(0));
     }
 
     #[tokio::test]
