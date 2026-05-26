@@ -65,6 +65,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info_span, Instrument};
 
+use engram_index::atomic_writes::{AtomicWriteError, AtomicWriteSession};
+
 use crate::invasiveness::{classify, DiffSummary, Invasiveness};
 use crate::locks::{LockError, LockManager};
 use crate::prompt_loader::{self, PromptLoadError};
@@ -340,9 +342,37 @@ pub struct RunReport {
     /// the AutoLand verdict — so even NoAction runs surface
     /// dangerous-looking paths for diagnostics.
     pub path_validation: Vec<PathValidation>,
+    /// Per-[`ProposedChange`] write verdict produced when the AutoLand
+    /// path was taken. Same length and ordering as `proposed_changes`
+    /// when populated; empty when no writes were attempted (NoAction,
+    /// Errored, Panicked, Deferred, or AutoLand with empty
+    /// `proposed_changes`). Each entry is either
+    /// [`WriteResult::Written`] (file is on disk at the resolved
+    /// path) or [`WriteResult::Failed`] (with the underlying error
+    /// message; the file is in whatever state the failure left it —
+    /// usually no change, since the `.tmp` rename is atomic).
+    ///
+    /// Writes are per-file independent: a failure on one entry does
+    /// not abort the loop, and other entries may still succeed. This
+    /// matches the at-most-once-per-file semantics the agent layer
+    /// expects from `atomic_writes`.
+    pub write_results: Vec<WriteResult>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
+}
+
+/// Per-file outcome from the AutoLand write phase. See
+/// [`RunReport::write_results`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteResult {
+    /// The file landed at the resolved vault path. The string is the
+    /// resolved absolute path for diagnostics.
+    Written(String),
+    /// The write attempt failed. The string is the error message
+    /// (typed errors are flattened to a string at this boundary so
+    /// `RunReport` stays `Clone + Eq` for tests).
+    Failed(String),
 }
 
 /// Safety verdict for a single [`ProposedChange`] path against the
@@ -703,6 +733,27 @@ impl AgentRunner {
             outcome
         };
 
+        // AutoLand write phase: actually land each ProposedChange via
+        // markdown-only atomic_writes sessions. Per-file independent —
+        // a failure on one entry doesn't abort the loop; other entries
+        // may still succeed. The three gates that produced AutoLand
+        // (confidence × invasiveness × path validation) already
+        // guarantee every path resolves safely under vault_root, so
+        // this loop doesn't re-validate.
+        let write_results: Vec<WriteResult> =
+            if matches!(outcome, RunOutcome::AutoLand) && !proposed_changes.is_empty() {
+                proposed_changes
+                    .iter()
+                    .map(|change| {
+                        self.land_one_change(name, change, &response_text)
+                            .map(WriteResult::Written)
+                            .unwrap_or_else(WriteResult::Failed)
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+
         // Both `Errored` (provider-returned Err) and `Panicked` (provider
         // unwinding panic) count as failures for the boolean flag. `Deferred`
         // is a resource conflict, not a failure.
@@ -740,8 +791,68 @@ impl AgentRunner {
             rationale,
             proposed_changes,
             path_validation,
+            write_results,
             response_text,
         })
+    }
+
+    /// Land one [`ProposedChange`] on disk via an
+    /// [`AtomicWriteSession::begin_markdown_only`] session: writes
+    /// to a `.tmp.<intent>` file, fsyncs, atomically renames into
+    /// place, marks the intent committed inside a fresh transaction.
+    ///
+    /// `diff_hash_input` is a placeholder hash basis (today: the
+    /// response text); a future slice can compute a per-file diff
+    /// hash from the before/after content. The hash isn't enforced
+    /// by `atomic_writes` — it's recorded for audit / recovery so a
+    /// stale replay can be detected.
+    ///
+    /// Returns the resolved absolute path on success, an error
+    /// message on failure. Either way the per-change result feeds
+    /// into [`RunReport::write_results`].
+    fn land_one_change(
+        &self,
+        agent_name: &str,
+        change: &ProposedChange,
+        diff_hash_input: &str,
+    ) -> std::result::Result<String, String> {
+        // Path validation has already passed (we only enter here when
+        // outcome == AutoLand, which the path-validation gate forces
+        // to NoAction on any rejection). Resolve under vault_root.
+        let target_path = self.vault_root.join(&change.path);
+        // Hash basis is response_text for now; a future slice can
+        // compute a real per-file diff hash.
+        let diff_hash = sha256_hex(diff_hash_input);
+
+        // Begin (autocommit INSERT against the bare connection).
+        let mut session = {
+            let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+            AtomicWriteSession::begin_markdown_only(&conn, agent_name, &target_path, &diff_hash)
+                .map_err(|e| format!("begin: {e}"))?
+        };
+
+        // Write the markdown body to the .tmp file (no DB).
+        if let Err(e) = session.write_markdown(&change.new_content) {
+            // Best-effort rollback to clean the begun-row + any
+            // partial .tmp; if rollback itself fails we still surface
+            // the original write error.
+            let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+            let _ = session.rollback(&conn);
+            return Err(format!("write_markdown: {e}"));
+        }
+
+        // Commit inside a fresh transaction. Held in its own scope
+        // so the conn mutex releases promptly.
+        {
+            let mut conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+            let mut txn = conn.transaction().map_err(|e| format!("txn: {e}"))?;
+            session
+                .commit(&mut txn)
+                .map_err(|e: AtomicWriteError| format!("commit: {e}"))?;
+            txn.commit().map_err(|e| format!("txn.commit: {e}"))?;
+        }
+
+        Ok(target_path.to_string_lossy().into_owned())
     }
 
     /// Attempt to acquire the per-note advisory lock. `LockManager::acquire`
@@ -811,6 +922,7 @@ impl AgentRunner {
             rationale: None,
             proposed_changes: Vec::new(),
             path_validation: Vec::new(),
+            write_results: Vec::new(),
             response_text: reason,
         })
     }
@@ -976,6 +1088,15 @@ fn render_dynamic_tail(
     }
     vars.insert("correlation_id", correlation_id);
     prompt_loader::render_tail(&prompt.dynamic_tail, &vars)
+}
+
+/// SHA-256 hex of `data`. Used for the placeholder `expected_diff_hash`
+/// passed to `AtomicWriteSession` (a real per-file diff hash lands
+/// when the AST walker can emit unified diffs; until then the response
+/// text is a deterministic identifier of the run's intent).
+fn sha256_hex(data: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(data.as_bytes()))
 }
 
 /// Best-effort stringify of a tokio task panic payload. The payload is
@@ -2626,6 +2747,164 @@ confidence_threshold = 0.7"#,
         assert!(names.is_empty());
         let report = runner.health_check().unwrap();
         assert!(report.is_empty());
+    }
+
+    /// AutoLand with valid proposed_changes actually lands the files
+    /// on disk via atomic_writes. RunReport.write_results captures
+    /// each per-file outcome.
+    #[tokio::test]
+    async fn autoland_with_valid_changes_lands_files_on_disk() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "proposed_changes": [
+                    {"path": "notes/alpha.md", "new_content": "# Alpha\n\nlanded body."},
+                    {"path": "notes/beta.md", "new_content": "# Beta\n"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert_eq!(report.write_results.len(), 2);
+        for r in &report.write_results {
+            assert!(
+                matches!(r, WriteResult::Written(_)),
+                "expected Written, got {r:?}"
+            );
+        }
+        // Files actually exist with the expected content.
+        let alpha = tmp.path().join("notes/alpha.md");
+        let beta = tmp.path().join("notes/beta.md");
+        assert!(alpha.exists(), "alpha.md must exist on disk");
+        assert!(beta.exists(), "beta.md must exist on disk");
+        assert_eq!(
+            std::fs::read_to_string(&alpha).unwrap(),
+            "# Alpha\n\nlanded body."
+        );
+    }
+
+    /// NoAction with proposed_changes does NOT touch disk. The
+    /// 3-gate AutoLand invariant means write_results is empty for any
+    /// non-AutoLand outcome.
+    #[tokio::test]
+    async fn no_action_does_not_write_files() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.5,
+                "proposed_changes": [
+                    {"path": "notes/never.md", "new_content": "should not land"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::NoAction);
+        assert!(
+            report.write_results.is_empty(),
+            "NoAction must not attempt writes"
+        );
+        assert!(
+            !tmp.path().join("notes/never.md").exists(),
+            "no file should land for NoAction"
+        );
+    }
+
+    /// AutoLand with empty proposed_changes is a no-op for writes —
+    /// outcome AutoLand without files to write produces an empty
+    /// write_results, not an error.
+    #[tokio::test]
+    async fn autoland_with_no_proposed_changes_is_write_noop() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.95}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert!(report.write_results.is_empty());
+    }
+
+    /// A run that writes one file successfully and overwrites it on
+    /// a follow-up call shows the second content — atomic-write
+    /// semantics (replace, not append).
+    #[tokio::test]
+    async fn second_autoland_overwrites_first() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(
+                r##"{"confidence": 0.95, "proposed_changes": [{"path": "notes/x.md", "new_content": "v1"}]}"##,
+            ),
+            Ok(
+                r##"{"confidence": 0.95, "proposed_changes": [{"path": "notes/x.md", "new_content": "v2"}]}"##,
+            ),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let _ = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("notes/x.md")).unwrap(),
+            "v1"
+        );
+
+        let _ = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("notes/x.md")).unwrap(),
+            "v2"
+        );
     }
 
     #[tokio::test]
