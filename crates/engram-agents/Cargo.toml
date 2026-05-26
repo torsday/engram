@@ -21,6 +21,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 toml = { workspace = true }
 async-trait = { workspace = true }
+comrak = { workspace = true }
+serde_yaml = { workspace = true }
 
 [dev-dependencies]
 engram-llm = { workspace = true, features = ["mock-llm"] }
