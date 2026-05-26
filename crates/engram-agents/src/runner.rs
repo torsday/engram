@@ -306,6 +306,17 @@ pub struct RunReport {
     /// didn't include a `diff_summary` (the gate is then bypassed —
     /// see `AgentConfig::max_invasiveness` docs).
     pub invasiveness: Option<Invasiveness>,
+    /// Action kind the agent self-classified (e.g. `link-add`,
+    /// `tag-norm`, `note-create`). Parsed from the response's `kind`
+    /// field. `None` when absent. Surfaces to the future agent_actions
+    /// writer; today this is observable only via [`RunReport`] and the
+    /// run's tracing span.
+    pub kind: Option<String>,
+    /// One-sentence rationale for the action, parsed from the
+    /// response's `rationale` field. `None` when absent. Same surface
+    /// as `kind`: observable today, consumed by the future
+    /// `agent_actions` writer.
+    pub rationale: Option<String>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
@@ -384,12 +395,18 @@ impl AgentRunner {
         let correlation_id = NoteId::new().as_str().to_string();
         let run_id = NoteId::new().as_str().to_string();
 
+        // `kind` and `rationale` are recorded later via
+        // `Span::record` once we've parsed the response. Declared
+        // here as `tracing::field::Empty` so subscribers see the
+        // field names even before the values land.
         let span = info_span!(
             "agent_run",
             agent = name,
             correlation_id = %correlation_id,
             run_id = %run_id,
             trigger = trigger.trigger_label(),
+            kind = tracing::field::Empty,
+            rationale = tracing::field::Empty,
         );
         async move {
             self.run_agent_inner(name, trigger, run_id, correlation_id)
@@ -490,11 +507,15 @@ impl AgentRunner {
             cost_cents,
             confidence,
             invasiveness,
+            kind,
+            rationale,
             response_text,
         ) = match join_result {
             Ok(Ok(completion)) => {
                 let confidence = parse_confidence(&completion.text);
                 let invasiveness = parse_diff_summary(&completion.text).map(|d| classify(&d));
+                let kind = parse_string_field(&completion.text, "kind");
+                let rationale = parse_string_field(&completion.text, "rationale");
                 // Auto-land requires BOTH gates to pass:
                 //   confidence ≥ threshold  AND  invasiveness ≤ max
                 // If the response didn't include a diff_summary, only
@@ -507,6 +528,11 @@ impl AgentRunner {
                 } else {
                     RunOutcome::NoAction
                 };
+                // Enrich the run's tracing span with what we now know
+                // about the agent's intent. Span fields are filtered
+                // out cleanly when subscribers don't want them.
+                tracing::Span::current().record("kind", kind.as_deref().unwrap_or(""));
+                tracing::Span::current().record("rationale", rationale.as_deref().unwrap_or(""));
                 (
                     outcome,
                     completion.usage.input_tokens_total,
@@ -514,6 +540,8 @@ impl AgentRunner {
                     completion.cost.total_cents,
                     confidence,
                     invasiveness,
+                    kind,
+                    rationale,
                     completion.text,
                 )
             }
@@ -528,6 +556,8 @@ impl AgentRunner {
                     0.0,
                     None,
                     None,
+                    None,
+                    None,
                     format!("provider error: {e}"),
                 )
             }
@@ -537,7 +567,7 @@ impl AgentRunner {
                 // task remains healthy.
                 let payload = join_err.into_panic();
                 let msg = panic_payload_to_string(payload);
-                (RunOutcome::Panicked, 0, 0, 0.0, None, None, msg)
+                (RunOutcome::Panicked, 0, 0, 0.0, None, None, None, None, msg)
             }
             Err(join_err) => {
                 // Cancellation — `tokio::spawn` futures are not
@@ -548,6 +578,8 @@ impl AgentRunner {
                     0,
                     0,
                     0.0,
+                    None,
+                    None,
                     None,
                     None,
                     format!("provider task cancelled: {join_err}"),
@@ -588,6 +620,8 @@ impl AgentRunner {
             cost_cents,
             confidence,
             invasiveness,
+            kind,
+            rationale,
             response_text,
         })
     }
@@ -655,6 +689,8 @@ impl AgentRunner {
             cost_cents: 0.0,
             confidence: None,
             invasiveness: None,
+            kind: None,
+            rationale: None,
             response_text: reason,
         })
     }
@@ -772,6 +808,14 @@ fn parse_diff_summary(text: &str) -> Option<DiffSummary> {
     let v: serde_json::Value = serde_json::from_str(text).ok()?;
     let field = v.get("diff_summary")?;
     serde_json::from_value(field.clone()).ok()
+}
+
+/// Best-effort extraction of a top-level string field from a JSON
+/// response body. Non-JSON, missing-field, or non-string-value cases
+/// return `None`. Used for `kind` and `rationale` parsing.
+fn parse_string_field(text: &str, field: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    v.get(field).and_then(|f| f.as_str()).map(String::from)
 }
 
 /// Best-effort extraction of `confidence` (number in `[0, 1]`) from a JSON
@@ -1679,6 +1723,82 @@ confidence_threshold = 0.99"#,
         );
         // Drop the unused first-snapshot to avoid an unused warning.
         let _ = gardener_first;
+    }
+
+    /// `kind` and `rationale` flow through from the response into
+    /// `RunReport`. They're optional — agents that don't emit them
+    /// still produce valid runs.
+    #[tokio::test]
+    async fn kind_and_rationale_propagate_to_report() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{
+                "confidence": 0.9,
+                "kind": "link-add",
+                "rationale": "Added missing wikilink to the source note's tagged concept."
+            }"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.kind.as_deref(), Some("link-add"));
+        assert_eq!(
+            report.rationale.as_deref(),
+            Some("Added missing wikilink to the source note's tagged concept.")
+        );
+    }
+
+    /// A response without `kind` or `rationale` produces `None` on
+    /// both — the runner doesn't require them.
+    #[tokio::test]
+    async fn missing_kind_and_rationale_are_none() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert!(report.kind.is_none());
+        assert!(report.rationale.is_none());
+    }
+
+    /// Non-string values in the `kind` / `rationale` slots are
+    /// ignored — only string values populate the field.
+    #[test]
+    fn parse_string_field_only_accepts_strings() {
+        assert_eq!(
+            parse_string_field(r#"{"kind": "link-add"}"#, "kind"),
+            Some("link-add".to_string())
+        );
+        // Number value in `kind`: ignored.
+        assert_eq!(parse_string_field(r#"{"kind": 42}"#, "kind"), None);
+        // Missing key.
+        assert_eq!(parse_string_field(r#"{"confidence": 0.9}"#, "kind"), None);
+        // Non-JSON body.
+        assert_eq!(parse_string_field("not json", "kind"), None);
     }
 
     #[tokio::test]
