@@ -311,6 +311,22 @@ pub struct RunReport {
     pub response_text: String,
 }
 
+/// One cached agent's parsed config + prompt plus the mtimes the
+/// cache was built from. The runner consults the cache on every
+/// `run_agent` call and reloads when either file's mtime has moved.
+///
+/// Cloning is cheap (an `Arc` bump) so in-flight runs hold their own
+/// reference for the duration of the call — a concurrent reload
+/// replaces the cache slot's `Arc` but doesn't disturb the in-flight
+/// run's view. This matches the AC's "in-flight runs continue with the
+/// prompt loaded at start time" semantics.
+struct CachedAgent {
+    config: AgentConfig,
+    prompt: PromptStructured,
+    config_mtime: std::time::SystemTime,
+    prompt_mtime: std::time::SystemTime,
+}
+
 /// The agent runner.
 ///
 /// Hold one per process; `run_agent` is safe to call concurrently from
@@ -322,6 +338,9 @@ pub struct AgentRunner {
     model: Model,
     agents_dir: PathBuf,
     locks: LockManager,
+    /// Per-agent cache of parsed config + prompt, invalidated by file
+    /// mtime change. See [`CachedAgent`].
+    cache: Mutex<std::collections::HashMap<String, Arc<CachedAgent>>>,
 }
 
 impl AgentRunner {
@@ -352,6 +371,7 @@ impl AgentRunner {
             model,
             agents_dir,
             locks,
+            cache: Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -388,9 +408,11 @@ impl AgentRunner {
     ) -> Result<RunReport, RunnerError> {
         // Load agent config + prompt before recording the run start so we
         // surface configuration errors loudly instead of leaving an
-        // open-ended row.
-        let config = self.load_config(name)?;
-        let prompt = self.load_prompt(name)?;
+        // open-ended row. The cache returns an `Arc` so a concurrent
+        // reload won't disturb this in-flight run.
+        let cached = self.load_cached(name)?;
+        let config = &cached.config;
+        let prompt = &cached.prompt;
 
         // INSERT agent_runs row with started_at; we'll UPDATE with
         // completed_at + outcome at the end.
@@ -441,7 +463,7 @@ impl AgentRunner {
         // Render the dynamic tail with the trigger's context. Today this
         // is a minimal `{{trigger}}` / `{{note_id}}` substitution; future
         // slices will assemble neighbors, biographer model, etc.
-        let rendered_tail = render_dynamic_tail(&prompt, &trigger, &correlation_id);
+        let rendered_tail = render_dynamic_tail(prompt, &trigger, &correlation_id);
 
         let final_prompt = PromptStructured {
             static_head: prompt.static_head.clone(),
@@ -637,24 +659,71 @@ impl AgentRunner {
         })
     }
 
-    fn load_config(&self, name: &str) -> Result<AgentConfig, RunnerError> {
-        let path = self.agents_dir.join(name).join("config.toml");
-        let raw = std::fs::read_to_string(&path).map_err(|e| RunnerError::AgentNotFound {
-            name: name.to_string(),
-            detail: format!("config.toml at {}: {}", path.display(), e),
-        })?;
-        AgentConfig::from_toml(&raw).map_err(|source| RunnerError::ConfigInvalid {
-            name: name.to_string(),
-            source,
-        })
-    }
+    /// Return a cached [`CachedAgent`] for `name`, reloading from disk
+    /// only when either `config.toml` or `prompt.md` has changed mtime
+    /// since the last load. First call always reads.
+    ///
+    /// Concurrency: the cache slot is `Arc<CachedAgent>`. A second
+    /// concurrent call that observes a stale mtime will re-read and
+    /// replace the slot; the first caller's `Arc` clone is unaffected
+    /// (RAII keeps the prior load alive for the duration of the
+    /// in-flight run).
+    fn load_cached(&self, name: &str) -> Result<Arc<CachedAgent>, RunnerError> {
+        let config_path = self.agents_dir.join(name).join("config.toml");
+        let prompt_path = self.agents_dir.join(name).join("prompt.md");
 
-    fn load_prompt(&self, name: &str) -> Result<PromptStructured, RunnerError> {
-        let path = self.agents_dir.join(name).join("prompt.md");
-        prompt_loader::load(&path).map_err(|source| RunnerError::PromptInvalid {
+        // Stat both files first. If either mtime read fails, propagate
+        // the AgentNotFound error so the caller surfaces a useful
+        // message about which file is missing.
+        let config_mtime = std::fs::metadata(&config_path)
+            .and_then(|m| m.modified())
+            .map_err(|e| RunnerError::AgentNotFound {
+                name: name.to_string(),
+                detail: format!("config.toml at {}: {}", config_path.display(), e),
+            })?;
+        let prompt_mtime = std::fs::metadata(&prompt_path)
+            .and_then(|m| m.modified())
+            .map_err(|e| RunnerError::AgentNotFound {
+                name: name.to_string(),
+                detail: format!("prompt.md at {}: {}", prompt_path.display(), e),
+            })?;
+
+        // Fast path: cache hit with matching mtimes.
+        {
+            let cache = self.cache.lock().expect("cache mutex poisoned");
+            if let Some(entry) = cache.get(name) {
+                if entry.config_mtime == config_mtime && entry.prompt_mtime == prompt_mtime {
+                    return Ok(Arc::clone(entry));
+                }
+            }
+        }
+
+        // Slow path: stale or first-time. Read + parse + replace.
+        let raw =
+            std::fs::read_to_string(&config_path).map_err(|e| RunnerError::AgentNotFound {
+                name: name.to_string(),
+                detail: format!("config.toml at {}: {}", config_path.display(), e),
+            })?;
+        let config = AgentConfig::from_toml(&raw).map_err(|source| RunnerError::ConfigInvalid {
             name: name.to_string(),
             source,
-        })
+        })?;
+        let prompt =
+            prompt_loader::load(&prompt_path).map_err(|source| RunnerError::PromptInvalid {
+                name: name.to_string(),
+                source,
+            })?;
+        let fresh = Arc::new(CachedAgent {
+            config,
+            prompt,
+            config_mtime,
+            prompt_mtime,
+        });
+        {
+            let mut cache = self.cache.lock().expect("cache mutex poisoned");
+            cache.insert(name.to_string(), Arc::clone(&fresh));
+        }
+        Ok(fresh)
     }
 }
 
@@ -1387,6 +1456,229 @@ confidence_threshold = 0.7"#,
         );
         // Confidence gate still applies (and passes here), so AutoLand.
         assert_eq!(report.outcome, RunOutcome::AutoLand);
+    }
+
+    /// First call to `run_agent` reads from disk; second call within
+    /// the same runner uses the cache, with no disk re-read or re-parse.
+    /// Verified by an instrumented filesystem: we record file reads via
+    /// a `read_count` test helper that wraps `fs::read_to_string` — but
+    /// since we can't intercept stdlib calls, the test instead asserts
+    /// the cache slot was populated and that mutating the *cached*
+    /// `AgentConfig` (via `runner.cache` test peek) is what the run
+    /// sees on the second call (proves the cache is what's consulted).
+    #[tokio::test]
+    async fn second_call_uses_cache() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(r#"{"confidence": 0.9}"#),
+            Ok(r#"{"confidence": 0.9}"#),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        // First call populates the cache.
+        let _ = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let cached_after_first = runner.cache.lock().unwrap().get("linker").cloned().unwrap();
+
+        // Overwrite the config.toml on disk but *keep its mtime* (set
+        // it back to what we recorded). The cache should not notice and
+        // should serve the original config on the second call.
+        let original_mtime = cached_after_first.config_mtime;
+        let cfg_path = tmp.path().join("linker").join("config.toml");
+        std::fs::write(
+            &cfg_path,
+            r#"name = "rewritten"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+        )
+        .unwrap();
+        // Reset the file's mtime to the original. On macOS / Linux,
+        // `filetime` is the standard way, but to avoid the extra dep
+        // we use `utimes` via libc through the std `set_modified` API
+        // (stable since Rust 1.75).
+        std::fs::File::open(&cfg_path)
+            .unwrap()
+            .set_modified(original_mtime)
+            .unwrap();
+
+        // Second call should use the cached config (confidence_threshold = 0.7),
+        // so a 0.9-confidence response still AutoLands. If we were re-reading,
+        // the rewritten config (threshold = 0.99) would resolve to NoAction.
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(
+            report.outcome,
+            RunOutcome::AutoLand,
+            "cached config (threshold 0.7) should still apply; on-disk rewrite is invisible"
+        );
+
+        // Sanity: the cache slot's pointer is the same as the one we
+        // captured after the first call (the Arc was reused, not
+        // replaced).
+        let cached_after_second = runner.cache.lock().unwrap().get("linker").cloned().unwrap();
+        assert!(
+            Arc::ptr_eq(&cached_after_first, &cached_after_second),
+            "cache slot's Arc must be identical when mtimes match"
+        );
+    }
+
+    /// Touching the config file (advancing mtime) triggers a reload.
+    /// Verified by overwriting with a *narrower* threshold that flips
+    /// outcome from AutoLand to NoAction.
+    #[tokio::test]
+    async fn mtime_change_triggers_reload() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.5"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(r#"{"confidence": 0.7}"#),
+            Ok(r#"{"confidence": 0.7}"#),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let first = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(first.outcome, RunOutcome::AutoLand);
+
+        // Rewrite the config with a higher threshold *and* advance the
+        // mtime past the cache's recorded value. `set_modified` to
+        // `now + 1s` guarantees a forward jump on every filesystem.
+        let bump = std::time::SystemTime::now() + std::time::Duration::from_secs(1);
+        let cfg_path = tmp.path().join("linker").join("config.toml");
+        std::fs::write(
+            &cfg_path,
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.9"#,
+        )
+        .unwrap();
+        std::fs::File::open(&cfg_path)
+            .unwrap()
+            .set_modified(bump)
+            .unwrap();
+
+        // The second call should re-read; with the new threshold of
+        // 0.9, a 0.7-confidence response resolves to NoAction.
+        let second = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(
+            second.outcome,
+            RunOutcome::NoAction,
+            "mtime bump must trigger reload + new threshold"
+        );
+    }
+
+    /// Two agents have independent cache slots — reloading one doesn't
+    /// invalidate the other.
+    #[tokio::test]
+    async fn per_agent_cache_isolation() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.5"#,
+            DEMO_PROMPT,
+        );
+        write_agent(
+            tmp.path(),
+            "gardener",
+            r#"name = "gardener"
+trigger = "on_demand"
+confidence_threshold = 0.5"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(r#"{"confidence": 0.9}"#),
+            Ok(r#"{"confidence": 0.9}"#),
+            Ok(r#"{"confidence": 0.9}"#),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        // Prime both caches.
+        let _ = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let gardener_first = runner.cache.lock().unwrap().get("gardener").cloned();
+        let _ = runner
+            .run_agent("gardener", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let linker_arc = runner.cache.lock().unwrap().get("linker").cloned().unwrap();
+        let gardener_arc = runner
+            .cache
+            .lock()
+            .unwrap()
+            .get("gardener")
+            .cloned()
+            .unwrap();
+
+        // Mutate linker's config + bump mtime; gardener untouched.
+        let bump = std::time::SystemTime::now() + std::time::Duration::from_secs(1);
+        let linker_cfg = tmp.path().join("linker").join("config.toml");
+        std::fs::write(
+            &linker_cfg,
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+        )
+        .unwrap();
+        std::fs::File::open(&linker_cfg)
+            .unwrap()
+            .set_modified(bump)
+            .unwrap();
+
+        // Trigger linker reload.
+        let _ = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let linker_arc_after = runner.cache.lock().unwrap().get("linker").cloned().unwrap();
+        let gardener_arc_after = runner
+            .cache
+            .lock()
+            .unwrap()
+            .get("gardener")
+            .cloned()
+            .unwrap();
+
+        assert!(
+            !Arc::ptr_eq(&linker_arc, &linker_arc_after),
+            "linker's cache slot should have been replaced"
+        );
+        assert!(
+            Arc::ptr_eq(&gardener_arc, &gardener_arc_after),
+            "gardener's cache slot must NOT be disturbed by linker's reload"
+        );
+        // Drop the unused first-snapshot to avoid an unused warning.
+        let _ = gardener_first;
     }
 
     #[tokio::test]
