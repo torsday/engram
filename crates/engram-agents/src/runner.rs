@@ -881,6 +881,80 @@ impl AgentRunner {
         }
         Ok(fresh)
     }
+
+    /// Enumerate the agents the runner can see on disk.
+    ///
+    /// Walks the immediate children of `agents_dir`; an entry counts as
+    /// "configured" iff it is a directory containing both `config.toml`
+    /// **and** `prompt.md`. Returns names in sorted order so the result
+    /// is stable across calls (useful for `engram status` and similar
+    /// operator surfaces). I/O errors on the directory listing
+    /// propagate as `RunnerError::Io`.
+    ///
+    /// Does not load or parse anything — pass each name to
+    /// [`AgentRunner::health_check`] for a fuller per-agent check.
+    pub fn list_configured_agents(&self) -> Result<Vec<String>, RunnerError> {
+        let entries = std::fs::read_dir(&self.agents_dir)?;
+        let mut names: Vec<String> = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let path = entry.path();
+            let has_config = path.join("config.toml").is_file();
+            let has_prompt = path.join("prompt.md").is_file();
+            if has_config && has_prompt {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    names.push(name.to_string());
+                }
+            }
+        }
+        names.sort_unstable();
+        Ok(names)
+    }
+
+    /// Pre-flight check: attempt to load every agent the runner sees on
+    /// disk, returning a per-agent health verdict. Doesn't contact the
+    /// provider or touch the database — purely "would the next
+    /// `run_agent` call surface a configuration error?"
+    ///
+    /// Designed for `engram serve --check` (future CLI surface): operators
+    /// can validate a vault's agents/ directory without running any
+    /// LLM calls. Loading uses the same hot-reload cache path
+    /// [`load_cached`](AgentRunner::load_cached) does, so successful
+    /// health checks warm the cache for subsequent real runs.
+    ///
+    /// Returns one [`AgentHealth`] per agent enumerated by
+    /// [`list_configured_agents`](AgentRunner::list_configured_agents).
+    /// The list of agents is itself returned via `Result` so that
+    /// directory-scan failures (permissions, missing root) surface
+    /// loudly.
+    pub fn health_check(&self) -> Result<Vec<AgentHealth>, RunnerError> {
+        let names = self.list_configured_agents()?;
+        let mut report = Vec::with_capacity(names.len());
+        for name in names {
+            let status = self.load_cached(&name).map(|_| ());
+            report.push(AgentHealth { name, status });
+        }
+        Ok(report)
+    }
+}
+
+/// Per-agent verdict produced by [`AgentRunner::health_check`].
+///
+/// `status` is `Ok(())` when the agent's `config.toml` parsed cleanly
+/// and `prompt.md` loaded via the cache-boundary marker; otherwise it
+/// carries the underlying [`RunnerError`] so operators see *which*
+/// rule fired.
+#[derive(Debug)]
+pub struct AgentHealth {
+    /// Agent name (directory name under `agents_dir`).
+    pub name: String,
+    /// Load attempt outcome — `Ok(())` if the agent can be invoked
+    /// without re-reading from disk; the `Err` variant carries the
+    /// load failure for diagnostics.
+    pub status: Result<(), RunnerError>,
 }
 
 /// Render the prompt's dynamic tail with trigger-context substitutions.
@@ -2407,6 +2481,151 @@ confidence_threshold = 0.9"#,
             report.path_validation[0],
             PathValidation::Rejected(_)
         ));
+    }
+
+    /// `list_configured_agents` finds subdirs with both files; sorts
+    /// the names; ignores subdirs that are missing either file or
+    /// regular files in the agents root.
+    #[tokio::test]
+    async fn list_configured_agents_filters_and_sorts() {
+        let tmp = tempdir().unwrap();
+        // Three valid agents.
+        write_agent(
+            tmp.path(),
+            "zebra",
+            r#"name = "zebra"
+trigger = "on_demand""#,
+            DEMO_PROMPT,
+        );
+        write_agent(
+            tmp.path(),
+            "alpha",
+            r#"name = "alpha"
+trigger = "on_demand""#,
+            DEMO_PROMPT,
+        );
+        write_agent(
+            tmp.path(),
+            "mango",
+            r#"name = "mango"
+trigger = "on_demand""#,
+            DEMO_PROMPT,
+        );
+        // Missing prompt.md → not configured.
+        std::fs::create_dir_all(tmp.path().join("no-prompt")).unwrap();
+        std::fs::write(
+            tmp.path().join("no-prompt").join("config.toml"),
+            r#"name = "x"
+trigger = "on_demand""#,
+        )
+        .unwrap();
+        // Missing config.toml → not configured.
+        std::fs::create_dir_all(tmp.path().join("no-config")).unwrap();
+        std::fs::write(tmp.path().join("no-config").join("prompt.md"), DEMO_PROMPT).unwrap();
+        // Regular file in agents root → not a directory, ignored.
+        std::fs::write(tmp.path().join("stray.txt"), "junk").unwrap();
+
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let names = runner.list_configured_agents().unwrap();
+        // Sorted; only the three complete agents.
+        assert_eq!(names, vec!["alpha", "mango", "zebra"]);
+    }
+
+    /// `health_check` returns an Ok status for valid agents and an Err
+    /// status (carrying the underlying RunnerError) for malformed ones.
+    #[tokio::test]
+    async fn health_check_returns_per_agent_verdict() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "good",
+            r#"name = "good"
+trigger = "on_demand""#,
+            DEMO_PROMPT,
+        );
+        // Bad config (malformed TOML).
+        write_agent(tmp.path(), "bad-config", "= = =", DEMO_PROMPT);
+        // Bad prompt (missing cache-boundary marker).
+        write_agent(
+            tmp.path(),
+            "bad-prompt",
+            r#"name = "bad-prompt"
+trigger = "on_demand""#,
+            "no marker here",
+        );
+
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner.health_check().unwrap();
+        assert_eq!(report.len(), 3);
+        let by_name: std::collections::HashMap<_, _> = report
+            .iter()
+            .map(|h| (h.name.as_str(), &h.status))
+            .collect();
+        assert!(by_name["good"].is_ok());
+        assert!(matches!(
+            by_name["bad-config"],
+            Err(RunnerError::ConfigInvalid { .. })
+        ));
+        assert!(matches!(
+            by_name["bad-prompt"],
+            Err(RunnerError::PromptInvalid { .. })
+        ));
+    }
+
+    /// Successful health-check loads warm the cache — a subsequent
+    /// `run_agent` call doesn't re-read from disk.
+    #[tokio::test]
+    async fn health_check_warms_the_cache() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner.health_check().unwrap();
+        assert!(report.iter().all(|h| h.status.is_ok()));
+
+        // Cache slot now populated.
+        let after_health = runner.cache.lock().unwrap().get("linker").cloned().unwrap();
+
+        // Run the agent; cache slot's Arc should be the same instance
+        // (no reload happened).
+        let _ = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let after_run = runner.cache.lock().unwrap().get("linker").cloned().unwrap();
+        assert!(
+            Arc::ptr_eq(&after_health, &after_run),
+            "run_agent must reuse the cache slot warmed by health_check"
+        );
+    }
+
+    /// Empty agents_dir → empty health report (not an error).
+    #[tokio::test]
+    async fn empty_agents_dir_is_empty_report_not_error() {
+        let tmp = tempdir().unwrap();
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let names = runner.list_configured_agents().unwrap();
+        assert!(names.is_empty());
+        let report = runner.health_check().unwrap();
+        assert!(report.is_empty());
     }
 
     #[tokio::test]
