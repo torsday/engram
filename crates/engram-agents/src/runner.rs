@@ -112,6 +112,27 @@ pub enum RunnerError {
     /// Reading from the filesystem failed.
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Filing a proposal failed at one of its sub-steps (directory
+    /// creation, JSON serialization, file write, or SQLite insert).
+    /// The `stage` field discriminates them. Logged-and-skipped by
+    /// the runner rather than propagated — the surrounding run still
+    /// produces an `agent_runs` row so the operator can see "ran but
+    /// no proposal landed."
+    #[error("proposal `{id}` filing failed at {stage}: {detail}")]
+    ProposalFilingFailed {
+        /// ULID of the proposal whose filing failed.
+        id: String,
+        /// Which step of the filer broke: `create_dir`, `serialize`,
+        /// `write`, or `sqlite_insert`. Static string so callers can
+        /// match on it without parsing the error message.
+        stage: &'static str,
+        /// Stringified underlying error from the failing step. Held
+        /// as `String` (not `#[source]`) because the underlying
+        /// errors come from heterogeneous types (io, serde, sqlite)
+        /// and the filer doesn't need to expose chain-walking.
+        detail: String,
+    },
 }
 
 /// Outcome recorded in `agent_runs.outcome` and returned in [`RunReport`].
@@ -378,6 +399,17 @@ pub struct RunReport {
     /// and resolved by `ActionLog::reconcile_with_git` once the human
     /// stages or rejects the change.
     pub action_id: Option<String>,
+    /// `proposals.id` (ULID) of the row filed when the decision
+    /// matrix produced [`RunOutcome::NoAction`] but the agent emitted
+    /// at least one [`ProposedChange`]. The proposal artifact lives
+    /// at `<vault_root>/.engram/proposals/<id>.json` and the matching
+    /// row sits in `proposals` with `status = 'pending'`.
+    ///
+    /// `None` when the run had nothing to propose (AutoLand / empty
+    /// proposed_changes / Errored / Panicked / Deferred) or when the
+    /// filer itself failed (filer errors are logged-and-skipped, not
+    /// propagated, so the run still produces an `agent_runs` row).
+    pub proposal_id: Option<String>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
@@ -429,6 +461,55 @@ pub struct ProposedChange {
     pub path: String,
     /// Full file content after the agent's edit.
     pub new_content: String,
+}
+
+/// Per-path validation verdict in the proposal artifact's JSON.
+/// `verdict` is `"ok"` for write-eligible paths or
+/// `"rejected: <reason>"` for paths the validator refused. Kept as a
+/// dedicated value type rather than reusing [`PathValidation`] so the
+/// proposal JSON has a stable string-only schema that survives serde
+/// renames to the enum.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposalPathStatus {
+    /// Vault-relative path as the agent emitted it.
+    pub path: String,
+    /// `"ok"` or `"rejected: <reason>"`.
+    pub verdict: String,
+}
+
+/// On-disk artifact written to `<vault_root>/.engram/proposals/<id>.json`
+/// when the runner files a proposal. Surface for a future review
+/// queue to consume — the row in the `proposals` table holds the
+/// lean SQL-side metadata; this JSON holds the full payload so the
+/// human can see exactly what the agent intended.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Proposal {
+    /// ULID — matches the `proposals.id` column.
+    pub id: String,
+    /// Name of the agent that emitted the proposal.
+    pub proposing_agent: String,
+    /// RFC 3339 timestamp at filing time.
+    pub proposed_at: String,
+    /// Invasiveness verdict string (`mechanical` / `additive` /
+    /// `editorial` / `structural`). When the agent didn't emit a
+    /// `diff_summary` the filer records `"editorial"` — the safe
+    /// fallback per the spec.
+    pub invasiveness: String,
+    /// Triggering note's ULID, when the trigger named one.
+    pub target_note_id: Option<String>,
+    /// One-sentence rationale parsed from the agent's response.
+    pub rationale: String,
+    /// Confidence as the agent self-reported it (0.0 when absent).
+    pub confidence: f64,
+    /// Full set of proposed file edits — each `(path, new_content)`.
+    /// Stored as JSON so the reviewer sees every byte the agent
+    /// intended to write.
+    pub proposed_changes: Vec<ProposedChange>,
+    /// Per-path validation verdict mirroring the runner's own
+    /// `path_validation` decision; the JSON form is stringified so
+    /// the artifact schema doesn't depend on the runtime enum's
+    /// internals.
+    pub path_validation: Vec<ProposalPathStatus>,
 }
 
 /// One cached agent's parsed config + prompt plus the mtimes the
@@ -833,6 +914,68 @@ impl AgentRunner {
             None
         };
 
+        // Proposal filer: when the decision matrix did NOT auto-land
+        // (NoAction outcome) but the agent did emit `proposed_changes`,
+        // file a proposal so the work isn't silently dropped. The
+        // proposal artifact has two parts:
+        //
+        //   1. `.engram/proposals/<id>.json` on disk under vault_root,
+        //      carrying the full proposed_changes payload so a human
+        //      (or future review queue) can inspect every edit.
+        //   2. One `proposals` row keyed by the same ULID, carrying the
+        //      lean metadata (agent, invasiveness, confidence, path,
+        //      target_note_id) for SQL-side discovery.
+        //
+        // We file ONLY when proposed_changes is non-empty — an empty
+        // NoAction is a clean "agent didn't see anything to do" and has
+        // nothing to review. Errored / Panicked / Deferred outcomes
+        // also skip the filer: those are not "agent reasoned about a
+        // change and the gate rejected it" states.
+        //
+        // Filing failure (JSON write error, SQLite insert error) is
+        // loud-but-non-fatal: the run itself still produces an
+        // `agent_runs` row, so the human can observe "agent ran but
+        // proposal filing failed" via tracing without losing the run.
+        let proposal_id: Option<String> =
+            if matches!(outcome, RunOutcome::NoAction) && !proposed_changes.is_empty() {
+                let proposal = Proposal {
+                    id: NoteId::new().as_str().to_string(),
+                    proposing_agent: name.to_string(),
+                    proposed_at: Utc::now().to_rfc3339(),
+                    invasiveness: invasiveness
+                        .map(|v| v.as_sql().to_string())
+                        .unwrap_or_else(|| "editorial".to_string()),
+                    target_note_id: trigger.note_id().map(str::to_string),
+                    rationale: rationale.clone().unwrap_or_default(),
+                    confidence: confidence.map(|c| c as f64).unwrap_or(0.0),
+                    proposed_changes: proposed_changes.clone(),
+                    path_validation: path_validation
+                        .iter()
+                        .zip(proposed_changes.iter())
+                        .map(|(v, c)| ProposalPathStatus {
+                            path: c.path.clone(),
+                            verdict: match v {
+                                PathValidation::Ok => "ok".to_string(),
+                                PathValidation::Rejected(reason) => format!("rejected: {reason}"),
+                            },
+                        })
+                        .collect(),
+                };
+                match self.file_proposal(&proposal) {
+                    Ok(()) => Some(proposal.id),
+                    Err(e) => {
+                        tracing::error!(
+                            agent = name,
+                            error = %e,
+                            "proposal filer failed — run completed but proposal not recorded"
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
         // Both `Errored` (provider-returned Err) and `Panicked` (provider
         // unwinding panic) count as failures for the boolean flag. `Deferred`
         // is a resource conflict, not a failure.
@@ -873,6 +1016,7 @@ impl AgentRunner {
             write_results,
             response_text,
             action_id,
+            proposal_id,
         })
     }
 
@@ -933,6 +1077,92 @@ impl AgentRunner {
         }
 
         Ok(target_path.to_string_lossy().into_owned())
+    }
+
+    /// Persist a [`Proposal`] to disk + database.
+    ///
+    /// On disk: `<vault_root>/.engram/proposals/<id>.json`, created
+    /// with the parent directories if missing. The JSON carries the
+    /// full proposed_changes payload + per-path validation verdict so
+    /// a human reviewer sees exactly what the agent intended and why
+    /// the runner declined to auto-land.
+    ///
+    /// In SQLite: one row in `proposals` with `status = 'pending'`,
+    /// `target_note_id` pointing at the triggering note when the
+    /// trigger named one. `target_note_id` is NULL when the triggering
+    /// note isn't in the database — we don't enforce a foreign-key
+    /// failure here because that would force the filer to fail when
+    /// the proposed change is creating a new note. Proposal rows
+    /// without a matching note row still resolve cleanly via their
+    /// `id` lookup.
+    ///
+    /// Errors propagate as `RunnerError::ProposalFilingFailed` and
+    /// are observed by the caller via `tracing::error!` — the run
+    /// itself still completes.
+    fn file_proposal(&self, proposal: &Proposal) -> Result<(), RunnerError> {
+        let dir = self.vault_root.join(".engram").join("proposals");
+        std::fs::create_dir_all(&dir).map_err(|e| RunnerError::ProposalFilingFailed {
+            id: proposal.id.clone(),
+            stage: "create_dir",
+            detail: e.to_string(),
+        })?;
+        let path = dir.join(format!("{}.json", proposal.id));
+        let json = serde_json::to_string_pretty(proposal).map_err(|e| {
+            RunnerError::ProposalFilingFailed {
+                id: proposal.id.clone(),
+                stage: "serialize",
+                detail: e.to_string(),
+            }
+        })?;
+        std::fs::write(&path, json).map_err(|e| RunnerError::ProposalFilingFailed {
+            id: proposal.id.clone(),
+            stage: "write",
+            detail: e.to_string(),
+        })?;
+
+        // Determine whether target_note_id actually exists in the
+        // notes table. If it doesn't, file as NULL — see method docs.
+        let target_note_id: Option<String> = match &proposal.target_note_id {
+            None => None,
+            Some(id) => {
+                let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+                let exists: bool = conn
+                    .query_row(
+                        "SELECT 1 FROM notes WHERE id = ?1",
+                        rusqlite::params![id],
+                        |_| Ok(true),
+                    )
+                    .unwrap_or(false);
+                if exists {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            }
+        };
+
+        let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+        conn.execute(
+            "INSERT INTO proposals (id, proposing_agent, proposed_at, invasiveness, \
+             target_note_id, proposed_diff_path, rationale, confidence, status) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending')",
+            rusqlite::params![
+                proposal.id,
+                proposal.proposing_agent,
+                proposal.proposed_at,
+                proposal.invasiveness,
+                target_note_id,
+                path.to_string_lossy().into_owned(),
+                proposal.rationale,
+                proposal.confidence,
+            ],
+        )
+        .map_err(|e| RunnerError::ProposalFilingFailed {
+            id: proposal.id.clone(),
+            stage: "sqlite_insert",
+            detail: e.to_string(),
+        })?;
+        Ok(())
     }
 
     /// Attempt to acquire the per-note advisory lock. `LockManager::acquire`
@@ -1005,6 +1235,7 @@ impl AgentRunner {
             write_results: Vec::new(),
             response_text: reason,
             action_id: None,
+            proposal_id: None,
         })
     }
 
@@ -3148,6 +3379,204 @@ confidence_threshold = 0.7"#,
             .query_row("SELECT COUNT(*) FROM agent_actions", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    /// NoAction with non-empty proposed_changes files a proposal:
+    /// JSON artifact under `.engram/proposals/<id>.json` AND one row
+    /// in `proposals` whose id surfaces on `RunReport.proposal_id`.
+    #[tokio::test]
+    async fn no_action_with_proposed_changes_files_proposal() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.5,
+                "kind": "link-suggestion",
+                "rationale": "two notes share a concept",
+                "proposed_changes": [
+                    {"path": "notes/alpha.md", "new_content": "# Alpha"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::NoAction);
+        let proposal_id = report
+            .proposal_id
+            .as_ref()
+            .expect("NoAction + non-empty proposed_changes must file a proposal");
+
+        // JSON artifact on disk.
+        let json_path = tmp
+            .path()
+            .join(".engram/proposals")
+            .join(format!("{proposal_id}.json"));
+        assert!(json_path.exists(), "proposal JSON must be written");
+        let body = std::fs::read_to_string(&json_path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed["id"].as_str().unwrap(), proposal_id);
+        assert_eq!(parsed["proposing_agent"].as_str().unwrap(), "linker");
+        assert_eq!(
+            parsed["rationale"].as_str().unwrap(),
+            "two notes share a concept"
+        );
+        assert!(
+            (parsed["confidence"].as_f64().unwrap() - 0.5).abs() < 1e-6,
+            "confidence must round-trip"
+        );
+
+        // SQL row.
+        let conn = sqlite.lock().unwrap();
+        let (agent, rationale, conf, status, path): (String, String, f64, String, String) = conn
+            .query_row(
+                "SELECT proposing_agent, rationale, confidence, status, proposed_diff_path \
+                 FROM proposals WHERE id = ?1",
+                rusqlite::params![proposal_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(agent, "linker");
+        assert_eq!(rationale, "two notes share a concept");
+        assert!((conf - 0.5).abs() < 1e-6);
+        assert_eq!(status, "pending");
+        assert!(path.ends_with(&format!("{proposal_id}.json")));
+    }
+
+    /// NoAction with an empty proposed_changes set files no proposal.
+    /// The "nothing to do" case is distinct from "tried to do
+    /// something the gate rejected" — only the latter is reviewable.
+    #[tokio::test]
+    async fn no_action_with_empty_proposed_changes_files_no_proposal() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.5}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(report.outcome, RunOutcome::NoAction);
+        assert!(report.proposal_id.is_none());
+        let conn = sqlite.lock().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM proposals", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    /// AutoLand never files a proposal — the on-disk write IS the
+    /// disposition.
+    #[tokio::test]
+    async fn autoland_does_not_file_proposal() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "proposed_changes": [
+                    {"path": "notes/alpha.md", "new_content": "# A"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert!(report.proposal_id.is_none());
+        let conn = sqlite.lock().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM proposals", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    /// AutoLand downgraded to NoAction by path-validation rejection
+    /// still files a proposal — the agent's intent is preserved even
+    /// though we declined to land it.
+    #[tokio::test]
+    async fn path_rejected_autoland_files_proposal() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        // Path traversal — `..` segment makes path_validation reject,
+        // which forces the AutoLand outcome down to NoAction.
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "proposed_changes": [
+                    {"path": "../escape.md", "new_content": "x"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(report.outcome, RunOutcome::NoAction);
+        assert!(
+            report.proposal_id.is_some(),
+            "even rejected paths produce a proposal so the human sees the intent"
+        );
+        // Path validation verdict is preserved in the JSON.
+        let json_path = tmp
+            .path()
+            .join(".engram/proposals")
+            .join(format!("{}.json", report.proposal_id.unwrap()));
+        let body = std::fs::read_to_string(&json_path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let verdicts = parsed["path_validation"].as_array().unwrap();
+        assert_eq!(verdicts.len(), 1);
+        assert!(
+            verdicts[0]["verdict"]
+                .as_str()
+                .unwrap()
+                .starts_with("rejected:"),
+            "rejected-path verdict must round-trip into the JSON"
+        );
     }
 
     #[tokio::test]
