@@ -67,6 +67,7 @@ use tracing::{info_span, Instrument};
 
 use engram_index::atomic_writes::{AtomicWriteError, AtomicWriteSession};
 
+use crate::action_log::{ActionLog, AgentAction};
 use crate::invasiveness::{classify, DiffSummary, Invasiveness};
 use crate::locks::{LockError, LockManager};
 use crate::prompt_loader::{self, PromptLoadError};
@@ -357,6 +358,15 @@ pub struct RunReport {
     /// matches the at-most-once-per-file semantics the agent layer
     /// expects from `atomic_writes`.
     pub write_results: Vec<WriteResult>,
+    /// `agent_actions.id` (ULID) of the audit-trail row written when
+    /// the AutoLand path landed at least one file. `None` when no
+    /// file write succeeded (NoAction, Errored, Panicked, Deferred,
+    /// AutoLand with empty `proposed_changes`, or all writes failed).
+    ///
+    /// The row is queryable via [`crate::action_log::ActionLog::history`]
+    /// and resolved by `ActionLog::reconcile_with_git` once the human
+    /// stages or rejects the change.
+    pub action_id: Option<String>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
@@ -754,6 +764,64 @@ impl AgentRunner {
                 Vec::new()
             };
 
+        // agent_actions audit row: one row per AutoLand that landed
+        // at least one file. The row carries the kind/rationale/
+        // confidence the agent emitted plus the list of files that
+        // actually landed; the action_log subsystem will reconcile
+        // each row's git_commit_sha when the human stages or rejects
+        // the change.
+        //
+        // We record only when at least one write succeeded — a run
+        // where every write failed has no on-disk effect to audit.
+        // Failures on individual files are visible in `write_results`;
+        // the action_log row records only the landed paths so a
+        // `git status` cross-reference is meaningful.
+        let action_id: Option<String> = if matches!(outcome, RunOutcome::AutoLand) {
+            let landed_files: Vec<String> = write_results
+                .iter()
+                .filter_map(|r| match r {
+                    WriteResult::Written(path) => Some(path.clone()),
+                    WriteResult::Failed(_) => None,
+                })
+                .collect();
+            if landed_files.is_empty() {
+                None
+            } else {
+                let action = AgentAction {
+                    id: NoteId::new(),
+                    agent_name: name.to_string(),
+                    kind: kind.clone().unwrap_or_else(|| "unspecified".to_string()),
+                    files: landed_files,
+                    diff_hash: sha256_hex(&response_text),
+                    confidence: confidence.map(|c| c as f64).unwrap_or(0.0),
+                    rationale: rationale.clone().unwrap_or_default(),
+                    deliberation_id: None,
+                    rubric_check: "n/a".to_string(),
+                    wrote_at: Utc::now(),
+                    human_decision: None,
+                    decided_at: None,
+                    final_diff_hash: None,
+                    git_commit_sha: None,
+                };
+                let log = ActionLog::new(Arc::clone(&self.sqlite));
+                match log.record(action) {
+                    Ok(id) => Some(id.as_str().to_string()),
+                    Err(e) => {
+                        // Audit failure is loud-but-non-fatal: the
+                        // files already landed; we'd rather surface
+                        // the missing audit than fail the whole run.
+                        tracing::error!(
+                            error = %e,
+                            "agent_actions record failed — files landed without audit row"
+                        );
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        };
+
         // Both `Errored` (provider-returned Err) and `Panicked` (provider
         // unwinding panic) count as failures for the boolean flag. `Deferred`
         // is a resource conflict, not a failure.
@@ -793,6 +861,7 @@ impl AgentRunner {
             path_validation,
             write_results,
             response_text,
+            action_id,
         })
     }
 
@@ -924,6 +993,7 @@ impl AgentRunner {
             path_validation: Vec::new(),
             write_results: Vec::new(),
             response_text: reason,
+            action_id: None,
         })
     }
 
@@ -2905,6 +2975,155 @@ confidence_threshold = 0.7"#,
             std::fs::read_to_string(tmp.path().join("notes/x.md")).unwrap(),
             "v2"
         );
+    }
+
+    /// AutoLand that lands at least one file inserts exactly one
+    /// `agent_actions` row whose id is exposed on `RunReport.action_id`,
+    /// and whose fields mirror what the agent emitted.
+    #[tokio::test]
+    async fn autoland_writes_agent_actions_row() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "kind": "link-suggestion",
+                "rationale": "two notes share a concept",
+                "proposed_changes": [
+                    {"path": "notes/alpha.md", "new_content": "# A"},
+                    {"path": "notes/beta.md", "new_content": "# B"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        let action_id = report
+            .action_id
+            .as_ref()
+            .expect("AutoLand with landed files must record an agent_actions row");
+
+        let conn = sqlite.lock().unwrap();
+        let (id, agent_name, kind, files_json, confidence, rationale): (
+            String,
+            String,
+            String,
+            String,
+            f64,
+            String,
+        ) = conn
+            .query_row(
+                "SELECT id, agent_name, kind, files, confidence, rationale \
+                 FROM agent_actions WHERE id = ?1",
+                rusqlite::params![action_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .expect("agent_actions row not found");
+        assert_eq!(&id, action_id);
+        assert_eq!(agent_name, "linker");
+        assert_eq!(kind, "link-suggestion");
+        assert!((confidence - 0.95).abs() < 1e-6);
+        assert_eq!(rationale, "two notes share a concept");
+        // Files stored as JSON array of strings; the row mirrors the
+        // absolute paths from `WriteResult::Written`.
+        let files: Vec<String> = serde_json::from_str(&files_json).unwrap();
+        assert_eq!(files.len(), 2);
+        assert!(files[0].ends_with("notes/alpha.md"));
+        assert!(files[1].ends_with("notes/beta.md"));
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM agent_actions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "exactly one agent_actions row per AutoLand");
+    }
+
+    /// NoAction outcomes never write an `agent_actions` row — the
+    /// audit trail records on-disk effects, and NoAction has none.
+    #[tokio::test]
+    async fn no_action_writes_no_agent_actions_row() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.5,
+                "proposed_changes": [
+                    {"path": "notes/skip.md", "new_content": "x"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::NoAction);
+        assert!(report.action_id.is_none());
+        let conn = sqlite.lock().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM agent_actions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    /// AutoLand verdict where no `proposed_changes` are present — no
+    /// files land, so no `agent_actions` row is recorded even though
+    /// the outcome is AutoLand.
+    #[tokio::test]
+    async fn autoland_with_no_landed_files_skips_agent_actions() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.95}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+        assert!(report.write_results.is_empty());
+        assert!(report.action_id.is_none());
+        let conn = sqlite.lock().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM agent_actions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[tokio::test]
