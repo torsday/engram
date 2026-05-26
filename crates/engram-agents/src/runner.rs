@@ -135,6 +135,12 @@ pub enum RunOutcome {
     /// notes; today the agent layer can re-queue or drop on its own
     /// schedule.
     Deferred,
+    /// The provider call panicked (an unwinding panic — usually
+    /// `unreachable!` / `unwrap` in the provider or a wrapper). The
+    /// runner catches the panic at the `JoinHandle` boundary so its own
+    /// task stays healthy. Distinct from `Errored` so panic-rate metrics
+    /// can be tracked separately from regular returned-Err API failures.
+    Panicked,
 }
 
 impl RunOutcome {
@@ -145,6 +151,7 @@ impl RunOutcome {
             Self::CouncilConvened => "council_convened",
             Self::Errored => "errored",
             Self::Deferred => "deferred",
+            Self::Panicked => "panicked",
         }
     }
 }
@@ -422,16 +429,22 @@ impl AgentRunner {
             dynamic_tail: rendered_tail,
         };
 
-        // Call the provider. On error, mark the run errored and propagate
-        // a clean Result so callers see exactly what failed.
-        let completion_result = self
-            .provider
-            .complete(&final_prompt, &self.model, &CompleteOptions::default())
-            .await;
+        // Call the provider. Spawn the call as its own task so panics
+        // (typically `unreachable!`/`unwrap` bugs in a provider wrapper)
+        // surface as `JoinError::is_panic()` instead of unwinding through
+        // the runner's task. The agent_runs row is already INSERTed and
+        // will be UPDATEd below regardless, so a panic still produces a
+        // complete lifecycle trail.
+        let provider = Arc::clone(&self.provider);
+        let model = self.model.clone();
+        let options = CompleteOptions::default();
+        let join_handle =
+            tokio::spawn(async move { provider.complete(&final_prompt, &model, &options).await });
+        let join_result = join_handle.await;
 
         let (outcome, input_tokens, output_tokens, cost_cents, confidence, response_text) =
-            match completion_result {
-                Ok(completion) => {
+            match join_result {
+                Ok(Ok(completion)) => {
                     let confidence = parse_confidence(&completion.text);
                     let outcome = match confidence {
                         Some(c) if c >= config.confidence_threshold => RunOutcome::AutoLand,
@@ -446,10 +459,10 @@ impl AgentRunner {
                         completion.text,
                     )
                 }
-                Err(e) => {
-                    // Provider failure — record as errored and surface the
-                    // message in the response slot so the agent_runs row is
-                    // a complete trail.
+                Ok(Err(e)) => {
+                    // Provider returned an error — record as Errored and
+                    // surface the message in the response slot so the
+                    // agent_runs row is a complete trail.
                     (
                         RunOutcome::Errored,
                         0,
@@ -459,9 +472,33 @@ impl AgentRunner {
                         format!("provider error: {e}"),
                     )
                 }
+                Err(join_err) if join_err.is_panic() => {
+                    // Provider task panicked — best-effort extract the
+                    // payload's string for diagnostics. The runner's own
+                    // task remains healthy.
+                    let payload = join_err.into_panic();
+                    let msg = panic_payload_to_string(payload);
+                    (RunOutcome::Panicked, 0, 0, 0.0, None, msg)
+                }
+                Err(join_err) => {
+                    // Cancellation — `tokio::spawn` futures are not
+                    // cancelled by the runner; if this ever fires it's a
+                    // runtime-shutdown signal. Treat as Errored.
+                    (
+                        RunOutcome::Errored,
+                        0,
+                        0,
+                        0.0,
+                        None,
+                        format!("provider task cancelled: {join_err}"),
+                    )
+                }
             };
 
-        let errored = matches!(outcome, RunOutcome::Errored) as i64;
+        // Both `Errored` (provider-returned Err) and `Panicked` (provider
+        // unwinding panic) count as failures for the boolean flag. `Deferred`
+        // is a resource conflict, not a failure.
+        let errored = matches!(outcome, RunOutcome::Errored | RunOutcome::Panicked) as i64;
         let completed_at = Utc::now().to_rfc3339();
         {
             let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
@@ -600,6 +637,21 @@ fn render_dynamic_tail(
     }
     vars.insert("correlation_id", correlation_id);
     prompt_loader::render_tail(&prompt.dynamic_tail, &vars)
+}
+
+/// Best-effort stringify of a tokio task panic payload. The payload is
+/// `Box<dyn Any + Send>`; the standard library convention is that
+/// `panic!(...)`-produced payloads are either `&'static str` or `String`,
+/// so we downcast to both. Unknown payload types fall back to a generic
+/// message so the agent_runs row always has something useful to read.
+fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        format!("provider panicked: {s}")
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        format!("provider panicked: {s}")
+    } else {
+        "provider panicked (non-string payload)".to_string()
+    }
 }
 
 /// Best-effort extraction of `confidence` (number in `[0, 1]`) from a JSON
@@ -1040,6 +1092,91 @@ trigger = "file_change""#,
             RunOutcome::AutoLand,
             "second run on same note must succeed after first guard drops"
         );
+    }
+
+    /// A provider that panics inside `complete` resolves the run as
+    /// Panicked (distinct from Errored) and the agent_runs row is fully
+    /// populated. The runner's own task remains usable for follow-up
+    /// invocations.
+    #[tokio::test]
+    async fn provider_panic_is_caught_and_marked_panicked() {
+        struct PanickingProvider;
+        #[async_trait]
+        impl LlmProvider for PanickingProvider {
+            async fn complete(
+                &self,
+                _prompt: &PromptStructured,
+                _model: &Model,
+                _options: &CompleteOptions,
+            ) -> engram_llm::Result<Completion> {
+                panic!("simulated provider bug");
+            }
+            async fn complete_streamed(
+                &self,
+                _: &PromptStructured,
+                _: &Model,
+                _: &CompleteOptions,
+            ) -> engram_llm::Result<StreamedCompletion> {
+                unreachable!()
+            }
+            async fn embed(&self, _: &str, _: &EmbeddingModel) -> engram_llm::Result<Vec<f32>> {
+                unreachable!()
+            }
+        }
+
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand""#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let runner = make_runner(&sqlite, Arc::new(PanickingProvider), tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome, RunOutcome::Panicked);
+        assert_eq!(report.input_tokens, 0);
+        assert_eq!(report.output_tokens, 0);
+        assert_eq!(report.cost_cents, 0.0);
+        assert!(
+            report.response_text.contains("simulated provider bug"),
+            "panic payload should surface in response_text: {}",
+            report.response_text
+        );
+
+        let row = agent_runs_row(&sqlite, &report.run_id);
+        assert!(row.completed_at.is_some());
+        assert_eq!(row.outcome.as_deref(), Some("panicked"));
+        assert_eq!(
+            row.errored, 1,
+            "panic counts as a failure for the errored flag"
+        );
+
+        // Runner is still usable after a prior panic — second call goes
+        // through cleanly with a normal provider.
+        let provider2 = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
+        let runner2 = make_runner(&sqlite, provider2, tmp.path());
+        let r2 = runner2
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        assert_eq!(r2.outcome, RunOutcome::AutoLand);
+    }
+
+    #[test]
+    fn panic_payload_to_string_handles_static_str_string_and_other() {
+        let s = panic_payload_to_string(Box::new("static str panic"));
+        assert!(s.contains("static str panic"));
+        let s = panic_payload_to_string(Box::new("owned String panic".to_string()));
+        assert!(s.contains("owned String panic"));
+        let s = panic_payload_to_string(Box::new(42_u64));
+        assert!(s.contains("non-string payload"));
     }
 
     #[tokio::test]
