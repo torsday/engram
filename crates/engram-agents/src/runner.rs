@@ -317,9 +317,43 @@ pub struct RunReport {
     /// as `kind`: observable today, consumed by the future
     /// `agent_actions` writer.
     pub rationale: Option<String>,
+    /// Files the agent proposes to write, parsed from the response's
+    /// `proposed_changes` field. Empty when the agent didn't propose
+    /// any changes (or the field was absent / malformed). Each entry
+    /// is a `{path, new_content}` pair describing the post-write state
+    /// of one file.
+    ///
+    /// The runner does **not** apply these changes today — the
+    /// `atomic_writes` integration is a separate slice. This field
+    /// defines the contract so that next slice can ship as a pure
+    /// consumer of `RunReport.proposed_changes` without re-walking the
+    /// response.
+    pub proposed_changes: Vec<ProposedChange>,
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
+}
+
+/// One file the agent proposes to write. Parsed from a `proposed_changes`
+/// entry in the agent's JSON response.
+///
+/// `path` is a vault-relative path the runner will later resolve against
+/// the vault root (the resolution + write-side bounds check belong to the
+/// `atomic_writes`-integration slice — this struct intentionally carries
+/// only what the agent emits).
+///
+/// `new_content` is the full post-write file content, not a diff. The
+/// runner can compute a diff against the existing file (if any) at write
+/// time; this keeps the agent's output format simple and lossless. Large
+/// files trade off response token cost for write-side simplicity — a
+/// future slice may add an alternative `patch: String` format for
+/// large-file edits.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ProposedChange {
+    /// Vault-relative path (e.g. `notes/some-note.md`).
+    pub path: String,
+    /// Full file content after the agent's edit.
+    pub new_content: String,
 }
 
 /// One cached agent's parsed config + prompt plus the mtimes the
@@ -509,6 +543,7 @@ impl AgentRunner {
             invasiveness,
             kind,
             rationale,
+            proposed_changes,
             response_text,
         ) = match join_result {
             Ok(Ok(completion)) => {
@@ -516,6 +551,7 @@ impl AgentRunner {
                 let invasiveness = parse_diff_summary(&completion.text).map(|d| classify(&d));
                 let kind = parse_string_field(&completion.text, "kind");
                 let rationale = parse_string_field(&completion.text, "rationale");
+                let proposed_changes = parse_proposed_changes(&completion.text);
                 // Auto-land requires BOTH gates to pass:
                 //   confidence ≥ threshold  AND  invasiveness ≤ max
                 // If the response didn't include a diff_summary, only
@@ -542,6 +578,7 @@ impl AgentRunner {
                     invasiveness,
                     kind,
                     rationale,
+                    proposed_changes,
                     completion.text,
                 )
             }
@@ -558,6 +595,7 @@ impl AgentRunner {
                     None,
                     None,
                     None,
+                    Vec::new(),
                     format!("provider error: {e}"),
                 )
             }
@@ -567,7 +605,18 @@ impl AgentRunner {
                 // task remains healthy.
                 let payload = join_err.into_panic();
                 let msg = panic_payload_to_string(payload);
-                (RunOutcome::Panicked, 0, 0, 0.0, None, None, None, None, msg)
+                (
+                    RunOutcome::Panicked,
+                    0,
+                    0,
+                    0.0,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                    msg,
+                )
             }
             Err(join_err) => {
                 // Cancellation — `tokio::spawn` futures are not
@@ -582,6 +631,7 @@ impl AgentRunner {
                     None,
                     None,
                     None,
+                    Vec::new(),
                     format!("provider task cancelled: {join_err}"),
                 )
             }
@@ -622,6 +672,7 @@ impl AgentRunner {
             invasiveness,
             kind,
             rationale,
+            proposed_changes,
             response_text,
         })
     }
@@ -691,6 +742,7 @@ impl AgentRunner {
             invasiveness: None,
             kind: None,
             rationale: None,
+            proposed_changes: Vec::new(),
             response_text: reason,
         })
     }
@@ -808,6 +860,24 @@ fn parse_diff_summary(text: &str) -> Option<DiffSummary> {
     let v: serde_json::Value = serde_json::from_str(text).ok()?;
     let field = v.get("diff_summary")?;
     serde_json::from_value(field.clone()).ok()
+}
+
+/// Best-effort extraction of a top-level `proposed_changes` array from
+/// a JSON response body. Each entry must shape to [`ProposedChange`]
+/// (`{path: String, new_content: String}`); entries that fail to
+/// deserialize are silently dropped so a partially-malformed array
+/// still yields the well-formed entries. Non-JSON, missing-field, or
+/// non-array-value cases return an empty `Vec`.
+fn parse_proposed_changes(text: &str) -> Vec<ProposedChange> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else {
+        return Vec::new();
+    };
+    let Some(arr) = v.get("proposed_changes").and_then(|f| f.as_array()) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|item| serde_json::from_value::<ProposedChange>(item.clone()).ok())
+        .collect()
 }
 
 /// Best-effort extraction of a top-level string field from a JSON
@@ -1799,6 +1869,122 @@ confidence_threshold = 0.7"#,
         assert_eq!(parse_string_field(r#"{"confidence": 0.9}"#, "kind"), None);
         // Non-JSON body.
         assert_eq!(parse_string_field("not json", "kind"), None);
+    }
+
+    /// A well-formed `proposed_changes` array surfaces fully on
+    /// `RunReport.proposed_changes`.
+    #[tokio::test]
+    async fn proposed_changes_propagate_to_report() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.9,
+                "proposed_changes": [
+                    {"path": "notes/alpha.md", "new_content": "# Alpha\n\nUpdated body."},
+                    {"path": "notes/beta.md", "new_content": "# Beta\n"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert_eq!(report.proposed_changes.len(), 2);
+        assert_eq!(report.proposed_changes[0].path, "notes/alpha.md");
+        assert!(report.proposed_changes[0]
+            .new_content
+            .contains("Updated body"));
+        assert_eq!(report.proposed_changes[1].path, "notes/beta.md");
+    }
+
+    /// A response without `proposed_changes` yields an empty vec —
+    /// the runner doesn't require the field.
+    #[tokio::test]
+    async fn missing_proposed_changes_is_empty_vec() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.9}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        assert!(report.proposed_changes.is_empty());
+    }
+
+    /// Malformed entries in `proposed_changes` are silently dropped so
+    /// a partially-malformed array still yields the well-formed
+    /// entries. This is a deliberate forgiveness: a buggy agent
+    /// proposing 5 valid edits and 1 garbage entry shouldn't lose the
+    /// 5 valid ones.
+    #[tokio::test]
+    async fn malformed_entries_in_proposed_changes_are_dropped() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "linker",
+            r#"name = "linker"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{
+                "confidence": 0.9,
+                "proposed_changes": [
+                    {"path": "notes/good.md", "new_content": "body"},
+                    "not an object",
+                    {"path": "notes/missing-content.md"},
+                    {"path": "notes/also-good.md", "new_content": ""}
+                ]
+            }"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("linker", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        // Only the two well-formed entries survive.
+        assert_eq!(report.proposed_changes.len(), 2);
+        let paths: Vec<&str> = report
+            .proposed_changes
+            .iter()
+            .map(|c| c.path.as_str())
+            .collect();
+        assert_eq!(paths, vec!["notes/good.md", "notes/also-good.md"]);
+    }
+
+    #[test]
+    fn parse_proposed_changes_only_accepts_array() {
+        assert!(parse_proposed_changes(r#"{}"#).is_empty());
+        assert!(parse_proposed_changes(r#"{"proposed_changes": "not an array"}"#).is_empty());
+        assert!(parse_proposed_changes("not json at all").is_empty());
+        assert_eq!(
+            parse_proposed_changes(r#"{"proposed_changes": [{"path": "p", "new_content": "c"}]}"#)
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]
