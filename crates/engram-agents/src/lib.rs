@@ -48,6 +48,12 @@ pub mod invasiveness;
 /// separate slice.
 pub mod diff_walker;
 
+/// Markdown-AST `DiffSummary` walker — AST-aware producer that adds
+/// link-removal, critical-frontmatter, and safe-additive-kind
+/// signals on top of the text walker. Drop-in replacement for
+/// `summarize_text_diff` when AST-level analysis is wanted.
+pub mod ast_walker;
+
 /// Prompt loader — splits `agents/<name>/prompt.md` on the cache-boundary
 /// marker into a `PromptStructured` per ADR 0010.
 pub mod prompt_loader;
