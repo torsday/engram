@@ -27,7 +27,15 @@ jobs:
       - name: install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
+      # `cache-targets: false` — only cache `~/.cargo/registry` + `~/.cargo/git`
+      # + the lockfile-keyed dep build artifacts under `~/.cargo/`, not the
+      # workspace `target/` directory. The full `target/` for this workspace
+      # (LanceDB + datafusion + comrak + rusqlite + lance pulls in ~2 GB)
+      # overflowed the runner's disk during the post-run cache save (see
+      # #212). Trade-off: slightly slower clean builds, but PRs unblock.
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: fmt
         run: cargo fmt --all -- --check
