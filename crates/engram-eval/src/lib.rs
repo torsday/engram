@@ -36,6 +36,8 @@
 
 /// Aggregate metrics over a set of [`CaseRunResult`]s.
 pub mod aggregate;
+/// Content-addressed snapshot cache (`.engram/evals/snapshots/<sha>/`).
+pub mod cache;
 /// Per-case fixture loaded from `.engram/evals/<agent>/cases/<id>.yaml`.
 pub mod case;
 /// Score / Verdict value types — what one case run produces.
@@ -48,6 +50,7 @@ pub mod scorer;
 pub mod snapshot;
 
 pub use aggregate::{Aggregate, CaseRunResult};
+pub use cache::SnapshotCache;
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
 pub use score::{Score, Verdict};
 pub use scorecard::{render_scorecard, sparkline};

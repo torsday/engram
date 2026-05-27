@@ -11,6 +11,7 @@ serde = { workspace = true }
 serde_yaml = { workspace = true }
 tar = { workspace = true }
 flate2 = { workspace = true }
+sha2 = "0.10"
 thiserror = { workspace = true }
 
 [dev-dependencies]
