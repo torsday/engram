@@ -482,12 +482,20 @@ async fn run_eval(
     let sqlite = Arc::new(Mutex::new(conn));
 
     // Select provider + model. Read EngramConfig and look at the
-    // `fast` model tier (Linker/Scribe/Cartographer all use fast;
-    // matches the per-agent config's `model_tier = "fast"` default).
-    // Operators with a different tier need an explicit follow-up;
-    // tier-selection-per-case is out of scope for this slice.
+    // Select the model tier the agent declared in its config.toml.
+    // Fast/Standard/Deep map to cfg.models.{fast,standard,deep}.
+    // If the agent's config can't be loaded (missing dir, parse
+    // error), fall back to Fast — matches AgentIdentity's default
+    // and the prior CLI behavior.
     let cfg = EngramConfig::load(&vault).unwrap_or_default();
-    let model_entry = &cfg.models.fast;
+    let tier = AgentConfig::load(&vault.join("agents"), &agent)
+        .map(|ac| ac.agent.model_tier.clone())
+        .unwrap_or(engram_core::config::ModelTier::Fast);
+    let model_entry = match tier {
+        engram_core::config::ModelTier::Fast => &cfg.models.fast,
+        engram_core::config::ModelTier::Standard => &cfg.models.standard,
+        engram_core::config::ModelTier::Deep => &cfg.models.deep,
+    };
     let (provider, model) = build_provider_and_model(model_entry, &cfg, &vault)?;
 
     // Build AgentRunner with the chosen provider.
