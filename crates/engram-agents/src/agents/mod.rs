@@ -140,6 +140,14 @@ pub mod scribe;
 /// output.
 pub mod gardener;
 
+/// Predictor — track predictions and confidence claims; maintain a
+/// prediction ledger; compute Brier-score calibration profiles per
+/// topic. Runs on a daily cron (09:00).
+///
+/// See `agents/predictor/prompt.md` for the prompt that produces
+/// this output.
+pub mod predictor;
+
 /// Witness — acknowledge personal and journal notes without analysis,
 /// suggestions, or vault modification. Strictly local-only; output
 /// goes to `.engram/witness/<date>.md`, never to the vault.
@@ -148,10 +156,45 @@ pub mod gardener;
 /// output.
 pub mod witness;
 
-/// Historian — create weekly activity-log entries that summarise vault
-/// changes and agent activity. Never modifies existing notes; every
-/// output is a new file under `meta/activity-log/YYYY-W<nn>.md`.
-/// Runs on a Monday-morning cron (06:00).
+/// Tutor — generate spaced-repetition flashcards from evergreen notes
+/// using the FSRS-4.5 algorithm and schedule cards for daily review.
+/// Additive invasiveness; auto-lands at confidence ≥ 0.80, council-
+/// routed below that. Runs on a daily cron (08:00).
+///
+/// See `agents/tutor/prompt.md` for the prompt that produces this
+/// output.
+pub mod tutor;
+
+/// Confidence Annotator — scan evergreen notes for claims without
+/// explicit epistemic markers and flag them with inline HTML comments.
+/// Additive invasiveness; annotations auto-land at confidence ≥ 0.80,
+/// council-routed below that. Confidence formula penalises 0.02 per
+/// proposed annotation (capped at 0.20) to reflect cumulative
+/// uncertainty.
+///
+/// See `agents/confidence-annotator/prompt.md` for the prompt that
+/// produces this output.
+pub mod confidence_annotator;
+
+/// Source Demand — flag uncited factual claims in evergreen notes
+/// and suggest vault literature notes that could serve as citations.
+/// Additive invasiveness; annotations auto-land at confidence ≥ 0.75.
+///
+/// See `agents/source-demand/prompt.md` for the prompt that produces
+/// this output.
+pub mod source_demand;
+
+/// Completion Nudger — surface unfinished notes (draft, open TODOs,
+/// mid-thought, stale in-progress) as a daily digest. Read-only;
+/// never modifies the vault. Runs on a daily cron at 07:00.
+///
+/// See `agents/completion-nudger/prompt.md` for the prompt that
+/// produces this output.
+pub mod completion_nudger;
+
+/// Historian — write a weekly activity-log entry summarising agent
+/// runs, auto-lands, proposals, and rejections. Creates a changelog
+/// note in `.engram/history/`; read-only with respect to vault notes.
 ///
 /// See `agents/historian/prompt.md` for the prompt that produces this
 /// output.

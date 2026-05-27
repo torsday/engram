@@ -42,12 +42,14 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    bridge_builder::BridgeBuilderOutput, devils_advocate::DevilsAdvocateOutput,
+    bridge_builder::BridgeBuilderOutput, completion_nudger::CompletionNudgerOutput,
+    confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput,
     gardener::GardenerOutput, historian::HistorianOutput, inquirer::InquirerOutput,
     linker::LinkerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn,
-    scribe::ScribeOutput, splitter::SplitterOutput,
-    steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
-    voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
+    predictor::PredictorOutput, scribe::ScribeOutput, source_demand::SourceDemandOutput,
+    splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput,
+    synthesizer::SynthesizerOutput, tutor::TutorOutput, voice_keeper::VoiceKeeperOutput,
+    witness::WitnessOutput,
 };
 use crate::cartographer::CartographerContinuousOutput;
 
@@ -127,7 +129,12 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "linker" => check::<LinkerOutput>(agent_name, text),
         "scribe" => check::<ScribeOutput>(agent_name, text),
         "gardener" => check::<GardenerOutput>(agent_name, text),
+        "predictor" => check::<PredictorOutput>(agent_name, text),
         "witness" => check::<WitnessOutput>(agent_name, text),
+        "confidence-annotator" => check::<ConfidenceAnnotatorOutput>(agent_name, text),
+        "source-demand" => check::<SourceDemandOutput>(agent_name, text),
+        "completion-nudger" => check::<CompletionNudgerOutput>(agent_name, text),
+        "tutor" => check::<TutorOutput>(agent_name, text),
         "historian" => check::<HistorianOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
@@ -154,7 +161,12 @@ pub fn registered_agents() -> &'static [&'static str] {
         "linker",
         "scribe",
         "gardener",
+        "predictor",
         "witness",
+        "confidence-annotator",
+        "source-demand",
+        "completion-nudger",
+        "tutor",
         "historian",
     ]
 }
@@ -232,13 +244,21 @@ mod tests {
                 r#"{"confidence":0.5,"rationale":"r","cleaned_body":"x","mode":"fleeting_cleanup","length_ratio":1.0}"#,
             ),
             ("gardener", r#"{"confidence":0.5,"rationale":"r"}"#),
+            ("predictor", r#"{"confidence":0.5,"rationale":"r"}"#),
             (
                 "witness",
                 r#"{"confidence":0.9,"rationale":"r","acknowledgment":"Thank you for sharing.","output_path":".engram/witness/2026-01-01.md"}"#,
             ),
             (
+                "confidence-annotator",
+                r#"{"confidence":0.5,"rationale":"r"}"#,
+            ),
+            ("source-demand", r#"{"confidence":0.5,"rationale":"r"}"#),
+            ("completion-nudger", r#"{"confidence":0.5,"rationale":"r"}"#),
+            ("tutor", r#"{"confidence":0.5,"rationale":"r"}"#),
+            (
                 "historian",
-                r#"{"confidence":0.8,"rationale":"r","log_entry":"Week summary.","output_path":"meta/activity-log/2026-W22.md"}"#,
+                r#"{"confidence":0.5,"rationale":"r","log_entry":"x","output_path":"y"}"#,
             ),
         ] {
             validate(agent, sample)

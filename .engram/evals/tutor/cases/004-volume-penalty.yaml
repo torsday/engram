@@ -1,0 +1,37 @@
+# AC: High card count → volume discount reduces final confidence
+id: tutor-volume-penalty
+description: >
+  When the Tutor generates many cards (>= 20) from a note, the volume
+  discount should reduce confidence by at least 0.15 compared to the
+  raw LLM quality score, capping at 0.20 penalty. The final confidence
+  must still be clamped to [0.0, 1.0].
+
+vault_state:
+  notes:
+    - path: "category-theory.md"
+      content: |
+        ---
+        title: Category Theory
+        id: 01J8DDDDDDDDDDDDDDD4
+        tags: [evergreen, mathematics, abstract-algebra]
+        ---
+        Category theory is a branch of mathematics that studies abstract
+        structures and relationships between them. Key concepts include:
+        objects, morphisms, functors, natural transformations, limits,
+        colimits, adjunctions, monads, Yoneda lemma, and universal properties.
+        Functors preserve structure between categories. Natural transformations
+        are morphisms between functors. Monads are monoids in the category of
+        endofunctors. The Yoneda lemma states that a functor F is determined
+        by its value at every representable functor.
+      note_type: evergreen
+
+trigger:
+  kind: cron
+  note_id: "category-theory"
+
+expected_output:
+  flashcards_min_count: 10
+  confidence_formula_check:
+    # confidence must be <= (llm_score - (n_cards * 0.01).min(0.20))
+    volume_discount_applied: true
+  rationale_nonempty: true

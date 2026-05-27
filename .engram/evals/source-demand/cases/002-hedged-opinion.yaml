@@ -1,0 +1,31 @@
+# AC: Hedged opinions are not flagged
+id: source-demand-hedged-opinion
+description: >
+  An evergreen note contains only hedged personal observations — no
+  factual assertions. The agent should return an empty flagged_claims list.
+
+vault_state:
+  notes:
+    - path: "morning-routine-reflections.md"
+      content: |
+        ---
+        title: Morning Routine Reflections
+        id: 01HMORN0000000000BB
+        note_type: evergreen
+        ---
+        In my experience, starting the day with a short walk seems to
+        improve my mood. I think this might be related to getting outside
+        early, though I'm not sure. It could just be that I enjoy the
+        quiet of early morning — that alone feels worthwhile.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "morning-routine-reflections.md"
+
+available_literature_notes: []
+
+expected_output:
+  flagged_claims: []
+  confidence_min: 0.70
+  rationale_nonempty: true
