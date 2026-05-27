@@ -198,8 +198,7 @@ mod tests {
                 "source_note_ids": ["01H8AA"]
             }
         }"#;
-        let parsed: SynthesizerOutput =
-            serde_json::from_str(minimal_propose).expect("parse");
+        let parsed: SynthesizerOutput = serde_json::from_str(minimal_propose).expect("parse");
         let ev = parsed.proposed_evergreen.expect("present");
         assert!(ev.related_existing_evergreens.is_empty());
         assert!(parsed.cluster_coherence.secondary_concept.is_none());
@@ -226,8 +225,7 @@ mod tests {
             "cluster_coherence": { "coherent": false },
             "proposed_evergreen": null
         }"#;
-        let parsed_null: SynthesizerOutput =
-            serde_json::from_str(null_value).expect("parse null");
+        let parsed_null: SynthesizerOutput = serde_json::from_str(null_value).expect("parse null");
         assert!(parsed_null.proposed_evergreen.is_none());
         assert_eq!(parsed, parsed_null);
     }
@@ -242,8 +240,8 @@ mod tests {
             "cluster_coherence": { "coherent": true },
             "future_field": "should not parse"
         }"#;
-        let err = serde_json::from_str::<SynthesizerOutput>(extra)
-            .expect_err("unknown field must fail");
+        let err =
+            serde_json::from_str::<SynthesizerOutput>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error message should point at the offending field; got: {err}"

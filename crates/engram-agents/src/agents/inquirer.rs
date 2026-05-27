@@ -143,8 +143,7 @@ mod tests {
     fn round_trips_via_serde_json() {
         let parsed: InquirerOutput = serde_json::from_str(SAMPLE_OUTPUT).expect("parse");
         let re_serialized = serde_json::to_string(&parsed).expect("serialize");
-        let re_parsed: InquirerOutput =
-            serde_json::from_str(&re_serialized).expect("re-parse");
+        let re_parsed: InquirerOutput = serde_json::from_str(&re_serialized).expect("re-parse");
         assert_eq!(parsed, re_parsed);
     }
 
@@ -177,11 +176,9 @@ mod tests {
             "questions": [],
             "output_path": "inbox/x.md"
         }"#;
-        let err = serde_json::from_str::<InquirerOutput>(bad)
-            .expect_err("unknown mode must fail");
+        let err = serde_json::from_str::<InquirerOutput>(bad).expect_err("unknown mode must fail");
         assert!(
-            err.to_string().contains("yearly-retrospective")
-                || err.to_string().contains("variant"),
+            err.to_string().contains("yearly-retrospective") || err.to_string().contains("variant"),
             "error message should point at the bad mode; got: {err}"
         );
     }
@@ -197,8 +194,8 @@ mod tests {
             "output_path": "inbox/x.md",
             "future_field": "this should not parse"
         }"#;
-        let err = serde_json::from_str::<InquirerOutput>(extra)
-            .expect_err("unknown field must fail");
+        let err =
+            serde_json::from_str::<InquirerOutput>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error message should point at the offending field; got: {err}"
@@ -247,8 +244,7 @@ mod tests {
             ],
             "output_path": "reflections/blindspots-2026-Q2.md"
         }"#;
-        let parsed: InquirerOutput =
-            serde_json::from_str(blindspot).expect("blindspot parse");
+        let parsed: InquirerOutput = serde_json::from_str(blindspot).expect("blindspot parse");
         assert_eq!(parsed.mode, InquirerMode::Blindspot);
         assert!(parsed.questions[0].motivating_note_ids.is_empty());
     }

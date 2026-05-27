@@ -259,7 +259,10 @@ mod tests {
         assert!(merge.dropped_content.is_empty());
         assert_eq!(merge.unresolved_conflicts.len(), 1);
         // The targeted-section vs whole-note distinction.
-        assert_eq!(merge.link_reassignments[0].target_section, "rate-distortion-analogy");
+        assert_eq!(
+            merge.link_reassignments[0].target_section,
+            "rate-distortion-analogy"
+        );
         assert!(merge.link_reassignments[1].target_section.is_empty());
     }
 
@@ -276,8 +279,7 @@ mod tests {
         for sample in [MERGE_SAMPLE, DECLINE_SAMPLE] {
             let parsed: MergerOutput = serde_json::from_str(sample).expect("parse");
             let re_serialized = serde_json::to_string(&parsed).expect("serialize");
-            let re_parsed: MergerOutput =
-                serde_json::from_str(&re_serialized).expect("re-parse");
+            let re_parsed: MergerOutput = serde_json::from_str(&re_serialized).expect("re-parse");
             assert_eq!(parsed, re_parsed);
         }
     }
@@ -323,8 +325,7 @@ mod tests {
             "similarity_signals": ["x"],
             "future_field": "should not parse"
         }"#;
-        let err = serde_json::from_str::<MergerOutput>(extra)
-            .expect_err("unknown field must fail");
+        let err = serde_json::from_str::<MergerOutput>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error message should point at the offending field; got: {err}"

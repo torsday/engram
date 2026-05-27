@@ -2307,7 +2307,11 @@ trigger = "on_demand"
                 continue;
             }
             let dir = entry.path();
-            let name = dir.file_name().and_then(|s| s.to_str()).unwrap().to_string();
+            let name = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap()
+                .to_string();
             let config_path = dir.join("config.toml");
             let prompt_path = dir.join("prompt.md");
             if !config_path.is_file() || !prompt_path.is_file() {

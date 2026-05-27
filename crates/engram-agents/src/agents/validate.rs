@@ -48,6 +48,7 @@ use super::{
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     voice_keeper::VoiceKeeperOutput,
 };
+use crate::cartographer::CartographerContinuousOutput;
 
 /// Errors produced by [`validate`].
 #[derive(Debug, Error)]
@@ -121,6 +122,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "splitter" => check::<SplitterOutput>(agent_name, text),
         "merger" => check::<MergerOutput>(agent_name, text),
         "bridge-builder" => check::<BridgeBuilderOutput>(agent_name, text),
+        "cartographer" => check::<CartographerContinuousOutput>(agent_name, text),
         "scribe" => check::<ScribeOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
@@ -143,6 +145,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "splitter",
         "merger",
         "bridge-builder",
+        "cartographer",
         "scribe",
     ]
 }
@@ -210,6 +213,10 @@ mod tests {
                 r#"{"confidence":0.5,"rationale":"r","decline":true}"#,
             ),
             ("bridge-builder", r#"{"confidence":0.5,"rationale":"r"}"#),
+            (
+                "cartographer",
+                r#"{"confidence":0.5,"rationale":"r","index_updates":[]}"#,
+            ),
             (
                 "scribe",
                 r#"{"confidence":0.5,"rationale":"r","cleaned_body":"x","mode":"fleeting_cleanup","length_ratio":1.0}"#,

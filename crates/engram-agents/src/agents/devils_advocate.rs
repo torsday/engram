@@ -280,8 +280,7 @@ mod tests {
             "rationale": "ok",
             "decline": false
         }"#;
-        let parsed: DevilsAdvocateOutput =
-            serde_json::from_str(missing).expect("parse missing");
+        let parsed: DevilsAdvocateOutput = serde_json::from_str(missing).expect("parse missing");
         assert!(parsed.standalone_critique.is_none());
 
         let null_value = r#"{
