@@ -44,8 +44,9 @@ use thiserror::Error;
 use super::{
     bridge_builder::BridgeBuilderOutput, devils_advocate::DevilsAdvocateOutput,
     inquirer::InquirerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn,
-    splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput,
-    synthesizer::SynthesizerOutput, voice_keeper::VoiceKeeperOutput,
+    scribe::ScribeOutput, splitter::SplitterOutput,
+    steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
+    voice_keeper::VoiceKeeperOutput,
 };
 use crate::cartographer::CartographerContinuousOutput;
 
@@ -122,6 +123,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "merger" => check::<MergerOutput>(agent_name, text),
         "bridge-builder" => check::<BridgeBuilderOutput>(agent_name, text),
         "cartographer" => check::<CartographerContinuousOutput>(agent_name, text),
+        "scribe" => check::<ScribeOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -144,6 +146,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "merger",
         "bridge-builder",
         "cartographer",
+        "scribe",
     ]
 }
 
@@ -213,6 +216,10 @@ mod tests {
             (
                 "cartographer",
                 r#"{"confidence":0.5,"rationale":"r","index_updates":[]}"#,
+            ),
+            (
+                "scribe",
+                r#"{"confidence":0.5,"rationale":"r","cleaned_body":"x","mode":"fleeting_cleanup","length_ratio":1.0}"#,
             ),
         ] {
             validate(agent, sample)

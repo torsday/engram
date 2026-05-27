@@ -1,0 +1,37 @@
+id: scribe-005
+description: >
+  Fleeting note with no frontmatter title. The note body is otherwise
+  clean (no filler). Scribe should propose a title in frontmatter_updates
+  derived from the note content, and leave the body unchanged.
+
+mode: fleeting_cleanup
+
+vault_state:
+  notes:
+    - path: inbox/untitled-2024-01-17.md
+      body: |
+        The key constraint in the vault design is that agents never
+        commit to git. All agent writes are unstaged. The human is
+        the only entity that touches git history.
+
+input:
+  note_path: inbox/untitled-2024-01-17.md
+
+expected_output:
+  mode: fleeting_cleanup
+  frontmatter_updates_must_include_key: title
+  length_ratio_range: [0.95, 1.05]
+  cleaned_body_must_contain:
+    - agents never commit
+    - unstaged
+
+pass_criteria:
+  - frontmatter_updates includes a non-empty "title" key
+  - body content is preserved (already clean, minimal changes expected)
+  - length_ratio close to 1.0
+  - no meaning change to the body
+
+fail_criteria:
+  - title omitted from frontmatter_updates
+  - body content altered in meaning
+  - title invented that contradicts note content

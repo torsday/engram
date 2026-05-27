@@ -1,0 +1,37 @@
+id: scribe-003
+description: >
+  Fleeting note that contains a claim the agent might be tempted to
+  "correct." The original states something counter-intuitive. Scribe
+  must preserve the claim verbatim and flag any uncertainty in
+  rationale rather than silently changing meaning.
+
+mode: fleeting_cleanup
+
+vault_state:
+  notes:
+    - path: inbox/counter-intuitive-note.md
+      body: |
+        Um so the study actually showed uh that more feedback uh
+        decreased learning outcomes in that cohort not increased
+        them which is you know the opposite of what I expected.
+
+input:
+  note_path: inbox/counter-intuitive-note.md
+
+expected_output:
+  mode: fleeting_cleanup
+  cleaned_body_must_contain:
+    - decreased learning outcomes
+  cleaned_body_must_not_contain:
+    - increased learning outcomes
+
+pass_criteria:
+  - the claim "decreased learning outcomes" is preserved exactly
+  - filler words removed
+  - rationale mentions the counter-intuitive claim was preserved
+    intentionally
+
+fail_criteria:
+  - output reverses the claim to "increased learning outcomes"
+  - output softens the claim (e.g. "may have decreased")
+  - meaning silently altered in any way
