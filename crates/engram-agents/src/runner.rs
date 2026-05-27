@@ -133,6 +133,23 @@ pub enum RunnerError {
         /// and the filer doesn't need to expose chain-walking.
         detail: String,
     },
+
+    /// A [`run_sub_agent`](AgentRunner::run_sub_agent) call was made
+    /// at a depth that exceeds [`MAX_SUB_AGENT_DEPTH`]. Returned
+    /// before any provider or database work happens; prevents
+    /// infinite ceremony loops where one agent invokes another that
+    /// (transitively) invokes the original.
+    #[error(
+        "sub-agent `{agent}` rejected at depth {depth} (max {limit}): recursion limit exceeded"
+    )]
+    RecursionLimitExceeded {
+        /// Name of the agent the caller tried to invoke.
+        agent: String,
+        /// Depth the caller passed.
+        depth: usize,
+        /// The compiled-in limit ([`MAX_SUB_AGENT_DEPTH`]).
+        limit: usize,
+    },
 }
 
 /// Outcome recorded in `agent_runs.outcome` and returned in [`RunReport`].
@@ -413,6 +430,11 @@ pub struct RunReport {
     /// Raw response text (kept so callers can route to action-log /
     /// proposal-filer in follow-up slices).
     pub response_text: String,
+    /// Generation of this run in the sub-agent call chain. `0` for
+    /// top-level [`AgentRunner::run_agent`] invocations; `≥1` for
+    /// [`AgentRunner::run_sub_agent`]. Caller threads `depth + 1`
+    /// when invoking a nested sub-agent from inside this run.
+    pub sub_agent_depth: usize,
 }
 
 /// Per-file outcome from the AutoLand write phase. See
@@ -520,7 +542,21 @@ pub struct Proposal {
 struct SubAgentContext {
     parent_run_id: String,
     parent_correlation_id: String,
+    /// Generation of this sub-agent in the call chain. The top-level
+    /// `run_agent` is depth 0; the first `run_sub_agent` it spawns
+    /// is depth 1; its sub-agent is depth 2; that one's sub-agent is
+    /// depth 3 — the maximum permitted. A call at depth > 3 errors
+    /// with [`RunnerError::RecursionLimitExceeded`].
+    depth: usize,
 }
+
+/// Maximum permitted sub-agent recursion depth per issue #31. The
+/// top-level [`AgentRunner::run_agent`] is depth 0; each nested
+/// [`AgentRunner::run_sub_agent`] increments. Calls at depth > 3 are
+/// rejected before any provider/database work happens. Prevents
+/// infinite ceremony loops where one agent invokes another that
+/// invokes the original.
+pub const MAX_SUB_AGENT_DEPTH: usize = 3;
 
 /// One cached agent's parsed config + prompt plus the mtimes the
 /// cache was built from. The runner consults the cache on every
@@ -610,26 +646,44 @@ impl AgentRunner {
     /// - the sub-run's [`agent_actions`] row records the parent's
     ///   `run_id` in the `parent_run_id` column, so the audit trail
     ///   can join sub-agent writes back to the originating run
+    /// - the recursion-depth gate fires when `depth > MAX_SUB_AGENT_DEPTH`
+    ///   (= 3); the call returns [`RunnerError::RecursionLimitExceeded`]
+    ///   before any provider or database work happens
+    ///
+    /// `depth` is the generation of *this* sub-agent in the call
+    /// chain: the first `run_sub_agent` a top-level run invokes is
+    /// `depth = 1`; that one's sub-agent passes `depth = 2`; and so
+    /// on. Callers thread the value themselves — the runner reads it
+    /// back on [`RunReport::sub_agent_depth`] so nested invocations
+    /// can `depth + 1`.
     ///
     /// Each sub-run still gets its own unique `run_id` (a separate
     /// row in `agent_runs`) — the parent_run_id link is what stitches
     /// them together. See issue #31 for the full invocation contract;
-    /// this slice covers attribution only. Memory namespacing,
-    /// budget accounting, recursion-depth limits, and the
-    /// timeout-bounded `SubAgent` trait are follow-up slices.
+    /// memory namespacing, budget accounting, and the timeout-bounded
+    /// `SubAgent` trait are still follow-up slices.
     pub async fn run_sub_agent(
         &self,
         parent_run_id: &str,
         parent_correlation_id: &str,
+        depth: usize,
         name: &str,
         trigger: TriggerContext,
     ) -> Result<RunReport, RunnerError> {
+        if depth > MAX_SUB_AGENT_DEPTH {
+            return Err(RunnerError::RecursionLimitExceeded {
+                agent: name.to_string(),
+                depth,
+                limit: MAX_SUB_AGENT_DEPTH,
+            });
+        }
         self.run_agent_with(
             name,
             trigger,
             Some(SubAgentContext {
                 parent_run_id: parent_run_id.to_string(),
                 parent_correlation_id: parent_correlation_id.to_string(),
+                depth,
             }),
         )
         .await
@@ -647,6 +701,7 @@ impl AgentRunner {
             .unwrap_or_else(|| NoteId::new().as_str().to_string());
         let run_id = NoteId::new().as_str().to_string();
         let parent_run_id = sub.as_ref().map(|s| s.parent_run_id.clone());
+        let sub_agent_depth = sub.as_ref().map(|s| s.depth).unwrap_or(0);
 
         // `kind` and `rationale` are recorded later via
         // `Span::record` once we've parsed the response. Declared
@@ -658,13 +713,21 @@ impl AgentRunner {
             correlation_id = %correlation_id,
             run_id = %run_id,
             parent_run_id = parent_run_id.as_deref().unwrap_or(""),
+            sub_agent_depth = sub_agent_depth,
             trigger = trigger.trigger_label(),
             kind = tracing::field::Empty,
             rationale = tracing::field::Empty,
         );
         async move {
-            self.run_agent_inner(name, trigger, run_id, correlation_id, parent_run_id)
-                .await
+            self.run_agent_inner(
+                name,
+                trigger,
+                run_id,
+                correlation_id,
+                parent_run_id,
+                sub_agent_depth,
+            )
+            .await
         }
         .instrument(span)
         .await
@@ -677,6 +740,7 @@ impl AgentRunner {
         run_id: String,
         correlation_id: String,
         parent_run_id: Option<String>,
+        sub_agent_depth: usize,
     ) -> Result<RunReport, RunnerError> {
         // Load agent config + prompt before recording the run start so we
         // surface configuration errors loudly instead of leaving an
@@ -725,7 +789,7 @@ impl AgentRunner {
                 Ok(guard) => Some(guard),
                 Err(reason) => {
                     return self
-                        .finalize_deferred(&run_id, &correlation_id, name, reason)
+                        .finalize_deferred(&run_id, &correlation_id, name, reason, sub_agent_depth)
                         .await;
                 }
             },
@@ -1076,6 +1140,7 @@ impl AgentRunner {
             response_text,
             action_id,
             proposal_id,
+            sub_agent_depth,
         })
     }
 
@@ -1258,6 +1323,7 @@ impl AgentRunner {
         correlation_id: &str,
         name: &str,
         reason: String,
+        sub_agent_depth: usize,
     ) -> Result<RunReport, RunnerError> {
         let completed_at = Utc::now().to_rfc3339();
         {
@@ -1295,6 +1361,7 @@ impl AgentRunner {
             response_text: reason,
             action_id: None,
             proposal_id: None,
+            sub_agent_depth,
         })
     }
 
@@ -3683,11 +3750,13 @@ confidence_threshold = 0.7"#,
             .run_sub_agent(
                 &parent_run_id,
                 &parent_correlation,
+                1,
                 "sub",
                 TriggerContext::OnDemand { note_id: None },
             )
             .await
             .unwrap();
+        assert_eq!(report.sub_agent_depth, 1);
 
         // Correlation inherited verbatim; run_id is a fresh ULID
         // (so the sub-run still gets its own agent_runs row).
@@ -3747,6 +3816,92 @@ confidence_threshold = 0.7"#,
         assert!(
             stored_parent.is_none(),
             "top-level runs must not populate parent_run_id"
+        );
+        assert_eq!(report.sub_agent_depth, 0, "top-level runs report depth 0");
+    }
+
+    /// A sub-agent call at the boundary `depth == MAX_SUB_AGENT_DEPTH`
+    /// is permitted; the next generation (`depth + 1`) is rejected
+    /// with `RecursionLimitExceeded` before any provider work.
+    #[tokio::test]
+    async fn run_sub_agent_rejects_calls_past_max_depth() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "sub",
+            r#"name = "sub"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.1}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        // Stub a parent agent_runs row so the FK on
+        // agent_actions.parent_run_id resolves cleanly.
+        let parent_run_id = "01HXPARRECDEPTH000000000".to_string();
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_runs (id, agent_name, started_at, trigger) \
+                 VALUES (?1, 'parent', ?2, 'on_demand')",
+                rusqlite::params![parent_run_id, Utc::now().to_rfc3339()],
+            )
+            .unwrap();
+        }
+
+        // depth == MAX (3) is allowed — the boundary itself isn't
+        // rejected, only strictly past it.
+        let at_max = runner
+            .run_sub_agent(
+                &parent_run_id,
+                "corr",
+                MAX_SUB_AGENT_DEPTH,
+                "sub",
+                TriggerContext::OnDemand { note_id: None },
+            )
+            .await
+            .expect("depth == MAX is permitted");
+        assert_eq!(at_max.sub_agent_depth, MAX_SUB_AGENT_DEPTH);
+
+        // depth == MAX + 1 is rejected.
+        let err = runner
+            .run_sub_agent(
+                &parent_run_id,
+                "corr",
+                MAX_SUB_AGENT_DEPTH + 1,
+                "sub",
+                TriggerContext::OnDemand { note_id: None },
+            )
+            .await
+            .expect_err("depth > MAX must error");
+        match err {
+            RunnerError::RecursionLimitExceeded {
+                agent,
+                depth,
+                limit,
+            } => {
+                assert_eq!(agent, "sub");
+                assert_eq!(depth, MAX_SUB_AGENT_DEPTH + 1);
+                assert_eq!(limit, MAX_SUB_AGENT_DEPTH);
+            }
+            other => panic!("expected RecursionLimitExceeded, got {other:?}"),
+        }
+
+        // The rejection short-circuits before any DB write — only
+        // the in-range run produced an agent_runs row.
+        let conn = sqlite.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM agent_runs WHERE agent_name = ?1",
+                rusqlite::params!["sub"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            count, 1,
+            "only the in-range sub-run wrote a row; the over-depth call short-circuited"
         );
     }
 
