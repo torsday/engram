@@ -198,10 +198,8 @@ impl EvalRunReport {
                     e,
                 )))
             })?;
-            // failure_reason is NULL for this slice — the runner
-            // doesn't yet capture per-case error messages on the
-            // Verdict::Error path. Future enhancement.
-            let failure_reason: Option<&str> = None;
+            // failure_reason is the runner-captured detail string
+            // on Verdict::Error (slice 12), None otherwise.
             txn.execute(
                 "INSERT INTO eval_case_results ( \
                     eval_run_id, case_id, result, scores, failure_reason \
@@ -211,7 +209,7 @@ impl EvalRunReport {
                     r.case_id,
                     r.verdict.as_sql(),
                     scores_json,
-                    failure_reason
+                    r.failure_reason
                 ],
             )?;
         }
@@ -346,13 +344,14 @@ impl EvalRunner {
             verdict,
             score,
             proposals_emitted,
+            failure_reason: None,
         }
     }
 }
 
 /// Build a uniform `CaseRunResult` for the error path so the
 /// runner always returns one row per case regardless of failure.
-fn error_result(case: &Case, _detail: String) -> CaseRunResult {
+fn error_result(case: &Case, detail: String) -> CaseRunResult {
     CaseRunResult {
         case_id: case.id.clone(),
         verdict: Verdict::Error,
@@ -364,6 +363,7 @@ fn error_result(case: &Case, _detail: String) -> CaseRunResult {
             cost_usd: 0.0,
         },
         proposals_emitted: 0,
+        failure_reason: Some(detail),
     }
 }
 
@@ -611,12 +611,14 @@ mod tests {
                 verdict: Verdict::Pass,
                 score: crate::Score::perfect(),
                 proposals_emitted: 0,
+                failure_reason: None,
             }],
             aggregate: Aggregate::from_results(&[CaseRunResult {
                 case_id: "001".into(),
                 verdict: Verdict::Pass,
                 score: crate::Score::perfect(),
                 proposals_emitted: 0,
+                failure_reason: None,
             }]),
         };
         let path = report.write_json(parent.path()).unwrap();
@@ -647,6 +649,7 @@ mod tests {
                 cost_usd: 0.10,
             },
             proposals_emitted: 1,
+            failure_reason: None,
         }
     }
 
@@ -662,6 +665,7 @@ mod tests {
                 cost_usd: 0.05,
             },
             proposals_emitted: 2,
+            failure_reason: None,
         }
     }
 
@@ -818,5 +822,82 @@ mod tests {
             )
             .unwrap();
         assert!(exists);
+    }
+
+    /// Verdict::Error rows carry the runner-captured detail string
+    /// in `failure_reason` — both in-memory on `CaseRunResult` and
+    /// persisted into `eval_case_results.failure_reason`.
+    #[test]
+    fn verdict_error_persists_failure_reason() {
+        let mut conn = setup_sqlite();
+        // Build a hand-crafted Error result with a known message.
+        let results = vec![CaseRunResult {
+            case_id: "001-x".into(),
+            verdict: Verdict::Error,
+            score: crate::Score {
+                precision: 0.0,
+                recall: 0.0,
+                calibration: 0.0,
+                cost: 1.0,
+                cost_usd: 0.0,
+            },
+            proposals_emitted: 0,
+            failure_reason: Some("simulated invoker panic".into()),
+        }];
+        let report = EvalRunReport {
+            agent: "linker".into(),
+            aggregate: Aggregate::from_results(&results),
+            results,
+        };
+        let params = PersistParams {
+            agent_prompt_sha: "p",
+            agent_config_sha: "c",
+            model_used: "m",
+            output_path: std::path::Path::new("/tmp/r.json"),
+            started_at: "2026-05-27T00:00:00Z",
+            completed_at: "2026-05-27T00:00:10Z",
+            total_tokens: 0,
+        };
+        let run_id = report.persist(&mut conn, &params).unwrap();
+        let reason: Option<String> = conn
+            .query_row(
+                "SELECT failure_reason FROM eval_case_results \
+                 WHERE eval_run_id = ?1 AND case_id = '001-x'",
+                rusqlite::params![run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(reason.as_deref(), Some("simulated invoker panic"));
+    }
+
+    /// Invoker-error path captures the InvokerError message verbatim
+    /// onto the resulting CaseRunResult.failure_reason.
+    #[test]
+    fn runner_captures_invoker_message_into_failure_reason() {
+        let dir = tempdir().unwrap();
+        let vault = dir.path().join("vault");
+        std::fs::create_dir_all(&vault).unwrap();
+        std::fs::write(vault.join("seed.md"), "hi").unwrap();
+        let cases_dir = dir.path().join("cases");
+        std::fs::create_dir_all(&cases_dir).unwrap();
+        std::fs::write(
+            cases_dir.join("001-broken.yaml"),
+            format!(
+                "id: 001-broken\ninput:\n  vault_state: {}\nexpected:\n  proposes_link: true\n",
+                vault.display()
+            ),
+        )
+        .unwrap();
+
+        let invoker: Invoker =
+            Box::new(|_case, _vault| Err(InvokerError::new("synthetic invoker failure")));
+        let cache = SnapshotCache::new(tempdir().unwrap().path());
+        let runner = EvalRunner::new("linker", &cases_dir, cache, invoker);
+        let report = runner.run_all().unwrap();
+        assert_eq!(report.results[0].verdict, Verdict::Error);
+        assert_eq!(
+            report.results[0].failure_reason.as_deref(),
+            Some("synthetic invoker failure")
+        );
     }
 }
