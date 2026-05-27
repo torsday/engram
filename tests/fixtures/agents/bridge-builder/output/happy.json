@@ -1,0 +1,38 @@
+{
+  "confidence": 0.79,
+  "rationale": "Three cluster pairs analyzed: two are meaningfully disconnected (one woodworking + one Rust; one personal-journal + one technical-writing) and one is an accidental gap (the rate-distortion cluster and the editing cluster both reach for lossy compression).",
+  "cluster_pair_verdicts": [
+    {
+      "cluster_a_id": "c-rate-distortion",
+      "cluster_b_id": "c-editing",
+      "verdict": "accidental_link",
+      "reasoning": "Both clusters reach for lossy compression; 01H8X9 (in c-rate-distortion) has an explicit anchor that fits 01H8XA in c-editing.",
+      "proposed_bridge": {
+        "source_note_id": "01H8X9",
+        "target_note_id": "01H8XA",
+        "anchor_text": "rate-distortion",
+        "justification": "01H8X9's rate-distortion analogy directly informs 01H8XA's claim about editor choice."
+      }
+    },
+    {
+      "cluster_a_id": "c-woodworking",
+      "cluster_b_id": "c-rust",
+      "verdict": "meaningful",
+      "reasoning": "Two genuinely unrelated topics; the author maintains them as separate projects.",
+      "proposed_bridge": null
+    },
+    {
+      "cluster_a_id": "c-systems-design",
+      "cluster_b_id": "c-knowledge-systems",
+      "verdict": "accidental_note",
+      "reasoning": "Both clusters circle the same abstraction (feedback loops in self-improving systems) without any one note being the right place to put a single link.",
+      "proposed_bridge": {
+        "title": "Feedback loops in self-improving systems",
+        "slug": "feedback-loops-self-improving-systems",
+        "body": "Both software design and knowledge management depend on feedback loops between the system's outputs and its inputs. Each cluster has notes on the local case; this bridge names the shared abstraction.",
+        "cluster_a_anchor_note_ids": ["01H9A1", "01H9A2"],
+        "cluster_b_anchor_note_ids": ["01H9B1", "01H9B2"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "confidence": 0.88,
+  "rationale": "Both notes name the same concept ('editing-as-compression') and reach the same central claim; one is sharper on the rate-distortion analogy, the other on the editor/author disagreement. The canonical preserves both.",
+  "decline": false,
+  "similarity_signals": ["identical-central-claim", "shared-citations"],
+  "proposed_merge": {
+    "canonical": {
+      "title": "Editing as compression",
+      "slug": "editing-as-compression",
+      "body": "Editing is the editor's choice of what to drop. Rate-distortion theory makes the trade-off legible; the editor/author disagreement makes the choice fraught...",
+      "source_note_ids": ["01H8AA", "01H8AB"]
+    },
+    "aliases": [
+      {
+        "former_title": "Editing-as-compression draft",
+        "former_note_id": "01H8AA",
+        "alias_slug": "editing-as-compression-draft"
+      },
+      {
+        "former_title": "Lossy reduction in writing",
+        "former_note_id": "01H8AB",
+        "alias_slug": "lossy-reduction-in-writing"
+      }
+    ],
+    "link_reassignments": [
+      {"source_note_id": "01H8X1", "anchor_text": "lossy", "target_section": "rate-distortion-analogy"},
+      {"source_note_id": "01H8X2", "anchor_text": "editor-choice", "target_section": ""}
+    ],
+    "dropped_content": [],
+    "unresolved_conflicts": [
+      {
+        "claim_a": "Editing always reduces fidelity to original intent.",
+        "claim_b": "Editing can clarify intent that the original prose obscured.",
+        "suggested_resolution": "Claim B is sharper; A is a special case (editor and author disagree on what counts as intent)."
+      }
+    ]
+  }
+}
