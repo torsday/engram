@@ -1,0 +1,19 @@
+{
+  "confidence": 0.88,
+  "rationale": "The draft opens with an abstract claim where the author always opens with a concrete example; the rest of the passage matches voice.",
+  "mode": "review",
+  "verdicts": [
+    {
+      "passage_excerpt": "Compression is the fundamental abstraction of writing.",
+      "verdict": "propose_rewrite",
+      "voice_signals": ["opens-abstract", "fundamental-overuse"],
+      "proposed_rewrite": "When I cut the third draft of the lossy-compression note down from 1200 words to 400, I noticed I was doing the same thing the note describes."
+    },
+    {
+      "passage_excerpt": "I noticed I was doing the same thing the note describes.",
+      "verdict": "pass",
+      "voice_signals": ["concrete-example-voice"],
+      "proposed_rewrite": null
+    }
+  ]
+}

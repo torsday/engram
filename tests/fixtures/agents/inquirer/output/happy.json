@@ -1,0 +1,13 @@
+{
+  "confidence": 0.78,
+  "rationale": "Today's changes added three notes on lossy compression as a writing metaphor; the question pulls forward an older note on rate-distortion theory that the author hasn't linked from this week's work yet.",
+  "mode": "daily-reactive",
+  "questions": [
+    {
+      "question": "Does the lossy-compression metaphor still hold when the editor and author disagree on which signal to drop?",
+      "motivating_note_ids": ["01H8X9", "01H8XA", "01H8XB"],
+      "why_now": "Three notes from this week reach for the metaphor; an older note (01H8X9) already complicates it without being linked back."
+    }
+  ],
+  "output_path": "inbox/2026-05-27-lossy-compression-disagreement.md"
+}
