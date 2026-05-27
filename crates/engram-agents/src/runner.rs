@@ -364,10 +364,64 @@ fn default_cron_interval_secs() -> u64 {
 }
 
 impl AgentConfig {
-    /// Parse from a TOML string. Useful for tests and for callers that
-    /// have already read the file.
+    /// Parse from a TOML string. Accepts **both** schemas:
+    ///
+    /// 1. The canonical [`engram_core::config::AgentConfig`] shape
+    ///    (nested `[agent]` / `[schedule]` / `[autonomy]` /
+    ///    `[permissions]` tables). This is what production agent
+    ///    files (`agents/<name>/config.toml`) ship and what
+    ///    `engram-cli` uses for model-tier lookup.
+    /// 2. A legacy flat shape with top-level `name`, `trigger`,
+    ///    `confidence_threshold`, `max_invasiveness`,
+    ///    `cron_interval_secs`. Used by the runner's own test
+    ///    fixtures; kept for back-compat so the unification doesn't
+    ///    cascade into rewriting ~140 inline TOML strings.
+    ///
+    /// Parses are attempted in that order. The nested shape is the
+    /// future direction — file an issue + propose to drop the flat
+    /// fallback once every test fixture is migrated.
     pub fn from_toml(s: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(s)
+        // Canonical nested shape first.
+        match toml::from_str::<engram_core::config::AgentConfig>(s) {
+            Ok(core_cfg) => Ok(Self::from_core(core_cfg)),
+            // Fall back to the legacy flat shape. Two distinct error
+            // surfaces — surface the flat one so contributors writing
+            // tests against the flat shape see the familiar parser
+            // diagnostic.
+            Err(_) => toml::from_str(s),
+        }
+    }
+
+    /// Project a parsed `engram_core::config::AgentConfig` into the
+    /// runner's minimal view. Anything the runner doesn't read today
+    /// (permissions.may_*, council.*, memory.*, trust.*, budget.*,
+    /// conversation.*) is dropped on the floor — adding fields to
+    /// the runner is incremental.
+    fn from_core(c: engram_core::config::AgentConfig) -> Self {
+        let trigger = match c.schedule.trigger {
+            engram_core::config::AgentTrigger::FileChange => TriggerKind::FileChange,
+            engram_core::config::AgentTrigger::Cron => TriggerKind::Cron,
+            engram_core::config::AgentTrigger::OnDemand => TriggerKind::OnDemand,
+            engram_core::config::AgentTrigger::CouncilOnly => TriggerKind::CouncilOnly,
+        };
+        let max_invasiveness = match c.permissions.max_invasiveness {
+            engram_core::config::InvasivenessLevel::Mechanical => Invasiveness::Mechanical,
+            engram_core::config::InvasivenessLevel::Additive => Invasiveness::Additive,
+            engram_core::config::InvasivenessLevel::Editorial => Invasiveness::Editorial,
+            engram_core::config::InvasivenessLevel::Structural => Invasiveness::Structural,
+        };
+        Self {
+            name: c.agent.name,
+            trigger,
+            confidence_threshold: c.autonomy.auto_land_min_confidence as f32,
+            max_invasiveness,
+            // The runner's cron tick period doesn't map onto
+            // engram-core's `cron: String` (a cron expression).
+            // Default to 60s — same as the flat schema's
+            // `cron_interval_secs` default — and let a future slice
+            // surface this as an explicit field if needed.
+            cron_interval_secs: default_cron_interval_secs(),
+        }
     }
 }
 
@@ -2147,6 +2201,82 @@ confidence_threshold = 0.7"#,
         let row = agent_runs_row(&sqlite, &report.run_id);
         assert_eq!(row.outcome.as_deref(), Some("no_action"));
         assert_eq!(row.errored, 0);
+    }
+
+    /// `AgentConfig::from_toml` accepts the canonical nested
+    /// `engram_core::config::AgentConfig` shape (production agent
+    /// files use this) and projects the relevant fields into the
+    /// runner's flat view. Each tier maps; trigger maps; max
+    /// invasiveness maps; confidence threshold rounds f64 → f32.
+    #[test]
+    fn from_toml_accepts_engram_core_nested_shape() {
+        let toml = r#"
+[agent]
+name = "linker"
+description = "wikilink discovery"
+model_tier = "fast"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+max_invasiveness = "additive"
+
+[autonomy]
+auto_land_min_confidence = 0.9
+"#;
+        let cfg = AgentConfig::from_toml(toml).expect("nested shape must parse");
+        assert_eq!(cfg.name, "linker");
+        assert_eq!(cfg.trigger, TriggerKind::OnDemand);
+        assert!((cfg.confidence_threshold - 0.9).abs() < 1e-6);
+        assert_eq!(cfg.max_invasiveness, Invasiveness::Additive);
+        // cron_interval_secs not surfaced by the nested schema yet
+        // — defaults to 60s per from_core.
+        assert_eq!(cfg.cron_interval_secs, 60);
+    }
+
+    /// The legacy flat shape still parses — preserves back-compat
+    /// for the runner's own test fixtures. Will be dropped once
+    /// every fixture migrates to the nested shape.
+    #[test]
+    fn from_toml_accepts_legacy_flat_shape() {
+        let toml = r#"
+name = "tagger"
+trigger = "cron"
+confidence_threshold = 0.7
+max_invasiveness = "editorial"
+cron_interval_secs = 30
+"#;
+        let cfg = AgentConfig::from_toml(toml).expect("flat shape must parse");
+        assert_eq!(cfg.name, "tagger");
+        assert_eq!(cfg.trigger, TriggerKind::Cron);
+        assert!((cfg.confidence_threshold - 0.7).abs() < 1e-6);
+        assert_eq!(cfg.max_invasiveness, Invasiveness::Editorial);
+        assert_eq!(cfg.cron_interval_secs, 30);
+    }
+
+    /// A nested shape that omits the optional sections (only
+    /// `[agent]` + `[schedule]`) parses with sensible defaults.
+    /// Verifies engram-core's `serde(default)` propagates correctly
+    /// through the projection.
+    #[test]
+    fn from_toml_nested_shape_with_only_required_sections() {
+        let toml = r#"
+[agent]
+name = "minimal"
+description = ""
+model_tier = "fast"
+
+[schedule]
+trigger = "on_demand"
+"#;
+        let cfg = AgentConfig::from_toml(toml).expect("minimal nested must parse");
+        assert_eq!(cfg.name, "minimal");
+        assert_eq!(cfg.trigger, TriggerKind::OnDemand);
+        // engram-core's auto_land_min_confidence default surfaces here.
+        // Just assert it's a sensible 0.0–1.0 value rather than pinning
+        // to the spec's exact default (which the spec doc owns).
+        assert!(cfg.confidence_threshold >= 0.0 && cfg.confidence_threshold <= 1.0);
     }
 
     #[tokio::test]
