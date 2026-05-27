@@ -11,7 +11,7 @@
         "body": "Rate-distortion theory bounds the trade-off between fidelity and rate in a lossy channel...",
         "moved_section_ids": ["s1", "s2", "s3"],
         "incoming_link_assignment": [
-          {"source_note_id": "01H8AA", "anchor_text": "rate-distortion"}
+          { "source_note_id": "01H8AA", "anchor_text": "rate-distortion" }
         ]
       },
       {
@@ -20,7 +20,10 @@
         "body": "Editing is the editor's choice of what to drop. The rate-distortion analogy makes the trade-off legible...",
         "moved_section_ids": ["s4", "s5"],
         "incoming_link_assignment": [
-          {"source_note_id": "01H8AB", "anchor_text": "editing-as-compression"}
+          {
+            "source_note_id": "01H8AB",
+            "anchor_text": "editing-as-compression"
+          }
         ]
       }
     ],
