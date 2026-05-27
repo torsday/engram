@@ -40,6 +40,9 @@ pub mod aggregate;
 pub mod cache;
 /// Per-case fixture loaded from `.engram/evals/<agent>/cases/<id>.yaml`.
 pub mod case;
+/// Orchestrating runner — ties Case loading + snapshot cache +
+/// caller-provided agent invoker + scorer + aggregate together.
+pub mod runner;
 /// Score / Verdict value types — what one case run produces.
 pub mod score;
 /// Markdown scorecard emitter with 8-run trend sparklines.
@@ -52,6 +55,7 @@ pub mod snapshot;
 pub use aggregate::{Aggregate, CaseRunResult};
 pub use cache::SnapshotCache;
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
+pub use runner::{EvalRunReport, EvalRunner, EvalRunnerError, Invoker, InvokerError};
 pub use score::{Score, Verdict};
 pub use scorecard::{render_scorecard, sparkline};
 pub use scorer::{score_case, Observation};
