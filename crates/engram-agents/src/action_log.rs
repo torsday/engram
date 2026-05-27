@@ -27,6 +27,7 @@
 //!     decided_at: None,
 //!     final_diff_hash: None,
 //!     git_commit_sha: None,
+//!     parent_run_id: None,
 //! };
 //!
 //! let action_id = log.record(action).unwrap();
@@ -127,6 +128,15 @@ pub struct AgentAction {
     pub final_diff_hash: Option<String>,
     /// Git commit SHA once the change lands in history.
     pub git_commit_sha: Option<String>,
+    /// `agent_runs.id` of the parent run when this action was
+    /// produced by a sub-agent invocation. `None` for top-level
+    /// (human / scheduler / file-change-initiated) runs.
+    ///
+    /// Threaded through from [`crate::runner::AgentRunner::run_sub_agent`]
+    /// so the audit trail can join a Curator's sub-Linker writes
+    /// back to the Curator's parent run. See issue #31.
+    #[serde(default)]
+    pub parent_run_id: Option<String>,
 }
 
 /// Errors from action log operations.
@@ -175,9 +185,9 @@ impl ActionLog {
         conn.execute(
             "INSERT INTO agent_actions \
              (id, agent_name, kind, files, diff_hash, confidence, rationale, \
-              deliberation_id, rubric_check, wrote_at, \
+              deliberation_id, rubric_check, wrote_at, parent_run_id, \
               human_decision, decided_at, final_diff_hash, git_commit_sha) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10, NULL, NULL, NULL, NULL)",
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11, NULL, NULL, NULL, NULL)",
             params![
                 action.id.as_str(),
                 action.agent_name,
@@ -189,6 +199,7 @@ impl ActionLog {
                 action.deliberation_id,
                 action.rubric_check,
                 action.wrote_at.to_rfc3339(),
+                action.parent_run_id,
             ],
         )?;
         Ok(action.id)
@@ -461,6 +472,10 @@ fn row_to_action(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentAction> {
         decided_at,
         final_diff_hash: row.get(12)?,
         git_commit_sha: row.get(13)?,
+        // Column index 14 = `parent_run_id` (added by migration 006).
+        // Returns Ok(None) if the column doesn't exist (older DBs);
+        // returns Ok(Some) when migration 006 has been applied.
+        parent_run_id: row.get(14).ok(),
     })
 }
 
@@ -516,6 +531,7 @@ mod tests {
             decided_at: None,
             final_diff_hash: None,
             git_commit_sha: None,
+            parent_run_id: None,
         }
     }
 
