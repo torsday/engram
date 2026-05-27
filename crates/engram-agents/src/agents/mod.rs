@@ -81,3 +81,11 @@ pub mod pair_thinking;
 /// See `agents/synthesizer/prompt.md` for the prompt that
 /// produces this output.
 pub mod synthesizer;
+
+/// Splitter — identify notes that violate atomicity (2–3 ideas in
+/// one file) and propose specific splits with full link
+/// redistribution. Structural invasiveness; always council-routed.
+///
+/// See `agents/splitter/prompt.md` for the prompt that produces
+/// this output.
+pub mod splitter;
