@@ -1,0 +1,16 @@
+{
+  "confidence": 0.86,
+  "rationale": "Five notes from this quarter reach for the same concept — the editor's choice of what to drop — without naming it. The proposed evergreen pulls forward what they all imply.",
+  "decline": false,
+  "cluster_coherence": {
+    "coherent": true,
+    "secondary_concept": null
+  },
+  "proposed_evergreen": {
+    "title": "Editing as compression",
+    "slug": "editing-as-compression",
+    "body": "Editing is the editor's choice of what to drop. The choice is the work — preserving 'intent' is the wrong framing because intent is exactly what the editor and author may disagree on. See [[01H8X9]] for the rate-distortion analogy.",
+    "source_note_ids": ["01H8X9", "01H8XA", "01H8XB", "01H8XC", "01H8XD"],
+    "related_existing_evergreens": ["01H7AA", "01H7AB"]
+  }
+}

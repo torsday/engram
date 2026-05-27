@@ -2279,6 +2279,86 @@ trigger = "on_demand"
         assert!(cfg.confidence_threshold >= 0.0 && cfg.confidence_threshold <= 1.0);
     }
 
+    /// Smoke test: every agent directory under `agents/` at the
+    /// workspace root must parse cleanly via the same path
+    /// `AgentRunner::load_cached` uses. Catches drift between the
+    /// canonical schema (engram-core) and what's checked in. Walks up
+    /// from `CARGO_MANIFEST_DIR` (crates/engram-agents) to the
+    /// workspace root.
+    ///
+    /// Auto-discovers agents — new agent dirs land in this test
+    /// without needing to update the assertions, so the smoke test
+    /// stays cheap to extend.
+    #[test]
+    fn on_disk_agent_files_parse() {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root reachable from manifest dir");
+        let agents_dir = workspace.join("agents");
+        let entries = std::fs::read_dir(&agents_dir)
+            .unwrap_or_else(|e| panic!("read {}: {}", agents_dir.display(), e));
+
+        let mut checked = 0usize;
+        for entry in entries {
+            let entry = entry.unwrap();
+            if !entry.file_type().unwrap().is_dir() {
+                continue;
+            }
+            let dir = entry.path();
+            let name = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap()
+                .to_string();
+            let config_path = dir.join("config.toml");
+            let prompt_path = dir.join("prompt.md");
+            if !config_path.is_file() || !prompt_path.is_file() {
+                continue;
+            }
+
+            // Config parses via the canonical engram-core nested
+            // schema (with legacy-flat fallback inside from_toml).
+            let raw = std::fs::read_to_string(&config_path)
+                .unwrap_or_else(|e| panic!("read {}: {}", config_path.display(), e));
+            let cfg = AgentConfig::from_toml(&raw)
+                .unwrap_or_else(|e| panic!("parse {}: {}", config_path.display(), e));
+            assert_eq!(
+                cfg.name, name,
+                "agent dir name `{}` must match config.toml [agent].name `{}`",
+                name, cfg.name
+            );
+            assert!(
+                (0.0..=1.0).contains(&cfg.confidence_threshold),
+                "{}: confidence_threshold {} out of [0.0, 1.0]",
+                name,
+                cfg.confidence_threshold
+            );
+
+            // Prompt loader: confirms the ADR 0010 `<!-- /cache -->`
+            // marker is in place (load returns MissingMarker if not).
+            let prompt = prompt_loader::load(&prompt_path)
+                .unwrap_or_else(|e| panic!("load {}: {}", prompt_path.display(), e));
+            assert!(
+                !prompt.static_head.is_empty(),
+                "{}: static head (cacheable prefix) must be non-empty",
+                name
+            );
+            checked += 1;
+        }
+
+        // Guard against the dir going empty + the test silently passing.
+        // Update this floor as agents are added (currently:
+        // steelman-constructive, devils-advocate, inquirer,
+        // synthesizer, voice-keeper, pair-thinking, splitter, merger,
+        // bridge-builder).
+        assert!(
+            checked >= 9,
+            "expected >=9 on-disk agents to be checked; found {checked}"
+        );
+    }
+
     #[tokio::test]
     async fn missing_confidence_field_is_no_action() {
         let tmp = tempdir().unwrap();

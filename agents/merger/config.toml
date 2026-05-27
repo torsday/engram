@@ -1,0 +1,59 @@
+# Merger — find notes about the same concept written at different
+# times (possibly under different titles) and propose a unified note
+# that preserves the best of both. Sibling of Splitter (#63): one
+# divides; one unifies.
+#
+# Per `docs/design/01-agents-and-council.md` §Merger:
+#   - Trigger: scheduled weekly, or invoked when the Linker detects
+#     high bidirectional similarity between two notes.
+#   - Output: merge proposal — unified draft + provenance history +
+#     ID alias mapping so incoming links reroute cleanly.
+#   - Invasiveness: High (structural). Modifies or removes existing
+#     notes; always council-routed per ADR 0004.
+#   - Tools: embedding similarity, content diffing, link graph,
+#     stable ID alias system.
+
+[agent]
+name = "merger"
+description = "Unify duplicate concept notes into one canonical note; preserve aliases and reroute incoming links. Always council-routed."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Merger writes a unified note (create), modifies the originals into
+# aliases or absorbs them (modify/remove), and updates the alias
+# table (modify). max_invasiveness=structural ensures the runner
+# downgrades every write to a proposal regardless of confidence.
+may_create_notes = true
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen"]
+max_invasiveness = "structural"
+
+[autonomy]
+# Confidence governs proposal quality, not auto-land. A low-
+# confidence merge is worse than no merge — silently unifying two
+# notes that *look* similar but mean different things is a real
+# corruption risk. 0.85 sits a touch above the Splitter floor (0.82)
+# because erroneous unification is harder to back out of than
+# erroneous splitting (the original two notes' content is fused).
+auto_land_min_confidence = 0.85
+
+[council]
+# Merger convenes councils because the resulting structural change
+# (new unified note + alias rewrites + incoming-link rerouting)
+# requires human + council approval. It also participates as a
+# constructive voice when another agent (Linker, Curator) surfaces a
+# possible duplicate.
+participates = true
+may_convene = true
+
+[budget]
+# Standard tier. Merger runs weekly on candidate pairs (typically
+# surfaced by Linker's similarity threshold) so the per-run cost is
+# bounded. Modest monthly cap; operators tune via `engram secrets` +
+# agent_budgets table updates.
+monthly_tokens = 100000
+auto_pause = true

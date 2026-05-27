@@ -1,0 +1,62 @@
+# Voice Keeper — protect the user's authorial voice. Safety mechanism.
+#
+# Per `docs/design/01-agents-and-council.md` §Voice Keeper:
+#   - Learn the user's writing voice (tone, vocabulary, sentence
+#     rhythm, characteristic moves) and check agent-drafted output
+#     against it.
+#   - The original drafting agent always retains authorship —
+#     Voice Keeper edits, doesn't replace.
+#   - Without this safety mechanism, the vault gradually homogenizes
+#     toward a generic LLM voice as agents do more writing.
+#
+# Trigger: participates in council deliberation whenever drafted
+# content is being considered; also runs monthly to update its voice
+# model in `.engram/meta/voice-model.md` (human-approved).
+
+[agent]
+name = "voice-keeper"
+description = "Protect authorial voice; flag or rewrite agent-drafted content that doesn't sound like the user. Safety mechanism."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Voice Keeper does not create notes from scratch; it edits
+# agent-drafted passages and updates its own voice model. Voice-model
+# updates and rewrite proposals both require approval — the runner's
+# invasiveness gate downgrades anything above `editorial` to a
+# proposal automatically.
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["fleeting", "literature", "evergreen", "moc"]
+max_invasiveness = "editorial"
+
+[autonomy]
+# Higher floor than the constructive Steelman (0.85) because voice
+# rewrites change *the author's prose*. A miscalibrated voice rewrite
+# is a high-cost mistake — the kind that erodes the very thing this
+# agent exists to protect. 0.92 sits between the constructive Steelman
+# (additive annotations, 0.85) and the editorial-but-binding Devil's
+# Advocate gate (0.90).
+auto_land_min_confidence = 0.92
+
+[council]
+# Voice Keeper participates in every council deliberation that
+# evaluates drafted content (Synthesizer evergreens, Scribe cleanups,
+# Steelman/Heretic rewrites). It does not convene its own councils —
+# the drafting agent that produced the content is the convenor; Voice
+# Keeper is one of the voices in the room.
+participates = true
+may_convene = false
+
+[budget]
+# Standard tier; modest monthly cap. Voice Keeper is on the hot path
+# for every drafted-content council so the budget needs to be
+# generous enough to never auto-pause during a deliberation — if it
+# does, the drafting agent's output ships *without* voice review,
+# which defeats the safety purpose. Operators tune via
+# `engram secrets` + agent_budgets table updates.
+monthly_tokens = 200000
+auto_pause = true

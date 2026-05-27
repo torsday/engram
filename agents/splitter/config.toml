@@ -1,0 +1,58 @@
+# Splitter — identify notes that violate atomicity (notes that are
+# really 2–3 ideas in one file) and propose specific splits.
+#
+# Per `docs/design/01-agents-and-council.md` §Splitter:
+#   - Trigger: scheduled weekly sweep of notes above a
+#     length/complexity threshold; also invoked by council when
+#     evaluating a note against the evergreen rubric.
+#   - Output: a structured split proposal — new note drafts + link
+#     redistribution plan + proposed redirects from the original.
+#   - Invasiveness: High (structural). Always goes through full
+#     council deliberation + human approval. Splitter creates new
+#     notes AND modifies the link graph; the structural floor
+#     captures both.
+#   - Tools: markdown AST (heading/section analysis), semantic
+#     segmentation, link graph, evergreen rubric checker.
+
+[agent]
+name = "splitter"
+description = "Propose specific splits for notes that have grown to cover multiple concepts. Always council-routed."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Splitter creates new notes (the resulting A/B/C of the split) and
+# modifies the link graph + the original note (which often becomes a
+# redirect / disambiguation note). max_invasiveness=structural ensures
+# the runner downgrades every write to a proposal regardless of
+# confidence — Splitter is *always* a proposal, never an auto-land.
+may_create_notes = true
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen"]
+max_invasiveness = "structural"
+
+[autonomy]
+# Confidence governs proposal quality, not auto-land. A low-confidence
+# split proposal wastes council cycles; 0.82 is the floor below which
+# the runner discards the candidate rather than convening.
+auto_land_min_confidence = 0.82
+
+[council]
+# Splitter convenes councils because the resulting structural change
+# (new notes + redistributed links + redirect on the original)
+# requires human + council approval. It also participates as a
+# constructive voice when a council is evaluating someone else's note
+# for atomicity violations.
+participates = true
+may_convene = true
+
+[budget]
+# Standard tier. Splitter runs weekly on a length-thresholded subset
+# of notes; the dominant cost is the AST + semantic-segmentation
+# work, not the LLM call. Modest monthly cap; operators tune via
+# `engram secrets` + agent_budgets table updates.
+monthly_tokens = 100000
+auto_pause = true

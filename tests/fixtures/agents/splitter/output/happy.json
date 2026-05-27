@@ -1,0 +1,36 @@
+{
+  "confidence": 0.83,
+  "rationale": "The note opens with three paragraphs on rate-distortion theory in information theory and then pivots to editing as compression — two distinct concepts that share vocabulary.",
+  "decline": false,
+  "coherence_signals": ["two-heading-clusters", "mid-note-topic-shift"],
+  "proposed_split": {
+    "resulting_notes": [
+      {
+        "title": "Rate-distortion theory",
+        "slug": "rate-distortion-theory",
+        "body": "Rate-distortion theory bounds the trade-off between fidelity and rate in a lossy channel...",
+        "moved_section_ids": ["s1", "s2", "s3"],
+        "incoming_link_assignment": [
+          { "source_note_id": "01H8AA", "anchor_text": "rate-distortion" }
+        ]
+      },
+      {
+        "title": "Editing as compression",
+        "slug": "editing-as-compression",
+        "body": "Editing is the editor's choice of what to drop. The rate-distortion analogy makes the trade-off legible...",
+        "moved_section_ids": ["s4", "s5"],
+        "incoming_link_assignment": [
+          {
+            "source_note_id": "01H8AB",
+            "anchor_text": "editing-as-compression"
+          }
+        ]
+      }
+    ],
+    "residual": {
+      "kind": "disambiguation",
+      "body": "This note was split into [[Rate-distortion theory]] and [[Editing as compression]]."
+    },
+    "unassigned_incoming_links": []
+  }
+}

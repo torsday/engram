@@ -38,7 +38,7 @@ Return a JSON object with this exact schema:
 - Set `confidence` honestly: 0.9+ only when you are certain the summary is
   accurate and the note clearly belongs in the index.
 
-<!-- cache-boundary -->
+<!-- /cache -->
 
 ## Notes recently changed
 

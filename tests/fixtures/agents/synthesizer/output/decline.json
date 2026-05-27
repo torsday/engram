@@ -1,0 +1,9 @@
+{
+  "confidence": 0.0,
+  "rationale": "The cluster contains two distinct concepts that share vocabulary ('writing-as-compression' vs. 'tape-archive compression formats'); the embedding similarity is coincidental. Naming one would suppress the other; declining lets the runner re-cluster around the secondary concept next sweep.",
+  "decline": true,
+  "cluster_coherence": {
+    "coherent": false,
+    "secondary_concept": "tape-archive compression formats"
+  }
+}

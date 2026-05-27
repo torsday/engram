@@ -91,3 +91,9 @@ pub mod conversation {}
 /// See [`cartographer::CartographerContinuousOutput`] and
 /// [`cartographer::CartographerAuditOutput`].
 pub mod cartographer;
+
+/// Per-agent typed output schemas. Each submodule mirrors an
+/// agent's documented JSON schema from `agents/<name>/prompt.md`
+/// as a Rust type, with `confidence` first per ADR 0011 so
+/// streaming early-exit can abort on cheap fields.
+pub mod agents;

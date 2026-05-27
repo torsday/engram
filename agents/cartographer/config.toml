@@ -1,23 +1,35 @@
-# Cartographer agent configuration
-# Keeps index.md in sync with vault changes.
+# Cartographer agent — keeps index.md in sync with vault changes.
+#
+# Runs on every file change (debounced 30 s) for the continuous mode.
+# The quarterly audit is invoked on-demand by the scheduler; that
+# dispatch is handled externally, not by this config.
 
+[agent]
 name = "cartographer"
 description = "Maintains index.md by tracking vault changes and emitting targeted add/update/remove operations."
+model_tier = "fast"
 
-# Auto-land threshold: operations with confidence >= this land unstaged immediately.
-# Remove operations on existing notes always go to council regardless of confidence.
-confidence_threshold = 0.75
+[schedule]
+trigger = "file_change"
+debounce_seconds = 30
 
-# Maximum invasiveness allowed for auto-land (editorial = line-level text changes).
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["index"]
 max_invasiveness = "editorial"
 
-# Trigger: run 30 seconds after any .md file changes in the vault.
-[[triggers]]
-kind = "file_change"
-glob = "**/*.md"
-debounce_secs = 30
+[autonomy]
+# add/update ops land directly when confidence >= threshold.
+# remove ops on existing vault files always route to council
+# regardless of confidence (enforced in cartographer::apply_updates).
+auto_land_min_confidence = 0.75
 
-# Trigger: full audit pass every 90 days (quarterly).
-[[triggers]]
-kind = "cron"
-interval_secs = 7_776_000  # 90 days
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 50000
+auto_pause = true

@@ -157,6 +157,62 @@ enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Agent introspection and schema-validation tooling.
+    ///
+    /// Operator-facing surface over `engram_agents::agents::validate`.
+    /// Use `list` to discover registered agents; use `validate` to
+    /// schema-check a captured agent response before feeding it into
+    /// the runner or eval framework.
+    Agents {
+        #[command(subcommand)]
+        action: AgentsAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentsAction {
+    /// Print the names of all agents with registered typed-output
+    /// validators (one per line). The list matches the on-disk
+    /// `agents/<name>/` directories.
+    List,
+    /// Schema-validate a captured agent output against its typed
+    /// Rust struct. Exits 0 on success; non-zero with a structured
+    /// error message on failure.
+    ///
+    /// Two modes:
+    /// - **single file**: pass `<name>` and `--file <path>`. Validates
+    ///   one response. `--file -` reads from stdin for shell
+    ///   pipelines: `engram run <agent> | engram agents
+    ///   validate <agent> --file -`.
+    /// - **walk fixtures**: pass `--all` (and optionally
+    ///   `--fixtures-root`). Walks every `<agent>/output/*.json`
+    ///   under the fixtures root and validates each. Mirrors the
+    ///   `fixture_outputs.rs` integration test for fast local
+    ///   feedback during prompt-schema changes.
+    ///
+    /// `<name>` and `--file` are required unless `--all` is set.
+    /// `--all` is mutually exclusive with both.
+    Validate {
+        /// Agent name (e.g. `steelman-constructive`, `inquirer`).
+        /// Must match a name from `engram agents list`. Omit when
+        /// using `--all`.
+        #[arg(required_unless_present = "all")]
+        name: Option<String>,
+        /// Path to the JSON response to validate. Pass `-` to read
+        /// from stdin. Omit when using `--all`.
+        #[arg(long, required_unless_present = "all", conflicts_with = "all")]
+        file: Option<PathBuf>,
+        /// Walk every `<agent>/output/*.json` under
+        /// `--fixtures-root` and validate each. Useful for
+        /// post-edit verification during prompt-schema changes.
+        #[arg(long, conflicts_with_all = ["name", "file"])]
+        all: bool,
+        /// Root of the fixtures tree to walk under `--all`. Defaults
+        /// to `tests/fixtures/agents/` relative to the current
+        /// directory.
+        #[arg(long, default_value = "tests/fixtures/agents", requires = "all")]
+        fixtures_root: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -427,6 +483,152 @@ async fn main() {
                 }
             }
         },
+        Command::Agents { action } => match action {
+            AgentsAction::List => {
+                for name in engram_agents::agents::validate::registered_agents() {
+                    println!("{name}");
+                }
+            }
+            AgentsAction::Validate {
+                name,
+                file,
+                all,
+                fixtures_root,
+            } => {
+                if all {
+                    // Walk every <agent>/output/*.json under the
+                    // fixtures root and validate. clap enforces
+                    // `name` and `file` are None when `--all` is
+                    // set, so we just need the walker.
+                    let exit = run_validate_all(&fixtures_root);
+                    std::process::exit(exit);
+                }
+
+                // Single-file path. clap enforces `name` and
+                // `file` are Some when `--all` is unset.
+                let name = name.expect("clap enforces name when --all unset");
+                let file = file.expect("clap enforces file when --all unset");
+                let raw = if file.as_os_str() == "-" {
+                    let mut buf = String::new();
+                    if let Err(e) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf) {
+                        eprintln!("✗ engram agents validate: read stdin: {e}");
+                        std::process::exit(1);
+                    }
+                    buf
+                } else {
+                    match std::fs::read_to_string(&file) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("✗ engram agents validate: read {}: {e}", file.display());
+                            std::process::exit(1);
+                        }
+                    }
+                };
+                match engram_agents::agents::validate::validate(&name, &raw) {
+                    Ok(()) => {
+                        println!("✓ {name}: output conforms to schema.");
+                    }
+                    Err(e) => {
+                        eprintln!("✗ engram agents validate: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
+    }
+}
+
+/// Walk every `<agent>/output/*.json` under `fixtures_root` and
+/// validate each through `engram_agents::agents::validate`. Prints
+/// a `✓` or `✗` per fixture; returns 0 if every fixture validated,
+/// 1 if any failed.
+///
+/// Mirrors the `fixture_outputs.rs` integration test as an operator-
+/// facing local verification tool. Useful workflow: edit a prompt
+/// schema → update typed struct → update fixtures → run
+/// `engram agents validate --all` for instant feedback (faster
+/// than `cargo test` to recompile + run).
+fn run_validate_all(fixtures_root: &std::path::Path) -> i32 {
+    if !fixtures_root.is_dir() {
+        eprintln!(
+            "✗ engram agents validate --all: fixtures root {} not found or not a directory",
+            fixtures_root.display()
+        );
+        return 1;
+    }
+
+    let entries = match std::fs::read_dir(fixtures_root) {
+        Ok(it) => it,
+        Err(e) => {
+            eprintln!(
+                "✗ engram agents validate --all: read {}: {e}",
+                fixtures_root.display()
+            );
+            return 1;
+        }
+    };
+
+    let mut total = 0usize;
+    let mut failures = 0usize;
+    let mut agent_dirs: Vec<_> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .collect();
+    // Stable, deterministic output order matters for diffability.
+    agent_dirs.sort_by_key(std::fs::DirEntry::file_name);
+
+    for agent_dir in agent_dirs {
+        let agent_name = match agent_dir.file_name().into_string() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let output_dir = agent_dir.path().join("output");
+        if !output_dir.is_dir() {
+            continue;
+        }
+        let mut fixtures: Vec<_> = match std::fs::read_dir(&output_dir) {
+            Ok(it) => it.filter_map(Result::ok).collect(),
+            Err(e) => {
+                eprintln!("✗ {agent_name}: read {}: {e}", output_dir.display());
+                failures += 1;
+                continue;
+            }
+        };
+        fixtures.sort_by_key(std::fs::DirEntry::file_name);
+
+        for fixture in fixtures {
+            let path = fixture.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                continue;
+            }
+            total += 1;
+            let raw = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("✗ {}: read failed: {e}", path.display());
+                    failures += 1;
+                    continue;
+                }
+            };
+            match engram_agents::agents::validate::validate(&agent_name, &raw) {
+                Ok(()) => println!("✓ {}", path.display()),
+                Err(e) => {
+                    eprintln!("✗ {}: {e}", path.display());
+                    failures += 1;
+                }
+            }
+        }
+    }
+
+    if failures == 0 {
+        println!("\n✓ All {total} fixture(s) validate.");
+        0
+    } else {
+        eprintln!(
+            "\n✗ {failures} of {total} fixture(s) failed validation.\n  Prompt schema, typed struct, or fixture content has drifted; \
+             bring them back in lockstep."
+        );
+        1
     }
 }
 

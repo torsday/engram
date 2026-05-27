@@ -1,0 +1,9 @@
+{
+  "confidence": 0.0,
+  "rationale": "The notes share vocabulary (both use 'compression') but engage different domains: one is information theory (formal, mathematical), the other is creative writing (intuitive, metaphorical). The shared term is coincidental — note A's claims aren't claims in note B at the same level of generality, and vice versa. Adjacent-but-distinct.",
+  "decline": true,
+  "similarity_signals": [
+    "adjacent-but-distinct",
+    "different-level-of-generality"
+  ]
+}

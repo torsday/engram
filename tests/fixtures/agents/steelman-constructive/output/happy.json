@@ -1,0 +1,18 @@
+{
+  "confidence": 0.87,
+  "rationale": "Two neighbor notes (01H8QZ, 01H8RC) establish the load-bearing premise the draft is reaching for; the proposed reframing trades a hedge for the specific claim those notes already support.",
+  "proposed_annotations": [
+    {
+      "anchor_text": "I think this generalizes",
+      "insertion_context": "...maybe. I think this generalizes to other lossy-reduction systems.",
+      "supporting_note_ids": ["01H8QZ", "01H8RC"]
+    }
+  ],
+  "proposed_reframings": [
+    {
+      "original_excerpt": "I think this generalizes to other lossy-reduction systems.",
+      "proposed_text": "This generalizes to every lossy-reduction system where the reducer chooses what to drop.",
+      "rationale": "01H8QZ already commits to the stronger claim; the hedge in the draft is the only weak point."
+    }
+  ]
+}
