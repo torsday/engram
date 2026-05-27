@@ -1,0 +1,63 @@
+# Bridge Builder — run community detection on the link graph. Find
+# clusters that are internally dense but disconnected from each
+# other. Determine whether disconnection is meaningful (genuinely
+# unrelated topics) or accidental (the author never linked them).
+# For accidental gaps, propose bridge links or bridge notes.
+#
+# Per `docs/design/01-agents-and-council.md` §Bridge Builder:
+#   - Trigger: scheduled monthly.
+#   - Output: graph analysis report + per-accidental-gap proposal
+#     (bridge link between existing notes, or new bridge note).
+#   - Invasiveness: Low for bridge links (Linker-like, additive);
+#     Medium for bridge notes. Bridge links go through council
+#     spot-check; bridge notes go through full council + human
+#     approval. `editorial` captures the higher of the two so the
+#     runner gates the riskier output correctly.
+#   - Tools: link graph + community detection (Louvain or label
+#     propagation), semantic search, note metadata.
+
+[agent]
+name = "bridge-builder"
+description = "Detect disconnected clusters in the link graph; propose bridge links or notes for accidental gaps."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Bridge links are additive edits to existing notes; bridge notes are
+# new creations. Both kinds — and any choice between them — must
+# pass through the runner's invasiveness gate. max_invasiveness =
+# `editorial` is the right ceiling: low-invasiveness bridge links
+# can land via the auto-land path when confidence is high, and
+# anything more structural (new bridge notes, multi-edge proposals)
+# is automatically downgraded to a proposal.
+may_create_notes = true
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen", "moc"]
+max_invasiveness = "editorial"
+
+[autonomy]
+# Higher than Linker's domain (additive wikilink suggestions) but
+# below the structural-agent floor (Splitter 0.82, Merger 0.85).
+# Bridge links can land on confidence; bridge *notes* are
+# automatically downgraded by the invasiveness gate regardless of
+# confidence.
+auto_land_min_confidence = 0.83
+
+[council]
+# Bridge Builder convenes councils for bridge-note proposals (new
+# content connecting two clusters); it participates as a constructive
+# voice when another agent surfaces a graph-structure observation.
+participates = true
+may_convene = true
+
+[budget]
+# Standard tier. Bridge Builder runs monthly — community detection +
+# semantic-validation cost is bounded per run, but per-cluster-pair
+# bridge analysis multiplies with the number of detected clusters.
+# Modest monthly cap; operators tune via `engram secrets` +
+# agent_budgets table updates.
+monthly_tokens = 100000
+auto_pause = true
