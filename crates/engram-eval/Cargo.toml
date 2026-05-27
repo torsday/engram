@@ -1,0 +1,15 @@
+[package]
+name = "engram-eval"
+description = "Agent evaluation framework: case fixtures, scoring, scorecard regeneration, CI gate"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
