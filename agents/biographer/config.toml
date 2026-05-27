@@ -1,0 +1,64 @@
+# Biographer agent — config.toml
+#
+# Per docs/design/01-agents-and-council.md §Biographer:
+#   - Trigger: scheduled (monthly).
+#   - Invasiveness: maintains one specific note (meta/biography.md).
+#   - Output: always proposal → human approval (this note models the user;
+#     they curate themselves).
+#
+# Maps to engram_agents::runner::AgentConfig. Fields the runner does not yet
+# consume (declarative tool list, schedule string, sparse-content thresholds)
+# are kept here as forward-compatible metadata; the runner will pick them up
+# as follow-up slices land.
+
+name              = "biographer"
+trigger           = "cron"
+confidence_threshold = 0.85
+# Editorial — Biographer rewrites paragraphs in meta/biography.md when drift
+# warrants. The auto-land gate is moot because invasiveness_ceiling_override
+# below forces every output through the proposal path regardless of
+# confidence.
+max_invasiveness  = "editorial"
+# Once per 30 days. The scheduler reads this when trigger == cron; for the
+# Biographer's monthly cadence we set the period in seconds (30 days =
+# 2_592_000s). Tests override this via the AgentConfig-builder pattern.
+cron_interval_secs = 2_592_000
+
+# ── Forward-compatible metadata (not yet consumed by the runner) ───────────
+#
+# The runner's AgentConfig schema is intentionally minimal in the #27 slice.
+# Everything below is biographer-specific policy that downstream slices will
+# read. Keeping it here means agents/biographer/ ships a complete spec the
+# moment those slices land — no return trip to amend the config.
+
+[biographer]
+# Sparse-content gate per docs/design/08-first-run.md §Sparse-content
+# bootstrap. While either threshold is unmet, the agent returns an empty
+# biography stub rather than fabricating.
+sparse_content_min_human_notes = 200
+sparse_content_min_vault_age_days = 60
+
+# Biographer never auto-lands regardless of the confidence threshold —
+# meta/biography.md models the user, so they curate themselves. This
+# override is read by the decision-matrix slice (follow-up to #27).
+always_propose = true
+
+# Tools the agent declares it needs. Names match the planned ToolRegistry
+# from docs/design/03-architecture.md. The runner's tool-gateway slice
+# (placeholder in lib.rs) will validate availability at startup.
+tools = [
+    "hybrid_search",
+    "topic_cluster",
+    "frontmatter_query",
+    "git_log_summary",
+    "provenance_filter",
+]
+
+# Output target relative to vault root. Single-note agent.
+output_note_path = "meta/biography.md"
+
+# Council participation: Biographer does not participate in council
+# deliberations directly — it produces a personal model, not a structural
+# verdict.
+[council]
+participates = false

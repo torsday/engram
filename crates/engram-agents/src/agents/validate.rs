@@ -42,14 +42,14 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    bridge_builder::BridgeBuilderOutput, completion_nudger::CompletionNudgerOutput,
-    confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput,
-    gardener::GardenerOutput, historian::HistorianOutput, inquirer::InquirerOutput,
-    linker::LinkerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn,
-    predictor::PredictorOutput, scribe::ScribeOutput, source_demand::SourceDemandOutput,
-    splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput,
-    synthesizer::SynthesizerOutput, tutor::TutorOutput, voice_keeper::VoiceKeeperOutput,
-    witness::WitnessOutput,
+    biographer::BiographerOutput, bridge_builder::BridgeBuilderOutput,
+    completion_nudger::CompletionNudgerOutput, confidence_annotator::ConfidenceAnnotatorOutput,
+    devils_advocate::DevilsAdvocateOutput, gardener::GardenerOutput, historian::HistorianOutput,
+    inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
+    pair_thinking::PairThinkingTurn, predictor::PredictorOutput, scribe::ScribeOutput,
+    source_demand::SourceDemandOutput, splitter::SplitterOutput,
+    steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
+    tutor::TutorOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
 };
 use crate::cartographer::CartographerContinuousOutput;
 
@@ -136,6 +136,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "completion-nudger" => check::<CompletionNudgerOutput>(agent_name, text),
         "tutor" => check::<TutorOutput>(agent_name, text),
         "historian" => check::<HistorianOutput>(agent_name, text),
+        "biographer" => check::<BiographerOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -168,6 +169,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "completion-nudger",
         "tutor",
         "historian",
+        "biographer",
     ]
 }
 
@@ -259,6 +261,10 @@ mod tests {
             (
                 "historian",
                 r#"{"confidence":0.5,"rationale":"r","log_entry":"x","output_path":"y"}"#,
+            ),
+            (
+                "biographer",
+                r#"{"confidence":0.5,"rationale":"r","sections":{"identity":"","domains_of_expertise":"","recurring_themes":"","stated_commitments":"","open_questions":"","drift_since_last_update":""}}"#,
             ),
         ] {
             validate(agent, sample)

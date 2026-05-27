@@ -200,6 +200,18 @@ pub mod completion_nudger;
 /// output.
 pub mod historian;
 
+/// Biographer — maintain `meta/biography.md`, the system's evolving
+/// model of the user (interests, expertise, recurring themes, stated
+/// commitments, drift). Monthly cron; always human-approved (the note
+/// models the user, so they curate it). Carries a deterministic
+/// sparse-content gate that abstains until the vault has ≥ 200
+/// human-authored notes over ≥ 60 days, plus a confidence formula
+/// (0.5×LLM + 0.3×corroboration + 0.2×corpus-coverage).
+///
+/// See `agents/biographer/prompt.md` for the prompt that produces this
+/// output.
+pub mod biographer;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

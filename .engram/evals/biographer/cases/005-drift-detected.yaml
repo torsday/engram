@@ -1,0 +1,24 @@
+# Case 005 — drift detection.
+#
+# A mature vault whose recent 90 days look meaningfully different from
+# the prior 360 days: new domain, retired theme, shifted commitments.
+# The previous-biography fixture under `input.vault_state` includes a
+# `meta/biography.md` from a year ago. Biographer must produce a
+# biography whose `drift_since_last_update` section names what
+# changed.
+id: 005-drift-detected
+description: >
+  Mature vault with a year-old previous biography and a clear shift in
+  the last 90 days. Expect drift section to name the new domain and
+  the retired theme.
+input:
+  vault_state: snapshot/cases/005/drift-vault.tar
+expected:
+  min_confidence: 0.75
+  rationale_must_mention:
+    - drift
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

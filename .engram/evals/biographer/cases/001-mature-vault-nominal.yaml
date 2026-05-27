@@ -1,0 +1,24 @@
+# Case 001 — nominal success on a mature, well-corroborated vault.
+#
+# A 1,400-note vault, 18 months old, with five clearly-emergent domains
+# of expertise. Biographer should produce a confident biography that
+# names those domains, references the recurring themes that surface in
+# the activity log, and reports modest drift since the last update.
+#
+# Confidence floor 0.85 because the corpus is large and coherent;
+# Watcher will eventually pull this floor based on observed calibration.
+id: 001-mature-vault-nominal
+description: >
+  A diverse, well-corroborated vault. Expect a biography with high
+  confidence, multiple domains named, and a mention of drift.
+input:
+  vault_state: snapshot/cases/001/mature-vault.tar
+expected:
+  min_confidence: 0.85
+  rationale_must_mention:
+    - corroborated
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
