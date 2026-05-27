@@ -150,6 +150,21 @@ pub enum RunnerError {
         /// The compiled-in limit ([`MAX_SUB_AGENT_DEPTH`]).
         limit: usize,
     },
+
+    /// A [`run_sub_agent`](AgentRunner::run_sub_agent) call exceeded
+    /// its wall-clock `timeout`. The in-flight inner future is
+    /// dropped — locks release on drop, the provider's HTTP call is
+    /// cancelled, and the `agent_runs` row may have a populated
+    /// `started_at` with NULL `completed_at` (the schema permits
+    /// this; future reconciliation can mark such rows
+    /// `outcome = 'timeout'`).
+    #[error("sub-agent `{agent}` timed out after {timeout:?}")]
+    SubAgentTimeout {
+        /// Name of the sub-agent that exceeded its timeout.
+        agent: String,
+        /// The timeout the caller specified.
+        timeout: std::time::Duration,
+    },
 }
 
 /// Outcome recorded in `agent_runs.outcome` and returned in [`RunReport`].
@@ -558,6 +573,15 @@ struct SubAgentContext {
 /// invokes the original.
 pub const MAX_SUB_AGENT_DEPTH: usize = 3;
 
+/// Default per-call timeout for [`AgentRunner::run_sub_agent`].
+/// Callers may pick any [`std::time::Duration`]; this is the value
+/// the spec calls "default sub-agent timeout" (`docs/design/01-…`
+/// §Inter-agent sub-agent invocation). Sub-runs that exceed their
+/// wall-clock timeout return [`RunnerError::SubAgentTimeout`]; the
+/// in-flight inner future is dropped, releasing locks and any
+/// outstanding provider HTTP call.
+pub const DEFAULT_SUB_AGENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// One cached agent's parsed config + prompt plus the mtimes the
 /// cache was built from. The runner consults the cache on every
 /// `run_agent` call and reloads when either file's mtime has moved.
@@ -667,6 +691,7 @@ impl AgentRunner {
         parent_run_id: &str,
         parent_correlation_id: &str,
         depth: usize,
+        timeout: std::time::Duration,
         name: &str,
         trigger: TriggerContext,
     ) -> Result<RunReport, RunnerError> {
@@ -677,7 +702,7 @@ impl AgentRunner {
                 limit: MAX_SUB_AGENT_DEPTH,
             });
         }
-        self.run_agent_with(
+        let inner = self.run_agent_with(
             name,
             trigger,
             Some(SubAgentContext {
@@ -685,8 +710,14 @@ impl AgentRunner {
                 parent_correlation_id: parent_correlation_id.to_string(),
                 depth,
             }),
-        )
-        .await
+        );
+        match tokio::time::timeout(timeout, inner).await {
+            Ok(result) => result,
+            Err(_elapsed) => Err(RunnerError::SubAgentTimeout {
+                agent: name.to_string(),
+                timeout,
+            }),
+        }
     }
 
     async fn run_agent_with(
@@ -3751,6 +3782,7 @@ confidence_threshold = 0.7"#,
                 &parent_run_id,
                 &parent_correlation,
                 1,
+                DEFAULT_SUB_AGENT_TIMEOUT,
                 "sub",
                 TriggerContext::OnDemand { note_id: None },
             )
@@ -3858,6 +3890,7 @@ confidence_threshold = 0.99"#,
                 &parent_run_id,
                 "corr",
                 MAX_SUB_AGENT_DEPTH,
+                DEFAULT_SUB_AGENT_TIMEOUT,
                 "sub",
                 TriggerContext::OnDemand { note_id: None },
             )
@@ -3871,6 +3904,7 @@ confidence_threshold = 0.99"#,
                 &parent_run_id,
                 "corr",
                 MAX_SUB_AGENT_DEPTH + 1,
+                DEFAULT_SUB_AGENT_TIMEOUT,
                 "sub",
                 TriggerContext::OnDemand { note_id: None },
             )
@@ -3903,6 +3937,90 @@ confidence_threshold = 0.99"#,
             count, 1,
             "only the in-range sub-run wrote a row; the over-depth call short-circuited"
         );
+    }
+
+    /// A sub-agent that takes longer than its `timeout` returns
+    /// `SubAgentTimeout`. The wrapped inner future is dropped — the
+    /// provider's HTTP call is cancelled — and no completion row
+    /// ever lands in `agent_runs`.
+    #[tokio::test]
+    async fn run_sub_agent_times_out_when_provider_is_slow() {
+        use std::time::Duration;
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "slow",
+            r#"name = "slow"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        // Provider that sleeps for real (the test does too — 50ms
+        // ceiling) so the wall-clock timeout has a deterministic
+        // observation. Cheaper than the paused-clock spawn dance
+        // and equally precise on the assertion.
+        struct SlowProvider;
+        #[async_trait]
+        impl LlmProvider for SlowProvider {
+            async fn complete(
+                &self,
+                _prompt: &PromptStructured,
+                _model: &Model,
+                _options: &CompleteOptions,
+            ) -> engram_llm::Result<Completion> {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                unreachable!("timeout should fire first");
+            }
+            async fn complete_streamed(
+                &self,
+                _prompt: &PromptStructured,
+                _model: &Model,
+                _options: &CompleteOptions,
+            ) -> engram_llm::Result<StreamedCompletion> {
+                unreachable!()
+            }
+            async fn embed(
+                &self,
+                _text: &str,
+                _model: &EmbeddingModel,
+            ) -> engram_llm::Result<Vec<f32>> {
+                unreachable!()
+            }
+        }
+        let provider: Arc<dyn LlmProvider> = Arc::new(SlowProvider);
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        // Stub a parent agent_runs row for the FK.
+        let parent_run_id = "01HXPARTIMEOUT0000000000".to_string();
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_runs (id, agent_name, started_at, trigger) \
+                 VALUES (?1, 'parent', ?2, 'on_demand')",
+                rusqlite::params![parent_run_id, Utc::now().to_rfc3339()],
+            )
+            .unwrap();
+        }
+
+        let err = runner
+            .run_sub_agent(
+                &parent_run_id,
+                "corr",
+                1,
+                Duration::from_millis(20),
+                "slow",
+                TriggerContext::OnDemand { note_id: None },
+            )
+            .await
+            .expect_err("timeout must error");
+        match err {
+            RunnerError::SubAgentTimeout { agent, timeout } => {
+                assert_eq!(agent, "slow");
+                assert_eq!(timeout, Duration::from_millis(20));
+            }
+            other => panic!("expected SubAgentTimeout, got {other:?}"),
+        }
     }
 
     #[tokio::test]
