@@ -4,9 +4,30 @@ This is **engram** --- your thoughts, encoded. A living knowledge base that rewr
 
 ## Status
 
-**Pre-implementation.** The repo currently contains only design docs (`docs/design/`), a `Taskfile.yml` with formatting tasks, this orientation file, a `.gitignore`, and a machine-readable v1 spec at [`SPEC.md`](SPEC.md). **No code yet.** v1 implementation has not begun.
+**v1 implementation in flight.** The Rust workspace at `crates/` holds the production code:
+
+- `engram-core` --- configuration, schemas, shared error categories
+- `engram-agents` --- agent runner + scheduler + per-agent typed output schemas (`src/agents/<name>.rs`)
+- `engram-llm` --- provider trait + Anthropic/OpenAI/Ollama implementations + resilience stack (timeout/retry/circuit-breaker)
+- `engram-index` --- SQLite (FTS5) metadata index + migrations
+- `engram-eval` --- eval framework (cases, scoring, scorecard, regression gate)
+- `engram-cli` --- the `engram` binary (`serve`, `eval`, `agents`, `backup`, `migrate`, `config`, ...)
+- `engram-mcp` --- MCP server (stdio + HTTP+SSE per ADR 0008)
+- `engram-api` --- HTTP+SSE surface
+- `engram-extract` --- file ingestion + extraction
+- `engram-git` --- git read/write boundary per ADR 0009
+
+The 9 v1 agent prompts + configs live at `agents/<name>/{config.toml, prompt.md}` (Steelman constructive, Devil's Advocate, Inquirer, Synthesizer, Voice Keeper, Pair-Thinking, Splitter, Merger, Bridge Builder).
+
+**What's not yet wired:** runner integration of the typed output structs (today the runner extracts confidence permissively via `serde_json::Value::get`; the typed `validate()` dispatch is an opt-in strict surface for eval cases, CLI, and future runner work --- see [ADR 0016](docs/design/adrs/0016-per-agent-typed-outputs.md)). The Swift universal app, REST+SSE API surface, council deliberation engine, and several whole-agent pipelines (Ingestor, Curator) are blocked on upstream slices --- see [`docs/design/07-roadmap.md`](docs/design/07-roadmap.md) for the current phasing.
 
 **Licensing:** All rights reserved. There is no `LICENSE` file by intent --- engram is private-by-default and the user has not yet decided whether to open-source it. Do not assume permissive use.
+
+## Where to look for what
+
+- **Adding or modifying an agent:** the four-layer stack documented in [ADR 0016](docs/design/adrs/0016-per-agent-typed-outputs.md) --- `agents/<name>/{config.toml, prompt.md}` (slice 1), `crates/engram-agents/src/agents/<name>.rs` (slice 2 typed output), `crates/engram-agents/src/agents/validate.rs` (dispatch registry), `tests/fixtures/agents/<name>/output/*.json` (exemplars). The integration test `crates/engram-agents/tests/fixture_outputs.rs` walks the fixtures through `validate()` at CI time and surfaces drift between any two layers.
+- **Validating a captured agent output:** `engram agents list` enumerates the registered agents; `engram agents validate <name> --file <path>` (or `--file -` from stdin, or `--all` to walk every fixture) schema-checks responses against the typed Rust struct.
+- **Running an eval suite:** `engram eval <agent>` reads `.engram/evals/<agent>/cases/` and writes a scorecard; `--baseline <path>` adds the 5%-regression CI gate.
 
 ## Where to start
 
