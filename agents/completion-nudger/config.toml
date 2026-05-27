@@ -1,0 +1,32 @@
+# Completion Nudger agent — surfaces unfinished notes as a daily digest.
+#
+# Runs on a daily cron at 07:00. Read-only: never modifies the vault.
+# Confidence is penalized slightly for each nudge beyond the first,
+# reflecting the increased judgment load.
+
+[agent]
+name = "completion-nudger"
+description = "Surfaces draft, open-TODO, mid-thought, and stale in-progress notes as a daily digest."
+model_tier = "fast"
+
+[schedule]
+trigger = "cron"
+cron = "0 7 * * *"
+
+[permissions]
+may_create_notes = false
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["evergreen", "fleeting", "literature"]
+max_invasiveness = "additive"
+
+[autonomy]
+auto_land_min_confidence = 0.70
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 20000
+auto_pause = true

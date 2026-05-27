@@ -1,0 +1,30 @@
+# AC: Unmarked factual claim → annotation proposed at high confidence
+id: confidence-annotator-unmarked-claim
+description: >
+  When an evergreen note contains a plain factual assertion without any
+  hedging language, the Confidence Annotator should propose a
+  <!-- confidence: needs-marker --> annotation with confidence >= 0.80.
+
+vault_state:
+  notes:
+    - path: "deep-work.md"
+      content: |
+        ---
+        title: Deep Work
+        id: 01J9XXXXXXXXXXXXXXXX
+        type: evergreen
+        ---
+        Focused work produces better output than multitasking.
+        Interruptions destroy flow states irreversibly.
+
+trigger:
+  kind: file_change
+  note_id: "deep-work"
+
+expected_output:
+  annotations_min: 1
+  annotations:
+    - note_id: "deep-work"
+      html_comment: "<!-- confidence: needs-marker -->"
+  confidence_min: 0.80
+  rationale_nonempty: true

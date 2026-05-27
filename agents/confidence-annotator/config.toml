@@ -1,0 +1,34 @@
+# Confidence Annotator agent — flags claims in evergreen notes that
+# lack explicit epistemic markers (e.g. "I think", "likely", "uncertain").
+#
+# Runs on every file change (debounced 45 s). Inserts inline HTML
+# comments only; never rewrites prose. Additive invasiveness.
+
+[agent]
+name = "confidence-annotator"
+description = "Scans evergreen notes for claims without epistemic markers and proposes inline HTML-comment flags."
+model_tier = "fast"
+
+[schedule]
+trigger = "file_change"
+debounce_seconds = 45
+
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen"]
+max_invasiveness = "additive"
+
+[autonomy]
+# Annotations auto-land when confidence >= 0.80; below that they
+# route to council for human approval.
+auto_land_min_confidence = 0.80
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 30000
+auto_pause = true

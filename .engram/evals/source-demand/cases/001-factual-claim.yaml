@@ -1,0 +1,33 @@
+# AC: A strong uncited factual claim is flagged with high severity
+id: source-demand-factual-claim
+description: >
+  An evergreen note asserts a specific causal mechanism with no qualifier
+  and no citation. The agent should flag it at high severity.
+
+vault_state:
+  notes:
+    - path: "sleep-and-memory.md"
+      content: |
+        ---
+        title: Sleep and Memory Consolidation
+        id: 01HSLEEP0000000000AA
+        note_type: evergreen
+        ---
+        Sleep consolidates declarative memories by replaying hippocampal
+        activity during slow-wave sleep. Without adequate sleep, long-term
+        potentiation is impaired and new learning fails to transfer from
+        the hippocampus to the neocortex.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "sleep-and-memory.md"
+
+available_literature_notes: []
+
+expected_output:
+  flagged_claims:
+    - note_id: "01HSLEEP0000000000AA"
+      severity: "high"
+  confidence_min: 0.70
+  rationale_nonempty: true

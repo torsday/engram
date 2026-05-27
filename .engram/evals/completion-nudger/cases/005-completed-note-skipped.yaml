@@ -1,0 +1,31 @@
+# AC: Completed note → no nudge emitted
+id: completion-nudger-completed-note-skipped
+description: >
+  When a note has status: evergreen, no open TODOs, and a clear conclusion,
+  the Completion Nudger should NOT emit a nudge for it. The nudges array
+  should be empty (or not contain this note).
+
+vault_state:
+  notes:
+    - path: "two-types-of-knowledge.md"
+      content: |
+        ---
+        title: Two Types of Knowledge
+        id: 01JDXXXXXXXXXXXXXXXX
+        status: evergreen
+        ---
+        Feynman distinguished between knowing the name of something and
+        understanding it. True knowledge means being able to derive the
+        concept from first principles, not merely recite its label.
+
+        This distinction matters when evaluating expertise: fluency with
+        vocabulary is not the same as conceptual mastery.
+      days_since_modified: 45
+
+trigger:
+  kind: cron
+
+expected_output:
+  nudges: []
+  confidence_min: 0.70
+  rationale_nonempty: true
