@@ -1,0 +1,36 @@
+# AC: Stale in-progress note → nudge with reason stale_in_progress
+id: completion-nudger-stale-in-progress
+description: >
+  When a note has status: in-progress and has not been modified for more
+  than 7 days, the Completion Nudger should emit a nudge with reason
+  stale_in_progress.
+
+vault_state:
+  notes:
+    - path: "distributed-systems-notes.md"
+      content: |
+        ---
+        title: Distributed Systems Notes
+        id: 01JCXXXXXXXXXXXXXXXX
+        status: in-progress
+        ---
+        Notes from reading "Designing Data-Intensive Applications".
+
+        Chapter 5: Replication
+        - Leader-based replication: one node accepts writes
+        - Followers apply changes from the replication log
+
+        Chapter 6: Partitioning
+        (notes incomplete — stopped mid-chapter)
+      days_since_modified: 14
+
+trigger:
+  kind: cron
+
+expected_output:
+  nudges:
+    - note_id: "distributed-systems-notes"
+      reason: "stale_in_progress"
+      days_stale_min: 7
+  confidence_min: 0.65
+  rationale_nonempty: true

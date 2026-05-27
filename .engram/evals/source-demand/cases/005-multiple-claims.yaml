@@ -1,0 +1,40 @@
+# AC: Multiple uncited claims in one note are all flagged with appropriate severity
+id: source-demand-multiple-claims
+description: >
+  An evergreen note contains three factual claims of different strengths:
+  one strong unqualified claim, one weakly qualified claim, and one
+  clearly hedged observation. The agent should flag the first two and
+  leave the third unflagged.
+
+vault_state:
+  notes:
+    - path: "exercise-cognition.md"
+      content: |
+        ---
+        title: Exercise and Cognitive Function
+        id: 01HEXCOG0000000000GG
+        note_type: evergreen
+        ---
+        Aerobic exercise increases BDNF levels in the hippocampus, which
+        directly drives neurogenesis in adult humans. Regular moderate
+        exercise generally improves executive function scores on standard
+        cognitive batteries. I find that even short walks seem to clear
+        my head before focused work sessions.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "exercise-cognition.md"
+
+available_literature_notes: []
+
+expected_output:
+  flagged_claims:
+    - note_id: "01HEXCOG0000000000GG"
+      severity: "high"
+    - note_id: "01HEXCOG0000000000GG"
+      severity: "medium"
+  flagged_count_min: 2
+  flagged_count_max: 2
+  confidence_min: 0.60
+  rationale_nonempty: true

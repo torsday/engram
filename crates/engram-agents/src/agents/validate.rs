@@ -42,7 +42,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    bridge_builder::BridgeBuilderOutput, confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput, gardener::GardenerOutput, inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn, scribe::ScribeOutput, splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput, predictor::PredictorOutput,
+    bridge_builder::BridgeBuilderOutput, confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput, gardener::GardenerOutput, inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn, scribe::ScribeOutput, splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput, predictor::PredictorOutput, source_demand::SourceDemandOutput, completion_nudger::CompletionNudgerOutput,
 };
 use crate::cartographer::CartographerContinuousOutput;
 
@@ -125,6 +125,8 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "predictor" => check::<PredictorOutput>(agent_name, text),
         "witness" => check::<WitnessOutput>(agent_name, text),
         "confidence-annotator" => check::<ConfidenceAnnotatorOutput>(agent_name, text),
+        "source-demand" => check::<SourceDemandOutput>(agent_name, text),
+        "completion-nudger" => check::<CompletionNudgerOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -153,6 +155,8 @@ pub fn registered_agents() -> &'static [&'static str] {
         "predictor",
         "witness",
         "confidence-annotator",
+        "source-demand",
+        "completion-nudger",
     ]
 }
 
@@ -238,6 +242,8 @@ mod tests {
                 "confidence-annotator",
                 r#"{"confidence":0.5,"rationale":"r"}"#,
             ),
+            ("source-demand", r#"{"confidence":0.5,"rationale":"r"}"#),
+            ("completion-nudger", r#"{"confidence":0.5,"rationale":"r"}"#),
         ] {
             validate(agent, sample)
                 .unwrap_or_else(|e| panic!("{agent} minimal sample failed: {e}"));

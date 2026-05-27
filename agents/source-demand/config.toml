@@ -1,0 +1,33 @@
+# Source Demand agent — flags uncited factual claims in evergreen notes.
+#
+# Runs on every file change (debounced 60 s) so that newly written
+# or updated evergreen notes are checked promptly.
+
+[agent]
+name = "source-demand"
+description = "Identifies factual assertions in evergreen notes that lack citations and suggests matching literature notes from the vault."
+model_tier = "fast"
+
+[schedule]
+trigger = "file_change"
+debounce_seconds = 60
+
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen"]
+max_invasiveness = "additive"
+
+[autonomy]
+# Citation-needed annotations land directly when confidence >= threshold.
+# Low-confidence outputs are council-routed for human review.
+auto_land_min_confidence = 0.75
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 40000
+auto_pause = true

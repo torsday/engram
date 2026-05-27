@@ -1,0 +1,28 @@
+# AC: Draft note → nudge with reason draft_status
+id: completion-nudger-draft-note
+description: >
+  When a note has frontmatter status: draft, the Completion Nudger
+  should emit a nudge with reason draft_status.
+
+vault_state:
+  notes:
+    - path: "systems-thinking.md"
+      content: |
+        ---
+        title: Systems Thinking
+        id: 01J9XXXXXXXXXXXXXXXX
+        status: draft
+        ---
+        Systems thinking is a holistic approach to analysis.
+        TODO: expand with examples and link to feedback-loops note.
+      days_since_modified: 12
+
+trigger:
+  kind: cron
+
+expected_output:
+  nudges:
+    - note_id: "systems-thinking"
+      reason: "draft_status"
+  confidence_min: 0.60
+  rationale_nonempty: true
