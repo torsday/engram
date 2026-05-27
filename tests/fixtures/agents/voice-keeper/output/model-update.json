@@ -1,0 +1,10 @@
+{
+  "confidence": 0.81,
+  "rationale": "The recent author-written corpus added two distinctive patterns and dropped one. The dropped pattern (explicit-numbered-lists-in-prose) is the more interesting signal — it's a 2024 habit that vanished in 2025; surfacing it for human confirmation lets the model evolve deliberately.",
+  "mode": "model-update",
+  "model_update": {
+    "additions": ["prefers-em-dash-over-colon", "double-quoted-keywords"],
+    "retirements": ["explicit-numbered-lists-in-prose"],
+    "rationale": "The two additions are stable across the last 30 author-written notes; the retirement is sharper — explicit lists were a 2024 habit that vanished in 2025. Human approval recommended for the retirement; additions are lower-risk."
+  }
+}

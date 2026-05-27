@@ -1,0 +1,6 @@
+{
+  "confidence": 0.0,
+  "rationale": "The note is one sustained argument from premise to conclusion; the three sections build on each other (premise, evidence, implication) rather than treating distinct concepts. The continuous citation thread (each section cites the previous) and the single central claim across all three argue against splitting.",
+  "decline": true,
+  "coherence_signals": ["single-sustained-argument", "continuous-citation-thread"]
+}

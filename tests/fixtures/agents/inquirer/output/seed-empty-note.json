@@ -1,0 +1,28 @@
+{
+  "confidence": 0.72,
+  "rationale": "The note's title points at a concept the vault touches in four neighbors but never fully names. Three seed questions cover the conceptual core; two probe edges where the neighbors disagree.",
+  "mode": "seed-empty-note",
+  "questions": [
+    {
+      "question": "What is the smallest example where this concept clearly applies, in your own work?",
+      "motivating_note_ids": ["01H8X9"],
+      "why_now": "Empty notes seeded with a concrete-example prompt produce better drafts in this vault's history."
+    },
+    {
+      "question": "Which of your existing notes does this concept generalize, and which does it not?",
+      "motivating_note_ids": ["01H8XA", "01H8XB"],
+      "why_now": "Two neighbors reach for adjacent generalizations; naming the scope early prevents drift."
+    },
+    {
+      "question": "Is this a concept you discovered, or a label for something you'd already implicitly understood?",
+      "motivating_note_ids": [],
+      "why_now": "The provenance question shapes whether this becomes an evergreen or stays fleeting."
+    },
+    {
+      "question": "What evidence would change your mind about this concept's usefulness?",
+      "motivating_note_ids": ["01H8XC"],
+      "why_now": "01H8XC sets a strong falsifiability standard that the new note should match."
+    }
+  ],
+  "output_path": "fleeting/2026-05-27-new-concept-seed.md"
+}

@@ -1,0 +1,5 @@
+{
+  "confidence": 0.0,
+  "rationale": "The note's central claim is well-defended: 01H8X9 supplies the counter-example the prompt would attack, the note acknowledges it, and the remaining assumptions are explicit and load-bearing. No defensible critique exists in the neighbor set; manufacturing one would fail the Steelman gate.",
+  "decline": true
+}
