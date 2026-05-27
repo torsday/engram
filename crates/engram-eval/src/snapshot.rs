@@ -7,19 +7,21 @@
 //!
 //! # Snapshot kinds
 //!
-//! This slice supports two source forms:
+//! This slice supports three source forms:
 //!
 //! - **Directory**: a vault tree on disk. `unpack_snapshot` does a
 //!   recursive copy under `dest`. Useful for hand-curated case
 //!   fixtures during early development.
-//! - **Tarball** (`.tar`): stream-extracted into `dest`. The spec's
-//!   preferred shipping format for case fixtures.
+//! - **Tarball** (`.tar`): stream-extracted into `dest`.
+//! - **Gzipped tarball** (`.tar.gz` / `.tgz`): `GzDecoder` + tar
+//!   streaming extraction. Expected shipping format for most case
+//!   fixtures — vault snapshots compress well.
 //!
 //! Out of scope for this slice (separate follow-ups):
 //!
 //! - Content-addressed snapshot cache at
 //!   `.engram/evals/snapshots/<sha>/` (the spec's preferred layout)
-//! - `.tar.gz` / `.zip` / other compressed formats
+//! - `.zip` / `.tar.zst` / other compressed formats
 //! - Permission/ACL preservation beyond what `std::fs::copy` does
 
 use std::path::{Path, PathBuf};
@@ -73,12 +75,19 @@ pub fn unpack_snapshot(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
     })?;
 
     if meta.is_file() {
+        // `.tar.gz` has a compound extension; only the trailing `.gz`
+        // surfaces via `Path::extension`. Match on both the trailing
+        // extension and the file_name to distinguish `.tgz` and the
+        // common `.tar.gz` two-part form.
+        let name = src.file_name().and_then(|s| s.to_str()).unwrap_or("");
         let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
         return match ext {
             "tar" => unpack_tar(src, dest),
-            "gz" | "tgz" => Err(SnapshotError::UnsupportedKind {
+            "tgz" => unpack_tar_gz(src, dest),
+            "gz" if name.ends_with(".tar.gz") => unpack_tar_gz(src, dest),
+            "gz" => Err(SnapshotError::UnsupportedKind {
                 path: src.to_path_buf(),
-                hint: "compressed-tar extraction is a follow-up slice",
+                hint: "plain-gzip (non-tar) extraction is not supported",
             }),
             "zip" => Err(SnapshotError::UnsupportedKind {
                 path: src.to_path_buf(),
@@ -86,7 +95,7 @@ pub fn unpack_snapshot(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
             }),
             _ => Err(SnapshotError::UnsupportedKind {
                 path: src.to_path_buf(),
-                hint: "snapshot file must be a .tar or a directory",
+                hint: "snapshot file must be a .tar / .tar.gz / .tgz or a directory",
             }),
         };
     }
@@ -121,6 +130,28 @@ fn unpack_tar(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
         source: e,
     })?;
     let mut archive = tar::Archive::new(file);
+    archive.set_preserve_permissions(false);
+    archive.set_overwrite(true);
+    archive.unpack(dest).map_err(|e| SnapshotError::Io {
+        path: src.to_path_buf(),
+        source: e,
+    })
+}
+
+/// Extract a `.tar.gz` / `.tgz` archive into `dest`. Wraps the
+/// `tar` reader with `flate2::read::GzDecoder` so memory use stays
+/// O(largest entry) regardless of compressed or uncompressed size.
+fn unpack_tar_gz(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
+    let file = std::fs::File::open(src).map_err(|e| SnapshotError::Io {
+        path: src.to_path_buf(),
+        source: e,
+    })?;
+    std::fs::create_dir_all(dest).map_err(|e| SnapshotError::Io {
+        path: dest.to_path_buf(),
+        source: e,
+    })?;
+    let gz = flate2::read::GzDecoder::new(file);
+    let mut archive = tar::Archive::new(gz);
     archive.set_preserve_permissions(false);
     archive.set_overwrite(true);
     archive.unpack(dest).map_err(|e| SnapshotError::Io {
@@ -277,14 +308,75 @@ mod tests {
         }
     }
 
+    /// Build a tar from a source dir then gzip-compress the result
+    /// in-memory, write it as `<name>.tar.gz`, and verify
+    /// unpack_snapshot extracts it correctly.
     #[test]
-    fn compressed_tar_returns_unsupported_with_distinct_hint() {
+    fn tar_gz_source_extracts_contents_into_dest() {
+        // Build a directory to archive.
+        let src = tempdir().unwrap();
+        std::fs::create_dir_all(src.path().join("notes")).unwrap();
+        std::fs::write(src.path().join("notes/a.md"), "alpha-gz").unwrap();
+        std::fs::write(src.path().join("top.md"), "top-gz").unwrap();
+
+        // Compose the .tar.gz: tar::Builder writing into GzEncoder.
         let parent = tempdir().unwrap();
         let gz_path = parent.path().join("vault.tar.gz");
+        {
+            let file = std::fs::File::create(&gz_path).unwrap();
+            let enc = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+            let mut builder = tar::Builder::new(enc);
+            builder.append_dir_all(".", src.path()).unwrap();
+            // Drop the builder so the GzEncoder finishes the stream.
+            builder.into_inner().unwrap().finish().unwrap();
+        }
+
+        let dest = tempdir().unwrap();
+        unpack_snapshot(&gz_path, dest.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("notes/a.md")).unwrap(),
+            "alpha-gz"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("top.md")).unwrap(),
+            "top-gz"
+        );
+    }
+
+    /// `.tgz` extension routes through the same gz path.
+    #[test]
+    fn tgz_extension_routes_through_gz_path() {
+        let src = tempdir().unwrap();
+        std::fs::write(src.path().join("only.md"), "tgz!").unwrap();
+
+        let parent = tempdir().unwrap();
+        let tgz_path = parent.path().join("vault.tgz");
+        {
+            let file = std::fs::File::create(&tgz_path).unwrap();
+            let enc = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+            let mut builder = tar::Builder::new(enc);
+            builder.append_dir_all(".", src.path()).unwrap();
+            builder.into_inner().unwrap().finish().unwrap();
+        }
+
+        let dest = tempdir().unwrap();
+        unpack_snapshot(&tgz_path, dest.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("only.md")).unwrap(),
+            "tgz!"
+        );
+    }
+
+    /// A plain `.gz` (non-tar) source is still rejected — only
+    /// `.tar.gz` / `.tgz` get extracted.
+    #[test]
+    fn plain_gz_source_returns_unsupported_with_distinct_hint() {
+        let parent = tempdir().unwrap();
+        let gz_path = parent.path().join("vault.gz");
         std::fs::write(&gz_path, b"\0\0\0\0").unwrap();
         match unpack_snapshot(&gz_path, parent.path()) {
             Err(SnapshotError::UnsupportedKind { hint, .. }) => {
-                assert!(hint.contains("compressed"));
+                assert!(hint.contains("plain-gzip"));
             }
             other => panic!("expected UnsupportedKind, got {other:?}"),
         }
