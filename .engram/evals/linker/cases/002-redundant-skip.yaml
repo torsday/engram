@@ -1,0 +1,39 @@
+# AC: Already-linked concept is not proposed again
+id: linker-redundant-skip
+description: >
+  The source note already contains [[spaced-repetition]] in its
+  existing_outgoing_links list. The Linker must not propose the link a
+  second time; proposed_links should be empty.
+
+vault_state:
+  notes:
+    - path: "learning-strategies.md"
+      content: |
+        ---
+        title: Learning Strategies
+        id: 01HLEARN0000000000AA
+        ---
+        Effective learning requires active recall and [[spaced-repetition]].
+        Reviewing material at increasing intervals encodes it more deeply
+        than massed practice.
+    - path: "spaced-repetition.md"
+      content: |
+        ---
+        title: Spaced Repetition
+        id: 01HSPACED0000000000
+        ---
+        Spaced repetition is a study technique that schedules reviews
+        at optimal intervals using the forgetting curve.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "learning-strategies.md"
+
+existing_outgoing_links:
+  - "01HSPACED0000000000"
+
+expected_output:
+  proposed_links: []
+  confidence_min: 0.60
+  rationale_nonempty: true

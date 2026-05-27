@@ -109,6 +109,16 @@ pub mod merger;
 /// produces this output.
 pub mod bridge_builder;
 
+/// Linker — discover missing wikilinks between notes and propose
+/// bidirectional connections. Additive invasiveness; proposals
+/// auto-land at confidence ≥ 0.85, council-routed below that.
+/// Confidence formula: 0.5×LLM + 0.3×retrieval_agreement +
+/// 0.2×calibration_adjustment.
+///
+/// See `agents/linker/prompt.md` for the prompt that produces
+/// this output.
+pub mod linker;
+
 /// Single dispatch entry point over all 9 typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

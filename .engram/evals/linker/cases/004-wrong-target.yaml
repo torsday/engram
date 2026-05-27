@@ -1,0 +1,43 @@
+# AC: Linker does not invent a link to a note not in the neighbour list
+id: linker-wrong-target
+description: >
+  The source note mentions "Zettelkasten" but the only neighbour
+  provided is a note about bullet journaling. The Linker must not
+  invent a link to a hypothetical [[zettelkasten]] note that was not
+  supplied in neighbor_summaries. proposed_links must be empty.
+
+vault_state:
+  notes:
+    - path: "note-taking-methods.md"
+      content: |
+        ---
+        title: Note-Taking Methods
+        id: 01HNOTES000000000001
+        ---
+        There are many approaches to personal knowledge management.
+        Zettelkasten emphasises atomic notes with dense linking.
+        Bullet journaling centres on rapid logging and migration.
+    - path: "bullet-journaling.md"
+      content: |
+        ---
+        title: Bullet Journaling
+        id: 01HBUJO000000000001
+        ---
+        Bullet journaling is an analogue productivity system using
+        rapid logging, collections, and a future log.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "note-taking-methods.md"
+
+# Only bullet-journaling is a supplied neighbour — no zettelkasten note.
+neighbor_note_ids:
+  - "01HBUJO000000000001"
+
+expected_output:
+  # Only a link to 01HBUJO000000000001 is permitted.
+  # Any link to an invented zettelkasten ID must not appear.
+  proposed_link_target_ids_allowed:
+    - "01HBUJO000000000001"
+  rationale_nonempty: true

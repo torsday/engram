@@ -1,0 +1,34 @@
+# Linker agent — discovers missing wikilinks between notes and proposes
+# bidirectional connections.
+#
+# Runs on every file change (debounced 30 s). Additive-only: it never
+# rewrites existing prose, only inserts [[wikilinks]] into existing text.
+
+[agent]
+name = "linker"
+description = "Discovers missing wikilinks between notes and proposes bidirectional connections."
+model_tier = "fast"
+
+[schedule]
+trigger = "file_change"
+debounce_seconds = 30
+
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen", "literature", "moc"]
+max_invasiveness = "additive"
+
+[autonomy]
+# Link proposals auto-land when confidence >= threshold.
+# Below threshold they are council-routed for human approval.
+auto_land_min_confidence = 0.85
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 40000
+auto_pause = true
