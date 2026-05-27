@@ -23,8 +23,16 @@
       }
     ],
     "link_reassignments": [
-      {"source_note_id": "01H8X1", "anchor_text": "lossy", "target_section": "rate-distortion-analogy"},
-      {"source_note_id": "01H8X2", "anchor_text": "editor-choice", "target_section": ""}
+      {
+        "source_note_id": "01H8X1",
+        "anchor_text": "lossy",
+        "target_section": "rate-distortion-analogy"
+      },
+      {
+        "source_note_id": "01H8X2",
+        "anchor_text": "editor-choice",
+        "target_section": ""
+      }
     ],
     "dropped_content": [],
     "unresolved_conflicts": [
