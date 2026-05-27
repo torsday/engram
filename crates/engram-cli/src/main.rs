@@ -99,14 +99,21 @@ enum Command {
     /// Run an agent evaluation
     Eval {
         /// Agent name to evaluate (matches `.engram/evals/<agent>/cases/`).
-        agent: String,
+        /// Required unless `--all` is set; ignored with `--all`.
+        #[arg(required_unless_present = "all")]
+        agent: Option<String>,
         /// Optional comma-separated case-id filter. Runs every case if absent.
-        #[arg(long, value_delimiter = ',')]
+        /// Incompatible with `--all`.
+        #[arg(long, value_delimiter = ',', conflicts_with = "all")]
         cases: Option<Vec<String>>,
         /// Vault root containing `.engram/evals/<agent>/cases/` and
         /// `.engram/index.sqlite`. Defaults to the current directory.
         #[arg(long, default_value = ".")]
         vault: PathBuf,
+        /// Run every agent's eval suite under `<vault>/.engram/evals/`
+        /// in turn. Mutually exclusive with `<agent>` and `--cases`.
+        #[arg(long)]
+        all: bool,
     },
     /// Verify vault backup recency
     Backup {
@@ -240,8 +247,17 @@ async fn main() {
             agent,
             cases,
             vault,
+            all,
         } => {
-            if let Err(e) = run_eval(agent, cases, vault).await {
+            let dispatch = if all {
+                run_eval_all(vault).await
+            } else {
+                // `agent` is `required_unless_present = "all"`, so clap
+                // guarantees Some(_) here.
+                let agent_name = agent.expect("clap enforces agent is Some when --all is unset");
+                run_eval(agent_name, cases, vault).await
+            };
+            if let Err(e) = dispatch {
                 eprintln!("engram eval: {e}");
                 std::process::exit(1);
             }
@@ -573,5 +589,77 @@ async fn run_eval(
     println!("eval_run_id: {run_id}");
     println!("artifact: {}", json_path.display());
 
+    Ok(())
+}
+
+/// `engram eval --all` — enumerate every subdirectory under
+/// `<vault>/.engram/evals/` that contains a `cases/` directory and
+/// run its eval suite via [`run_eval`]. Agents are visited in
+/// sorted order so the output is reproducible. A single agent's
+/// failure does not abort the rest of the sweep — its error
+/// surfaces in stderr and the loop continues; the process exits
+/// non-zero at the end iff any agent failed.
+async fn run_eval_all(vault: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let evals_root = vault.join(".engram").join("evals");
+    if !evals_root.is_dir() {
+        return Err(format!(
+            "evals directory missing: {} (no agents to evaluate)",
+            evals_root.display()
+        )
+        .into());
+    }
+
+    // Enumerate <evals_root>/<agent>/ that contain cases/ —
+    // anything else (e.g. `snapshots/` under the same root) is
+    // skipped. Sort by file name for reproducible output.
+    let mut agents: Vec<String> = std::fs::read_dir(&evals_root)?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if !path.is_dir() {
+                return None;
+            }
+            // The `snapshots/` cache directory lives next to per-
+            // agent directories and is NOT an agent.
+            if path.file_name()?.to_str()? == "snapshots" {
+                return None;
+            }
+            if !path.join("cases").is_dir() {
+                return None;
+            }
+            path.file_name()?.to_str().map(String::from)
+        })
+        .collect();
+    agents.sort();
+
+    if agents.is_empty() {
+        return Err(format!(
+            "no agents found under {} (each agent needs a `cases/` subdirectory)",
+            evals_root.display()
+        )
+        .into());
+    }
+
+    let mut failed: Vec<(String, String)> = Vec::new();
+    for agent in &agents {
+        println!("─── eval: {agent} ────────────────────────────────");
+        if let Err(e) = run_eval(agent.clone(), None, vault.clone()).await {
+            eprintln!("engram eval {agent}: {e}");
+            failed.push((agent.clone(), format!("{e}")));
+        }
+    }
+    println!("─── summary ─────────────────────────────────────");
+    println!(
+        "agents run: {} / {} (failed: {})",
+        agents.len() - failed.len(),
+        agents.len(),
+        failed.len()
+    );
+    if !failed.is_empty() {
+        for (a, msg) in &failed {
+            println!("  ✗ {a}: {msg}");
+        }
+        return Err(format!("{} agent(s) failed", failed.len()).into());
+    }
     Ok(())
 }
