@@ -148,6 +148,14 @@ pub mod gardener;
 /// this output.
 pub mod predictor;
 
+/// Witness — acknowledge personal and journal notes without analysis,
+/// suggestions, or vault modification. Strictly local-only; output
+/// goes to `.engram/witness/<date>.md`, never to the vault.
+///
+/// See `agents/witness/prompt.md` for the prompt that produces this
+/// output.
+pub mod witness;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path
