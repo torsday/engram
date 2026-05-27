@@ -38,6 +38,9 @@
 pub mod case;
 /// Score / Verdict value types — what one case run produces.
 pub mod score;
+/// Pure scoring function: `ExpectedOutcome` + `Observation` → `(Score, Verdict)`.
+pub mod scorer;
 
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
 pub use score::{Score, Verdict};
+pub use scorer::{score_case, Observation};
