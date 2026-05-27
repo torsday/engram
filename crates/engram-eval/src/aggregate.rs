@@ -32,6 +32,12 @@ pub struct CaseRunResult {
     /// Used to normalize cost-per-proposal. `0` is valid for cases
     /// that expected no proposal.
     pub proposals_emitted: usize,
+    /// Human-readable reason this case errored or failed. Populated
+    /// on `Verdict::Error` (snapshot unpack failure, invoker
+    /// panic/timeout, etc.); `None` on Pass and currently on Fail.
+    /// Persisted into `eval_case_results.failure_reason`.
+    #[serde(default)]
+    pub failure_reason: Option<String>,
 }
 
 /// Summary metrics over a set of case results.
@@ -169,6 +175,7 @@ mod tests {
                 cost_usd,
             },
             proposals_emitted: proposals,
+            failure_reason: None,
         }
     }
 
@@ -184,6 +191,7 @@ mod tests {
                 cost_usd: 0.0,
             },
             proposals_emitted: 1,
+            failure_reason: None,
         }
     }
 
@@ -199,6 +207,7 @@ mod tests {
                 cost_usd: 0.0,
             },
             proposals_emitted: 0,
+            failure_reason: None,
         }
     }
 
@@ -283,12 +292,14 @@ mod tests {
                     cost_usd: 0.10,
                 },
                 proposals_emitted: 2,
+                failure_reason: None,
             },
             CaseRunResult {
                 case_id: "b".into(),
                 verdict: Verdict::Pass,
                 score: Score::perfect(),
                 proposals_emitted: 0,
+                failure_reason: None,
             },
         ];
         let agg = Aggregate::from_results(&results);
@@ -302,6 +313,7 @@ mod tests {
             verdict: Verdict::Pass,
             score: Score::perfect(),
             proposals_emitted: 0,
+            failure_reason: None,
         }];
         let agg = Aggregate::from_results(&results);
         assert_eq!(agg.mean_cost_per_proposal_usd, 0.0);
