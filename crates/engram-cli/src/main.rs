@@ -699,7 +699,7 @@ fn build_provider_and_model(
     use engram_llm::anthropic::AnthropicProvider;
     use engram_llm::{
         CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider, Model, ModelProvider,
-        PromptStructured, StreamedCompletion, Usage,
+        OllamaProvider, PromptStructured, StreamedCompletion, Usage,
     };
     use std::sync::Arc;
 
@@ -755,6 +755,23 @@ fn build_provider_and_model(
                 Arc::new(provider),
                 Model {
                     provider: ModelProvider::Anthropic,
+                    name: entry.model.clone(),
+                },
+            ))
+        }
+        "ollama" => {
+            // Ollama runs locally; no secrets store needed. Base
+            // URL defaults to localhost:11434 (the daemon's stock
+            // bind). A future EngramConfig field can let operators
+            // override the host; for now we keep the wiring tight
+            // by hardcoding the convention.
+            let base_url = "http://localhost:11434";
+            let provider = OllamaProvider::new(base_url)
+                .map_err(|e| format!("OllamaProvider init failed: {e}"))?;
+            Ok((
+                Arc::new(provider),
+                Model {
+                    provider: ModelProvider::Ollama,
                     name: entry.model.clone(),
                 },
             ))
