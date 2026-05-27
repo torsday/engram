@@ -1,0 +1,52 @@
+id: scribe-004
+description: >
+  Literature note with inconsistent heading levels and a mixed citation
+  style. Scribe should normalize headings (H2 sections, H3 subsections)
+  and unify citation style without changing content.
+
+mode: literature_formatting
+
+vault_state:
+  notes:
+    - path: literature/attention-is-all-you-need.md
+      body: |
+        # Attention Is All You Need — Vaswani et al. 2017
+
+        ### Summary
+
+        The paper introduces the Transformer architecture.
+        All sequence transduction tasks rely on RNNs or CNNs.
+        The Transformer relies solely on attention mechanisms.
+
+        # Key claims
+
+        - Self-attention allows O(1) path length between positions (Vaswani 2017, p. 6)
+        - RNNs have O(n) path length (Vaswani et al., 2017)
+
+        ##### Evaluation
+
+        Achieved 28.4 BLEU on WMT 2014 English-to-German. (Vaswani et al. 2017)
+
+input:
+  note_path: literature/attention-is-all-you-need.md
+
+expected_output:
+  mode: literature_formatting
+  length_ratio_range: [0.95, 1.05]
+  cleaned_body_must_contain:
+    - Attention Is All You Need
+    - Vaswani
+    - Self-attention
+    - 28.4 BLEU
+
+pass_criteria:
+  - heading hierarchy is consistent (H2 for top-level sections)
+  - citation style is unified
+  - all factual content preserved
+  - length_ratio within [0.95, 1.05]
+
+fail_criteria:
+  - any factual claim altered
+  - BLEU score changed
+  - author names changed
+  - length_ratio outside [0.9, 1.1]
