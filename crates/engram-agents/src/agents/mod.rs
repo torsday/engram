@@ -156,6 +156,15 @@ pub mod predictor;
 /// output.
 pub mod witness;
 
+/// Tutor — generate spaced-repetition flashcards from evergreen notes
+/// using the FSRS-4.5 algorithm and schedule cards for daily review.
+/// Additive invasiveness; auto-lands at confidence ≥ 0.80, council-
+/// routed below that. Runs on a daily cron (08:00).
+///
+/// See `agents/tutor/prompt.md` for the prompt that produces this
+/// output.
+pub mod tutor;
+
 /// Confidence Annotator — scan evergreen notes for claims without
 /// explicit epistemic markers and flag them with inline HTML comments.
 /// Additive invasiveness; annotations auto-land at confidence ≥ 0.80,

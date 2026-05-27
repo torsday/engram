@@ -1,0 +1,33 @@
+# AC: Tags from source note appear on generated flashcards
+id: tutor-tag-extraction
+description: >
+  Tags present in the source note's frontmatter must appear on every
+  flashcard derived from that note. The Tutor may add inferred tags
+  but must not drop source tags.
+
+vault_state:
+  notes:
+    - path: "async-await-rust.md"
+      content: |
+        ---
+        title: Async/Await in Rust
+        id: 01J8EEEEEEEEEEEEEEE5
+        tags: [evergreen, rust, async, concurrency]
+        ---
+        Rust's async/await syntax allows writing asynchronous code that looks
+        synchronous. An `async fn` returns a `Future`. The `.await` operator
+        suspends the current task until the future resolves. The Tokio and
+        async-std crates provide runtime executors.
+      note_type: evergreen
+
+trigger:
+  kind: cron
+  note_id: "async-await-rust"
+
+expected_output:
+  flashcards_min_count: 1
+  flashcards:
+    - note_id: "01J8EEEEEEEEEEEEEEE5"
+      tags_includes_all: ["rust", "async", "concurrency", "evergreen"]
+  confidence_min: 0.70
+  rationale_nonempty: true
