@@ -36,6 +36,10 @@ static MIGRATIONS: &[(&str, &str)] = &[
         "005_atomic_writes_mode.sql",
         include_str!("../migrations/005_atomic_writes_mode.sql"),
     ),
+    (
+        "006_agent_actions_parent_run_id.sql",
+        include_str!("../migrations/006_agent_actions_parent_run_id.sql"),
+    ),
 ];
 
 /// Highest migration ordinal supported by this binary.

@@ -512,6 +512,16 @@ pub struct Proposal {
     pub path_validation: Vec<ProposalPathStatus>,
 }
 
+/// Per-call context for a sub-agent invocation, threaded from
+/// [`AgentRunner::run_sub_agent`] through the run path so the
+/// resulting `agent_actions` row carries the parent's `run_id` and
+/// tracing spans share the parent's `correlation_id`. See issue #31.
+#[derive(Debug, Clone)]
+struct SubAgentContext {
+    parent_run_id: String,
+    parent_correlation_id: String,
+}
+
 /// One cached agent's parsed config + prompt plus the mtimes the
 /// cache was built from. The runner consults the cache on every
 /// `run_agent` call and reloads when either file's mtime has moved.
@@ -589,8 +599,54 @@ impl AgentRunner {
         name: &str,
         trigger: TriggerContext,
     ) -> Result<RunReport, RunnerError> {
-        let correlation_id = NoteId::new().as_str().to_string();
+        self.run_agent_with(name, trigger, None).await
+    }
+
+    /// Run an agent as a sub-agent invoked by another agent's run.
+    ///
+    /// Identical to [`run_agent`] except:
+    /// - the sub-run **inherits the parent's `correlation_id`** so
+    ///   tracing spans for parent + sub share one identifier
+    /// - the sub-run's [`agent_actions`] row records the parent's
+    ///   `run_id` in the `parent_run_id` column, so the audit trail
+    ///   can join sub-agent writes back to the originating run
+    ///
+    /// Each sub-run still gets its own unique `run_id` (a separate
+    /// row in `agent_runs`) — the parent_run_id link is what stitches
+    /// them together. See issue #31 for the full invocation contract;
+    /// this slice covers attribution only. Memory namespacing,
+    /// budget accounting, recursion-depth limits, and the
+    /// timeout-bounded `SubAgent` trait are follow-up slices.
+    pub async fn run_sub_agent(
+        &self,
+        parent_run_id: &str,
+        parent_correlation_id: &str,
+        name: &str,
+        trigger: TriggerContext,
+    ) -> Result<RunReport, RunnerError> {
+        self.run_agent_with(
+            name,
+            trigger,
+            Some(SubAgentContext {
+                parent_run_id: parent_run_id.to_string(),
+                parent_correlation_id: parent_correlation_id.to_string(),
+            }),
+        )
+        .await
+    }
+
+    async fn run_agent_with(
+        &self,
+        name: &str,
+        trigger: TriggerContext,
+        sub: Option<SubAgentContext>,
+    ) -> Result<RunReport, RunnerError> {
+        let correlation_id = sub
+            .as_ref()
+            .map(|s| s.parent_correlation_id.clone())
+            .unwrap_or_else(|| NoteId::new().as_str().to_string());
         let run_id = NoteId::new().as_str().to_string();
+        let parent_run_id = sub.as_ref().map(|s| s.parent_run_id.clone());
 
         // `kind` and `rationale` are recorded later via
         // `Span::record` once we've parsed the response. Declared
@@ -601,12 +657,13 @@ impl AgentRunner {
             agent = name,
             correlation_id = %correlation_id,
             run_id = %run_id,
+            parent_run_id = parent_run_id.as_deref().unwrap_or(""),
             trigger = trigger.trigger_label(),
             kind = tracing::field::Empty,
             rationale = tracing::field::Empty,
         );
         async move {
-            self.run_agent_inner(name, trigger, run_id, correlation_id)
+            self.run_agent_inner(name, trigger, run_id, correlation_id, parent_run_id)
                 .await
         }
         .instrument(span)
@@ -619,6 +676,7 @@ impl AgentRunner {
         trigger: TriggerContext,
         run_id: String,
         correlation_id: String,
+        parent_run_id: Option<String>,
     ) -> Result<RunReport, RunnerError> {
         // Load agent config + prompt before recording the run start so we
         // surface configuration errors loudly instead of leaving an
@@ -894,6 +952,7 @@ impl AgentRunner {
                     decided_at: None,
                     final_diff_hash: None,
                     git_commit_sha: None,
+                    parent_run_id: parent_run_id.clone(),
                 };
                 let log = ActionLog::new(Arc::clone(&self.sqlite));
                 match log.record(action) {
@@ -3576,6 +3635,118 @@ confidence_threshold = 0.7"#,
                 .unwrap()
                 .starts_with("rejected:"),
             "rejected-path verdict must round-trip into the JSON"
+        );
+    }
+
+    /// A sub-agent invocation inherits the parent's `correlation_id`
+    /// and the resulting `agent_actions` row carries the parent's
+    /// `run_id` in `parent_run_id`. See issue #31 (slice 1).
+    #[tokio::test]
+    async fn run_sub_agent_propagates_correlation_and_parent_run_id() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "sub",
+            r#"name = "sub"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "kind": "sub-action",
+                "rationale": "called by parent",
+                "proposed_changes": [
+                    {"path": "notes/sub.md", "new_content": "# Sub"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        // Insert a parent agent_runs row so the FK on
+        // agent_actions.parent_run_id resolves cleanly. In production
+        // the parent run lands its own row via run_agent_inner before
+        // calling run_sub_agent; this test stubs the parent directly
+        // to keep the assertion focused on attribution propagation.
+        let parent_run_id = "01HXPARENTRUNXX0000000000".to_string();
+        let parent_correlation = "01HXPARENTCORR0000000000".to_string();
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_runs (id, agent_name, started_at, trigger) \
+                 VALUES (?1, 'parent', ?2, 'on_demand')",
+                rusqlite::params![parent_run_id, Utc::now().to_rfc3339()],
+            )
+            .unwrap();
+        }
+        let report = runner
+            .run_sub_agent(
+                &parent_run_id,
+                &parent_correlation,
+                "sub",
+                TriggerContext::OnDemand { note_id: None },
+            )
+            .await
+            .unwrap();
+
+        // Correlation inherited verbatim; run_id is a fresh ULID
+        // (so the sub-run still gets its own agent_runs row).
+        assert_eq!(report.correlation_id, parent_correlation);
+        assert_ne!(report.run_id, parent_run_id);
+        assert_eq!(report.outcome, RunOutcome::AutoLand);
+
+        // agent_actions row carries parent_run_id.
+        let action_id = report.action_id.as_ref().expect("sub-AutoLand must record");
+        let conn = sqlite.lock().unwrap();
+        let stored_parent: Option<String> = conn
+            .query_row(
+                "SELECT parent_run_id FROM agent_actions WHERE id = ?1",
+                rusqlite::params![action_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored_parent.as_deref(), Some(parent_run_id.as_str()));
+    }
+
+    /// A normal (non-sub) `run_agent` leaves `parent_run_id` NULL on
+    /// the resulting `agent_actions` row — the column is reserved
+    /// for the sub-agent path.
+    #[tokio::test]
+    async fn run_agent_leaves_parent_run_id_null() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "top",
+            r#"name = "top"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r##"{
+                "confidence": 0.95,
+                "proposed_changes": [
+                    {"path": "notes/top.md", "new_content": "# Top"}
+                ]
+            }"##)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        let report = runner
+            .run_agent("top", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let action_id = report.action_id.as_ref().unwrap();
+        let conn = sqlite.lock().unwrap();
+        let stored_parent: Option<String> = conn
+            .query_row(
+                "SELECT parent_run_id FROM agent_actions WHERE id = ?1",
+                rusqlite::params![action_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(
+            stored_parent.is_none(),
+            "top-level runs must not populate parent_run_id"
         );
     }
 
