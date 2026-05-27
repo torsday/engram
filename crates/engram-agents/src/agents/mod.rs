@@ -131,7 +131,16 @@ pub mod linker;
 /// output.
 pub mod scribe;
 
-/// Single dispatch entry point over all 9 typed agent outputs.
+/// Gardener — prune stale content (dead wikilinks, resolved TODOs)
+/// and flag decayed evergreens. Follows the ADR 0013 pre-filter-then-
+/// judge pattern: deterministic helpers find candidates; the LLM
+/// decides which to act on. Runs on a daily cron (03:00).
+///
+/// See `agents/gardener/prompt.md` for the prompt that produces this
+/// output.
+pub mod gardener;
+
+/// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path
 /// stays on the permissive `parse_confidence` lookup.

@@ -1,0 +1,38 @@
+# AC: Resolved TODO → removal proposed
+id: gardener-done-todo
+description: >
+  When a note contains a - [ ] checkbox item for a task that is
+  demonstrably complete (the note body itself confirms it), the
+  Gardener should emit a resolved_todo removal.
+
+vault_state:
+  notes:
+    - path: "project-engram.md"
+      content: |
+        ---
+        title: Project Engram
+        id: 01JAXXXXXXXXXXXXXXXX
+        ---
+        ## Status
+
+        The Gardener agent spec was merged in PR #42. The implementation
+        is complete and all tests pass.
+
+        ## TODOs
+
+        - [ ] Write the Gardener agent spec
+        - [ ] Ship the initial CLI skeleton
+
+trigger:
+  kind: cron
+  note_id: "project-engram"
+  todo_candidates:
+    - "Write the Gardener agent spec"
+    - "Ship the initial CLI skeleton"
+
+expected_output:
+  removals:
+    - kind: resolved_todo
+      target: "Write the Gardener agent spec"
+      confidence_min: 0.75
+  rationale_nonempty: true
