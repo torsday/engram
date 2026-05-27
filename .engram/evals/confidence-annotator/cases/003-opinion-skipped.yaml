@@ -1,0 +1,27 @@
+# AC: Personal opinion in first person not flagged as unmarked
+id: confidence-annotator-opinion-skipped
+description: >
+  Statements that are clearly personal preferences or first-person
+  experiences should not be flagged as unmarked claims. The agent
+  should return an empty annotations list.
+
+vault_state:
+  notes:
+    - path: "morning-routine.md"
+      content: |
+        ---
+        title: Morning Routine
+        id: 01J9ZZZZZZZZZZZZZZZZ
+        type: evergreen
+        ---
+        I enjoy writing in the morning before checking email.
+        This practice helps me feel more focused throughout the day.
+
+trigger:
+  kind: file_change
+  note_id: "morning-routine"
+
+expected_output:
+  annotations_count: 0
+  confidence_min: 0.85
+  rationale_nonempty: true

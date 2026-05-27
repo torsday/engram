@@ -1,0 +1,29 @@
+# AC: HTML comment format is exactly <!-- confidence: needs-marker -->
+id: confidence-annotator-html-comment-format
+description: >
+  The html_comment field in every annotation must be exactly
+  <!-- confidence: needs-marker --> to ensure consistent downstream
+  parsing by the runner and Obsidian plugins.
+
+vault_state:
+  notes:
+    - path: "habit-formation.md"
+      content: |
+        ---
+        title: Habit Formation
+        id: 01JBXXXXXXXXXXXXXXXX
+        type: evergreen
+        ---
+        Habits form faster when paired with an existing trigger behaviour.
+
+trigger:
+  kind: file_change
+  note_id: "habit-formation"
+
+expected_output:
+  annotations_min: 1
+  annotations:
+    - note_id: "habit-formation"
+      html_comment: "<!-- confidence: needs-marker -->"
+  confidence_min: 0.78
+  rationale_nonempty: true

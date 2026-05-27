@@ -1,0 +1,28 @@
+# AC: Multiple unmarked claims → one annotation per claim
+id: confidence-annotator-multiple-claims
+description: >
+  When a note contains several unmarked claims, the agent should
+  propose a separate annotation for each one. Confidence is expected
+  to be somewhat lower due to the penalty applied per annotation.
+
+vault_state:
+  notes:
+    - path: "knowledge-management.md"
+      content: |
+        ---
+        title: Knowledge Management
+        id: 01JAXXXXXXXXXXXXXXXX
+        type: evergreen
+        ---
+        Spaced repetition is the most effective memorisation technique.
+        Note-taking by hand produces better recall than typing.
+        Linking ideas across domains accelerates learning.
+
+trigger:
+  kind: file_change
+  note_id: "knowledge-management"
+
+expected_output:
+  annotations_min: 2
+  confidence_min: 0.70
+  rationale_nonempty: true

@@ -148,6 +148,17 @@ pub mod gardener;
 /// output.
 pub mod witness;
 
+/// Confidence Annotator — scan evergreen notes for claims without
+/// explicit epistemic markers and flag them with inline HTML comments.
+/// Additive invasiveness; annotations auto-land at confidence ≥ 0.80,
+/// council-routed below that. Confidence formula penalises 0.02 per
+/// proposed annotation (capped at 0.20) to reflect cumulative
+/// uncertainty.
+///
+/// See `agents/confidence-annotator/prompt.md` for the prompt that
+/// produces this output.
+pub mod confidence_annotator;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path
