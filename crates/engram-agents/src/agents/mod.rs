@@ -99,3 +99,12 @@ pub mod splitter;
 /// See `agents/merger/prompt.md` for the prompt that produces
 /// this output.
 pub mod merger;
+
+/// Bridge Builder — detect disconnected clusters in the link
+/// graph and propose bridge links or bridge notes for accidental
+/// gaps. Two output shapes (link vs. note) dispatched by an
+/// untagged enum on `proposed_bridge`.
+///
+/// See `agents/bridge-builder/prompt.md` for the prompt that
+/// produces this output.
+pub mod bridge_builder;
