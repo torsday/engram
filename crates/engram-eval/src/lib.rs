@@ -34,6 +34,8 @@
 //! / `serde(other)` where appropriate) so future schema additions
 //! don't reject existing fixtures.
 
+/// Aggregate metrics over a set of [`CaseRunResult`]s.
+pub mod aggregate;
 /// Per-case fixture loaded from `.engram/evals/<agent>/cases/<id>.yaml`.
 pub mod case;
 /// Score / Verdict value types — what one case run produces.
@@ -41,6 +43,7 @@ pub mod score;
 /// Pure scoring function: `ExpectedOutcome` + `Observation` → `(Score, Verdict)`.
 pub mod scorer;
 
+pub use aggregate::{Aggregate, CaseRunResult};
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
 pub use score::{Score, Verdict};
 pub use scorer::{score_case, Observation};
