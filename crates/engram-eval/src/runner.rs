@@ -58,7 +58,7 @@ impl std::fmt::Display for InvokerError {
 impl std::error::Error for InvokerError {}
 
 /// One eval run's full report.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EvalRunReport {
     /// Agent the run targeted (echoed from `EvalRunner::new`).
     pub agent: String,
@@ -66,6 +66,46 @@ pub struct EvalRunReport {
     pub results: Vec<CaseRunResult>,
     /// Aggregate metrics over `results`.
     pub aggregate: Aggregate,
+}
+
+impl EvalRunReport {
+    /// Write a JSON artifact of this report under `runs_dir`.
+    ///
+    /// Creates `runs_dir` (with parents) if missing. Filename is
+    /// `<RFC3339-utc>-<agent>.json` so multiple runs of the same
+    /// agent on different days sort chronologically by `ls`. The
+    /// `:` and `.` in the timestamp are replaced with `-` so the
+    /// filename is portable across filesystems (FAT/NTFS forbid
+    /// `:`). The agent name is sanitized to `[A-Za-z0-9-]` with
+    /// other characters replaced by `_`.
+    ///
+    /// Returns the absolute path written. Pure I/O wrapper around
+    /// `serde_json::to_string_pretty` — no DB writes. The
+    /// `eval_runs` / `eval_case_results` persistence is a separate
+    /// slice.
+    pub fn write_json(&self, runs_dir: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+        std::fs::create_dir_all(runs_dir)?;
+        let stamp = chrono::Utc::now()
+            .format("%Y-%m-%dT%H-%M-%S-%fZ")
+            .to_string();
+        let safe_agent: String = self
+            .agent
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let filename = format!("{stamp}-{safe_agent}.json");
+        let path = runs_dir.join(filename);
+        let body = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(&path, body)?;
+        Ok(path)
+    }
 }
 
 /// Errors `EvalRunner` itself surfaces (distinct from per-case
@@ -409,5 +449,67 @@ mod tests {
         let runner = EvalRunner::new("linker", &cases_dir, cache, invoker);
         let report = runner.run_all().unwrap();
         assert_eq!(report.results[0].verdict, Verdict::Pass);
+    }
+
+    fn empty_report(agent: &str) -> EvalRunReport {
+        EvalRunReport {
+            agent: agent.into(),
+            results: Vec::new(),
+            aggregate: Aggregate::empty(),
+        }
+    }
+
+    #[test]
+    fn write_json_creates_runs_dir_and_returns_path() {
+        let parent = tempdir().unwrap();
+        let runs_dir = parent.path().join("runs/missing/parents");
+        assert!(!runs_dir.exists());
+        let path = empty_report("linker").write_json(&runs_dir).unwrap();
+        assert!(path.exists());
+        assert!(path.starts_with(&runs_dir));
+    }
+
+    #[test]
+    fn write_json_filename_starts_with_iso_stamp_and_ends_with_agent_json() {
+        let parent = tempdir().unwrap();
+        let path = empty_report("linker").write_json(parent.path()).unwrap();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        // YYYY-MM-DDTHH-MM-SS-...
+        assert!(name.starts_with(&chrono::Utc::now().format("%Y-").to_string()));
+        assert!(name.ends_with("-linker.json"));
+    }
+
+    #[test]
+    fn write_json_sanitizes_disallowed_filename_characters() {
+        let parent = tempdir().unwrap();
+        let path = empty_report("evil/agent name?")
+            .write_json(parent.path())
+            .unwrap();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.ends_with("-evil_agent_name_.json"), "got {name}");
+    }
+
+    #[test]
+    fn write_json_round_trips_through_serde() {
+        let parent = tempdir().unwrap();
+        let report = EvalRunReport {
+            agent: "scribe".into(),
+            results: vec![CaseRunResult {
+                case_id: "001".into(),
+                verdict: Verdict::Pass,
+                score: crate::Score::perfect(),
+                proposals_emitted: 0,
+            }],
+            aggregate: Aggregate::from_results(&[CaseRunResult {
+                case_id: "001".into(),
+                verdict: Verdict::Pass,
+                score: crate::Score::perfect(),
+                proposals_emitted: 0,
+            }]),
+        };
+        let path = report.write_json(parent.path()).unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        let parsed: EvalRunReport = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed, report);
     }
 }
