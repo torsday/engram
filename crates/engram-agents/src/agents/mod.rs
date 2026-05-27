@@ -156,6 +156,17 @@ pub mod predictor;
 /// output.
 pub mod witness;
 
+/// Confidence Annotator — scan evergreen notes for claims without
+/// explicit epistemic markers and flag them with inline HTML comments.
+/// Additive invasiveness; annotations auto-land at confidence ≥ 0.80,
+/// council-routed below that. Confidence formula penalises 0.02 per
+/// proposed annotation (capped at 0.20) to reflect cumulative
+/// uncertainty.
+///
+/// See `agents/confidence-annotator/prompt.md` for the prompt that
+/// produces this output.
+pub mod confidence_annotator;
+
 /// Source Demand — flag uncited factual claims in evergreen notes
 /// and suggest vault literature notes that could serve as citations.
 /// Additive invasiveness; annotations auto-land at confidence ≥ 0.75.

@@ -1,0 +1,29 @@
+# AC: All claims already carry markers → empty annotations, high confidence
+id: confidence-annotator-already-marked
+description: >
+  When every claim in an evergreen note already has an explicit epistemic
+  marker, the Confidence Annotator should return an empty annotations list
+  with confidence >= 0.90.
+
+vault_state:
+  notes:
+    - path: "sleep-learning.md"
+      content: |
+        ---
+        title: Sleep and Learning
+        id: 01J9YYYYYYYYYYYYYYYY
+        type: evergreen
+        ---
+        I think sleep consolidates memories more effectively than
+        additional study time.
+        Research suggests that slow-wave sleep is likely critical
+        for declarative memory.
+
+trigger:
+  kind: file_change
+  note_id: "sleep-learning"
+
+expected_output:
+  annotations_count: 0
+  confidence_min: 0.90
+  rationale_nonempty: true
