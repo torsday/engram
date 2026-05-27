@@ -1,0 +1,38 @@
+# AC: Personal note receives a short, non-judgmental acknowledgment
+id: witness-personal-note
+description: >
+  A personal note about a difficult day should receive a brief acknowledgment
+  that reflects the content back without judgment, advice, or analysis.
+  Confidence must be >= 0.85.
+
+vault_state:
+  notes:
+    - path: "journal/2026-05-20.md"
+      content: |
+        ---
+        title: May 20
+        id: 01JVXXXXXXXXXXXXXXXX
+        type: journal
+        ---
+        Feeling scattered today. Couldn't focus on anything for more than
+        ten minutes. Made a list of three things I wanted to do; got through
+        none of them. At least I went for a walk.
+
+trigger:
+  kind: file_change
+  note_path: "journal/2026-05-20.md"
+  captured_at: "2026-05-20T19:34:00Z"
+
+expected_output:
+  confidence_min: 0.85
+  rationale_nonempty: true
+  acknowledgment_nonempty: true
+  acknowledgment_max_sentences: 4
+  output_path_prefix: ".engram/witness/"
+  must_not_contain:
+    - "you should"
+    - "try"
+    - "suggest"
+    - "recommend"
+    - "perhaps"
+    - "analysis"

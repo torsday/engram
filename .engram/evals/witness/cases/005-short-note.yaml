@@ -1,0 +1,29 @@
+# AC: Very short note still receives a valid acknowledgment
+id: witness-short-note
+description: >
+  A very short fleeting note (one sentence) must still produce a valid
+  WitnessOutput with a non-empty acknowledgment and confidence >= 0.85.
+  The agent must not pad or over-explain to compensate for brevity.
+
+vault_state:
+  notes:
+    - path: "fleeting/2026-05-27-0901.md"
+      content: |
+        ---
+        title: Fleeting 2026-05-27 09:01
+        id: 01JVYYYYYYYYYYYYYY
+        type: fleeting
+        ---
+        Tired but okay.
+
+trigger:
+  kind: file_change
+  note_path: "fleeting/2026-05-27-0901.md"
+  captured_at: "2026-05-27T09:01:00Z"
+
+expected_output:
+  confidence_min: 0.85
+  rationale_nonempty: true
+  acknowledgment_nonempty: true
+  acknowledgment_max_sentences: 4
+  output_path_prefix: ".engram/witness/"

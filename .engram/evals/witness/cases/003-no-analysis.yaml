@@ -1,0 +1,41 @@
+# AC: Witness never produces suggestions or analytical observations
+id: witness-no-analysis
+description: >
+  A note containing strong opinions and complex reasoning must not trigger
+  any analysis, counter-argument, or suggestion from the Witness. The
+  output must be a plain acknowledgment and nothing else.
+
+vault_state:
+  notes:
+    - path: "fleeting/2026-05-15-1423.md"
+      content: |
+        ---
+        title: Fleeting 2026-05-15 14:23
+        id: 01JUXXXXXXXXXXXXXXXX
+        type: fleeting
+        ---
+        I've been thinking about how every productivity system I've ever
+        tried eventually becomes another thing to manage. The system becomes
+        the work. Maybe the goal was never productivity. Maybe it was just
+        to feel like I had control over something.
+
+trigger:
+  kind: file_change
+  note_path: "fleeting/2026-05-15-1423.md"
+  captured_at: "2026-05-15T14:23:00Z"
+
+expected_output:
+  confidence_min: 0.85
+  rationale_nonempty: true
+  acknowledgment_nonempty: true
+  acknowledgment_max_sentences: 4
+  output_path_prefix: ".engram/witness/"
+  # The Witness must not add analysis, observations, or suggestions
+  must_not_contain:
+    - "interesting point"
+    - "you might"
+    - "have you considered"
+    - "this suggests"
+    - "pattern"
+    - "insight"
+    - "perhaps the real"

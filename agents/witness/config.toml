@@ -1,0 +1,32 @@
+# Witness agent — acknowledge personal and journal notes without analysis.
+#
+# Strictly local-only: model_tier = "fast" with no cloud escalation.
+# No vault modification of any kind; output goes to .engram/witness/ only.
+
+[agent]
+name = "witness"
+description = "Acknowledges personal and journal notes without analysis, suggestions, or vault modification. Local-only."
+model_tier = "fast"
+
+[schedule]
+trigger = "file_change"
+debounce_seconds = 5
+
+[permissions]
+may_create_notes = false
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["fleeting", "journal"]
+max_invasiveness = "additive"
+
+[autonomy]
+# Acknowledgments write to .engram/witness/ (not the vault) at high confidence.
+auto_land_min_confidence = 0.95
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 20000
+auto_pause = true
