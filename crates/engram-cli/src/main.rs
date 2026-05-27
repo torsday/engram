@@ -456,65 +456,12 @@ async fn run_eval(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
     use engram_agents::{
         eval_adapter::agent_runner_invoker,
         locks::{LockConfig, LockManager},
         runner::AgentRunner,
     };
     use engram_eval::{EvalRunner, PersistParams, SnapshotCache};
-    use engram_llm::{
-        CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider, Model, ModelProvider,
-        PromptStructured, StreamedCompletion, Usage,
-    };
-
-    // EchoLlmProvider: deterministic placeholder. Returns a
-    // low-confidence JSON response that classifies every case as
-    // NoAction. Useful for CLI smoke-testing the eval pipeline
-    // before production-provider wiring lands.
-    struct EchoLlmProvider;
-    #[async_trait]
-    impl LlmProvider for EchoLlmProvider {
-        async fn complete(
-            &self,
-            _prompt: &PromptStructured,
-            model: &Model,
-            _options: &CompleteOptions,
-        ) -> engram_llm::Result<Completion> {
-            Ok(Completion {
-                text: r#"{"confidence":0.1,"kind":"echo","rationale":"placeholder echo response (production-provider wiring pending)"}"#.to_string(),
-                usage: Usage {
-                    input_tokens_total: 10,
-                    output_tokens: 10,
-                    ..Default::default()
-                },
-                cost: Cost {
-                    input_cents: 0.0,
-                    cache_create_cents: 0.0,
-                    cache_read_cents: 0.0,
-                    output_cents: 0.0,
-                    total_cents: 0.0,
-                },
-                model_used: format!("echo/{}", model.name),
-                latency_ms: 0,
-            })
-        }
-        async fn complete_streamed(
-            &self,
-            _: &PromptStructured,
-            _: &Model,
-            _: &CompleteOptions,
-        ) -> engram_llm::Result<StreamedCompletion> {
-            Err(engram_llm::Error::Decode(
-                "EchoLlmProvider does not support streaming".into(),
-            ))
-        }
-        async fn embed(&self, _: &str, _: &EmbeddingModel) -> engram_llm::Result<Vec<f32>> {
-            Err(engram_llm::Error::Decode(
-                "EchoLlmProvider does not embed".into(),
-            ))
-        }
-    }
 
     // Resolve paths under the vault.
     let agents_dir = vault.join("agents");
@@ -534,14 +481,20 @@ async fn run_eval(
     Migrator::new(&conn).apply_all()?;
     let sqlite = Arc::new(Mutex::new(conn));
 
-    // Build AgentRunner with EchoLlmProvider.
+    // Select provider + model. Read EngramConfig and look at the
+    // `fast` model tier (Linker/Scribe/Cartographer all use fast;
+    // matches the per-agent config's `model_tier = "fast"` default).
+    // Operators with a different tier need an explicit follow-up;
+    // tier-selection-per-case is out of scope for this slice.
+    let cfg = EngramConfig::load(&vault).unwrap_or_default();
+    let model_entry = &cfg.models.fast;
+    let (provider, model) = build_provider_and_model(model_entry, &vault)?;
+
+    // Build AgentRunner with the chosen provider.
     let runner = Arc::new(AgentRunner::new(
         Arc::clone(&sqlite),
-        Arc::new(EchoLlmProvider),
-        Model {
-            provider: ModelProvider::Anthropic,
-            name: "echo-stub".into(),
-        },
+        provider,
+        model,
         agents_dir,
         LockManager::new(
             Arc::clone(&sqlite),
@@ -584,11 +537,12 @@ async fn run_eval(
     let json_path = report.write_json(&runs_dir)?;
 
     // Persist the eval_runs + eval_case_results rows.
-    let total_tokens: i64 = 0; // EchoLlmProvider returns a small fixed usage; aggregate not threaded here.
+    let total_tokens: i64 = 0; // total tokens aren't threaded into Observation yet (follow-up).
+    let model_used = format!("{}/{}", model_entry.provider, model_entry.model);
     let params = PersistParams {
         agent_prompt_sha: &agent_prompt_sha,
         agent_config_sha: &agent_config_sha,
-        model_used: "echo-stub",
+        model_used: &model_used,
         output_path: &json_path,
         started_at: &started_at,
         completed_at: &completed_at,
@@ -713,4 +667,109 @@ async fn run_eval_all(vault: PathBuf) -> Result<(), Box<dyn std::error::Error>> 
         return Err(format!("{} agent(s) failed", failed.len()).into());
     }
     Ok(())
+}
+
+/// Resolve `ModelEntry { provider, model }` to a concrete
+/// [`engram_llm::LlmProvider`] + [`engram_llm::Model`] pair.
+///
+/// Currently:
+///   - `provider = "anthropic"`: builds `AnthropicProvider` against
+///     the default base URL with secrets resolved via
+///     `engram_secrets::store::open_default(<vault>/.engram)`.
+///   - any other provider: falls back to an inline EchoLlmProvider
+///     stub with a stderr warning. OpenAI + Ollama wiring lands in
+///     future slices; until then the eval pipeline runs to
+///     completion against the echo stub.
+///
+/// The full resilience stack (RetryProvider + TimeoutProvider +
+/// CircuitBreakerProvider per ADR 0011) is intentionally NOT wired
+/// here — that's a separate slice and the unwrapped provider gives
+/// operators a clearer error when secrets aren't configured.
+fn build_provider_and_model(
+    entry: &engram_core::config::ModelEntry,
+    vault: &std::path::Path,
+) -> Result<
+    (
+        std::sync::Arc<dyn engram_llm::LlmProvider>,
+        engram_llm::Model,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    use async_trait::async_trait;
+    use engram_llm::anthropic::AnthropicProvider;
+    use engram_llm::{
+        CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider, Model, ModelProvider,
+        PromptStructured, StreamedCompletion, Usage,
+    };
+    use std::sync::Arc;
+
+    /// Fallback provider for non-Anthropic configs (Ollama / OpenAI
+    /// wiring isn't implemented yet). Mirrors the inline stub the
+    /// CLI used before slice 18; lets the eval pipeline still
+    /// complete end-to-end with a deterministic low-confidence
+    /// response while we wait for the real provider wiring.
+    struct EchoLlmProvider;
+    #[async_trait]
+    impl LlmProvider for EchoLlmProvider {
+        async fn complete(
+            &self,
+            _: &PromptStructured,
+            model: &Model,
+            _: &CompleteOptions,
+        ) -> engram_llm::Result<Completion> {
+            Ok(Completion {
+                text: r#"{"confidence":0.1,"kind":"echo","rationale":"non-anthropic provider wiring is a follow-up slice"}"#.into(),
+                usage: Usage { input_tokens_total: 10, output_tokens: 10, ..Default::default() },
+                cost: Cost {
+                    input_cents: 0.0,
+                    cache_create_cents: 0.0,
+                    cache_read_cents: 0.0,
+                    output_cents: 0.0,
+                    total_cents: 0.0,
+                },
+                model_used: format!("echo/{}", model.name),
+                latency_ms: 0,
+            })
+        }
+        async fn complete_streamed(
+            &self,
+            _: &PromptStructured,
+            _: &Model,
+            _: &CompleteOptions,
+        ) -> engram_llm::Result<StreamedCompletion> {
+            Err(engram_llm::Error::Decode("echo: no streaming".into()))
+        }
+        async fn embed(&self, _: &str, _: &EmbeddingModel) -> engram_llm::Result<Vec<f32>> {
+            Err(engram_llm::Error::Decode("echo: no embeddings".into()))
+        }
+    }
+
+    match entry.provider.as_str() {
+        "anthropic" => {
+            let secrets = engram_secrets::open_default(&vault.join(".engram"))
+                .map_err(|e| format!("secrets store init failed: {e}"))?;
+            let provider =
+                AnthropicProvider::new(Arc::new(secrets), AnthropicProvider::DEFAULT_BASE_URL)
+                    .map_err(|e| format!("AnthropicProvider init failed: {e}"))?;
+            Ok((
+                Arc::new(provider),
+                Model {
+                    provider: ModelProvider::Anthropic,
+                    name: entry.model.clone(),
+                },
+            ))
+        }
+        other => {
+            eprintln!(
+                "warning: provider `{other}` wiring is not implemented yet — falling back to EchoLlmProvider"
+            );
+            Ok((
+                Arc::new(EchoLlmProvider),
+                Model {
+                    provider: ModelProvider::Anthropic,
+                    name: format!("echo/{}", entry.model),
+                },
+            ))
+        }
+    }
 }

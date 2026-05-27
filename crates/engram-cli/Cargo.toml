@@ -19,6 +19,7 @@ engram-api = { workspace = true }
 engram-eval = { workspace = true }
 engram-llm = { workspace = true }
 engram-mcp = { workspace = true }
+engram-secrets = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
