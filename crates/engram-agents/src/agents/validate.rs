@@ -42,9 +42,10 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    bridge_builder::BridgeBuilderOutput, devils_advocate::DevilsAdvocateOutput,
-    gardener::GardenerOutput, inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
-    pair_thinking::PairThinkingTurn, scribe::ScribeOutput, splitter::SplitterOutput,
+    bridge_builder::BridgeBuilderOutput, completion_nudger::CompletionNudgerOutput,
+    devils_advocate::DevilsAdvocateOutput, gardener::GardenerOutput, inquirer::InquirerOutput,
+    linker::LinkerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn,
+    scribe::ScribeOutput, splitter::SplitterOutput,
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
 };
@@ -127,6 +128,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "scribe" => check::<ScribeOutput>(agent_name, text),
         "gardener" => check::<GardenerOutput>(agent_name, text),
         "witness" => check::<WitnessOutput>(agent_name, text),
+        "completion-nudger" => check::<CompletionNudgerOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -153,6 +155,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "scribe",
         "gardener",
         "witness",
+        "completion-nudger",
     ]
 }
 
@@ -233,6 +236,7 @@ mod tests {
                 "witness",
                 r#"{"confidence":0.9,"rationale":"r","acknowledgment":"Thank you for sharing.","output_path":".engram/witness/2026-01-01.md"}"#,
             ),
+            ("completion-nudger", r#"{"confidence":0.5,"rationale":"r"}"#),
         ] {
             validate(agent, sample)
                 .unwrap_or_else(|e| panic!("{agent} minimal sample failed: {e}"));
