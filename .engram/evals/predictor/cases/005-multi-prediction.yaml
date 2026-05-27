@@ -1,0 +1,36 @@
+# AC: Note with multiple predictions → all extracted, volume penalty applied
+id: predictor-multi-prediction
+description: >
+  When a note contains several predictions, the Predictor should extract
+  each one and apply the volume penalty, resulting in a lower overall
+  confidence than for a single-prediction note.
+
+vault_state:
+  notes:
+    - path: "annual-predictions-2025.md"
+      content: |
+        ---
+        title: Annual Predictions 2025
+        id: 01J9AAAAAAAAAAAAAAA5
+        ---
+        My predictions for 2025:
+
+        1. Rust will land in the Linux kernel's core networking stack by
+           2025-12-31. Confidence: 75%.
+        2. At least one major LLM provider will offer 10M-token context by
+           mid-2025. Confidence: 85%.
+        3. The US Federal Reserve will cut rates at least twice in 2025.
+           Confidence: 60%.
+        4. Battery EVs will outsell ICE vehicles in Norway every month of 2025.
+           Confidence: 90%.
+        5. A WebAssembly-based OS kernel will ship a stable 1.0 by 2025-12-31.
+           Confidence: 20%.
+
+trigger:
+  kind: cron
+  note_id: "annual-predictions-2025"
+
+expected_output:
+  predictions_found_count_min: 4
+  confidence_max: 0.80
+  rationale_nonempty: true

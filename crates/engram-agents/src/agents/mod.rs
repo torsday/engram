@@ -140,6 +140,14 @@ pub mod scribe;
 /// output.
 pub mod gardener;
 
+/// Predictor — track predictions and confidence claims; maintain a
+/// prediction ledger; compute Brier-score calibration profiles per
+/// topic. Runs on a daily cron (09:00).
+///
+/// See `agents/predictor/prompt.md` for the prompt that produces
+/// this output.
+pub mod predictor;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path
