@@ -103,3 +103,4 @@ engram-extract = { path = "crates/engram-extract" }
 engram-api = { path = "crates/engram-api" }
 engram-mcp = { path = "crates/engram-mcp" }
 engram-secrets = { path = "crates/engram-secrets" }
+engram-eval = { path = "crates/engram-eval" }
