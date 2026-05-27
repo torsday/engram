@@ -45,3 +45,13 @@ pub mod steelman_constructive;
 /// See `agents/devils-advocate/prompt.md` for the prompt that
 /// produces this output.
 pub mod devils_advocate;
+
+/// Inquirer — generate questions about the vault from four
+/// vantage points (`daily-reactive`, `seed-empty-note`,
+/// `holistic-gap`, `blindspot`). First multi-mode agent; the
+/// `InquirerMode` enum is the typed-dispatch template that
+/// Voice Keeper and Pair-Thinking reuse.
+///
+/// See `agents/inquirer/prompt.md` for the prompt that produces
+/// this output.
+pub mod inquirer;
