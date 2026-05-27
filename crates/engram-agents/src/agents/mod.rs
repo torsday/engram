@@ -89,3 +89,13 @@ pub mod synthesizer;
 /// See `agents/splitter/prompt.md` for the prompt that produces
 /// this output.
 pub mod splitter;
+
+/// Merger — unify duplicate concept notes into one canonical
+/// note; preserve aliases and reroute incoming links. Sibling of
+/// Splitter; structural invasiveness; always council-routed.
+/// Encodes three never-silent failure modes at the type level:
+/// dropped content, unresolved conflicts, lost incoming links.
+///
+/// See `agents/merger/prompt.md` for the prompt that produces
+/// this output.
+pub mod merger;
