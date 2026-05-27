@@ -1,0 +1,53 @@
+# Steelman (constructive role) — strengthen weak or tentative notes by
+# finding supporting evidence and proposing stronger framings.
+#
+# Per `docs/design/01-agents-and-council.md` §Steelman:
+#   - Constructive role: turn `status: draft` / hedging-language notes
+#     into the strongest possible version of their argument.
+#   - Gate role: rationality gate on critical agents (Devil's Advocate,
+#     Heretic, Socratic Prober). The gate role lives in #35; this file
+#     is the constructive-role agent only.
+#
+# Operates via council deliberation as the counterweight to Devil's
+# Advocate, and via on-demand `engram run steelman-constructive`.
+
+[agent]
+name = "steelman-constructive"
+description = "Strengthen weak notes with supporting evidence and stronger framings; council counterweight to Devil's Advocate."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Annotations land inline; full reframings go through council per
+# the spec's "Invasiveness: Medium" classification. The runner's
+# invasiveness gate downgrades anything above `editorial` to a
+# proposal automatically.
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["fleeting", "literature", "evergreen", "moc"]
+max_invasiveness = "editorial"
+
+[autonomy]
+# Auto-land floor for additive annotations (HTML-comment markers
+# pointing at supporting evidence). Reframings — text changes
+# inside existing paragraphs — classify as `editorial` and
+# require council review even above this confidence threshold.
+auto_land_min_confidence = 0.85
+
+[council]
+# Steelman participates in council deliberations as the
+# constructive counterweight to Devil's Advocate (per ADR 0007's
+# rationality-gate design). It doesn't convene councils itself —
+# those are triggered by critical agents whose output exceeds
+# their invasiveness ceiling.
+participates = true
+may_convene = false
+
+[budget]
+# Standard tier; modest monthly cap. Operators tune via
+# `engram secrets` + agent_budgets table updates.
+monthly_tokens = 100000
+auto_pause = true

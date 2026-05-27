@@ -2279,6 +2279,40 @@ trigger = "on_demand"
         assert!(cfg.confidence_threshold >= 0.0 && cfg.confidence_threshold <= 1.0);
     }
 
+    /// Smoke test: the on-disk Steelman (constructive role) agent
+    /// files at `agents/steelman-constructive/` must parse cleanly via
+    /// the same path `AgentRunner::load_cached` uses. Catches drift
+    /// between the canonical schema (engram-core) and what's checked
+    /// in. Walks up from `CARGO_MANIFEST_DIR` (crates/engram-agents)
+    /// to the workspace root.
+    #[test]
+    fn steelman_constructive_on_disk_files_parse() {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root reachable from manifest dir");
+        let config_path = workspace.join("agents/steelman-constructive/config.toml");
+        let raw = std::fs::read_to_string(&config_path)
+            .unwrap_or_else(|e| panic!("read {}: {}", config_path.display(), e));
+        let cfg = AgentConfig::from_toml(&raw)
+            .unwrap_or_else(|e| panic!("parse {}: {}", config_path.display(), e));
+        assert_eq!(cfg.name, "steelman-constructive");
+        assert_eq!(cfg.trigger, TriggerKind::OnDemand);
+        // Per spec: auto_land floor is 0.85 for additive annotations.
+        assert!((cfg.confidence_threshold - 0.85).abs() < f32::EPSILON);
+
+        // Prompt loader exercise: verifies the `<!-- /cache -->`
+        // marker is in place per ADR 0010.
+        let prompt_path = workspace.join("agents/steelman-constructive/prompt.md");
+        let prompt = prompt_loader::load(&prompt_path)
+            .unwrap_or_else(|e| panic!("load {}: {}", prompt_path.display(), e));
+        assert!(
+            !prompt.static_head.is_empty(),
+            "static head (cacheable prefix) must be non-empty"
+        );
+    }
+
     #[tokio::test]
     async fn missing_confidence_field_is_no_action() {
         let tmp = tempdir().unwrap();
