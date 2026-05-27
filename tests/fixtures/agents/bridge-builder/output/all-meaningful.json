@@ -1,0 +1,33 @@
+{
+  "confidence": 0.88,
+  "rationale": "Healthy vault scan: every cluster pair examined is meaningfully disconnected. The author maintains distinct projects (woodworking / Rust / personal journal / technical writing) without conceptual overlap that warrants a bridge. Defaulting to decline across all four pairs is the right outcome.",
+  "cluster_pair_verdicts": [
+    {
+      "cluster_a_id": "c-woodworking",
+      "cluster_b_id": "c-rust",
+      "verdict": "meaningful",
+      "reasoning": "Two genuinely unrelated topics; the author maintains them as separate projects.",
+      "proposed_bridge": null
+    },
+    {
+      "cluster_a_id": "c-personal-journal",
+      "cluster_b_id": "c-technical-writing",
+      "verdict": "meaningful",
+      "reasoning": "Personal-journal cluster intentionally has zero outbound links to technical clusters; the disconnection is the author's design.",
+      "proposed_bridge": null
+    },
+    {
+      "cluster_a_id": "c-recipes",
+      "cluster_b_id": "c-rust",
+      "verdict": "meaningful",
+      "reasoning": "No conceptual overlap; embedding similarity was below 0.15 across all cross-pair note comparisons.",
+      "proposed_bridge": null
+    },
+    {
+      "cluster_a_id": "c-recipes",
+      "cluster_b_id": "c-personal-journal",
+      "verdict": "meaningful",
+      "reasoning": "Distinct purposes (action-oriented vs. reflective); the few shared tokens are domain coincidences."
+    }
+  ]
+}

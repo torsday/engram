@@ -102,12 +102,15 @@ fn every_agent_happy_path_fixture_validates() {
     }
 
     // The on-disk agent floor is 9 (asserted in
-    // `runner::tests::on_disk_agent_files_parse`). Each must have
-    // at least one fixture. A missing fixture for any agent
-    // surfaces drift between slice 1 (files on disk) and slice 5
-    // (test fixtures, per Doc 12).
+    // `runner::tests::on_disk_agent_files_parse`). Every agent
+    // now has a happy-path fixture and an alternate-shape
+    // fixture (decline / alternate-mode / end) — 18 total — so
+    // the floor here moves in lockstep. A missing fixture for
+    // any agent surfaces drift between slice 1 (files on disk)
+    // and slice 5 (test fixtures, per Doc 12).
     assert!(
-        checked >= 9,
-        "expected at least one happy-path fixture per agent (9 total); checked {checked}"
+        checked >= 18,
+        "expected at least two fixtures per agent (happy + alternate; 18 total); \
+         checked {checked}"
     );
 }
