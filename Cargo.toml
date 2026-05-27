@@ -62,6 +62,7 @@ rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
 
 # archives
 tar = "0.4"
+flate2 = "1"
 
 # git
 gix = "0.83"
