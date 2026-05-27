@@ -1,0 +1,51 @@
+# Synthesizer — identify clusters of related notes and propose new
+# evergreen notes that name the concept the cluster circles around.
+#
+# Per `docs/design/01-agents-and-council.md` §Synthesizer:
+#   - Trigger: scheduled weekly, or on-demand via Research Council.
+#   - Output: proposed new notes with links to the source cluster.
+#   - Invasiveness: High (structural). **Always** goes through full
+#     council deliberation + human approval — never auto-lands.
+#   - Tools: embedding-based clustering, semantic search, link graph.
+
+[agent]
+name = "synthesizer"
+description = "Identify clusters of related notes; propose new evergreen notes naming the concept they circle. Always council-routed."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Synthesizer's *intent* is to create new evergreen notes — but every
+# such creation flows through council deliberation, not direct write.
+# may_create_notes=true reflects the agent's role; max_invasiveness =
+# `structural` ensures the runner's invasiveness gate downgrades the
+# write to a proposal regardless of confidence (see ADR 0004).
+may_create_notes = true
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["evergreen"]
+max_invasiveness = "structural"
+
+[autonomy]
+# Confidence here governs *proposal quality*, not auto-land — every
+# Synthesizer output is a proposal by construction. A confidence
+# threshold still matters because low-confidence proposals waste
+# council cycles; 0.80 is the floor below which the runner
+# discards rather than convening.
+auto_land_min_confidence = 0.80
+
+[council]
+# Synthesizer is a constructive participant in Research Council
+# deliberations, and it also convenes its own councils to approve a
+# proposed evergreen — because creating a new evergreen note is a
+# Structural change per the invasiveness ladder.
+participates = true
+may_convene = true
+
+[budget]
+# Standard tier; modest monthly cap. Operators tune via
+# `engram secrets` + agent_budgets table updates.
+monthly_tokens = 100000
+auto_pause = true

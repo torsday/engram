@@ -2346,10 +2346,10 @@ trigger = "on_demand"
 
         // Guard against the dir going empty + the test silently passing.
         // Update this floor as agents are added (currently:
-        // steelman-constructive, devils-advocate, inquirer).
+        // steelman-constructive, devils-advocate, inquirer, synthesizer).
         assert!(
-            checked >= 3,
-            "expected >=3 on-disk agents to be checked; found {checked}"
+            checked >= 4,
+            "expected >=4 on-disk agents to be checked; found {checked}"
         );
     }
 
