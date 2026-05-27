@@ -55,3 +55,12 @@ pub mod devils_advocate;
 /// See `agents/inquirer/prompt.md` for the prompt that produces
 /// this output.
 pub mod inquirer;
+
+/// Voice Keeper — protect authorial voice; flag or rewrite
+/// agent-drafted content that doesn't sound like the user.
+/// Two-mode (`review`, `model-update`) — the minimal multi-mode
+/// variant of the Inquirer template.
+///
+/// See `agents/voice-keeper/prompt.md` for the prompt that
+/// produces this output.
+pub mod voice_keeper;
