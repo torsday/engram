@@ -1,0 +1,42 @@
+# AC: Claims that already carry a wikilink citation are not flagged
+id: source-demand-existing-citation
+description: >
+  An evergreen note makes a factual claim but links directly to a
+  literature note as a citation. The agent should not flag this claim
+  because it is already sourced.
+
+vault_state:
+  notes:
+    - path: "cognitive-load-theory.md"
+      content: |
+        ---
+        title: Cognitive Load Theory
+        id: 01HCOGLO0000000000CC
+        note_type: evergreen
+        ---
+        Working memory can hold approximately 4 items simultaneously
+        ([[miller-1956-magical-number]]). Instructional design should
+        minimise extraneous cognitive load so that germane load —
+        schema formation — can proceed unimpeded.
+    - path: "miller-1956-magical-number.md"
+      content: |
+        ---
+        title: Miller 1956 — The Magical Number Seven
+        id: 01HMILL0000000000DD
+        note_type: literature
+        ---
+        Miller's seminal paper on the capacity of short-term memory.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "cognitive-load-theory.md"
+
+available_literature_notes:
+  - title: "Miller 1956 — The Magical Number Seven"
+    id: "01HMILL0000000000DD"
+
+expected_output:
+  flagged_claims: []
+  confidence_min: 0.65
+  rationale_nonempty: true

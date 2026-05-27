@@ -148,6 +148,14 @@ pub mod gardener;
 /// output.
 pub mod witness;
 
+/// Source Demand — flag uncited factual claims in evergreen notes
+/// and suggest vault literature notes that could serve as citations.
+/// Additive invasiveness; annotations auto-land at confidence ≥ 0.75.
+///
+/// See `agents/source-demand/prompt.md` for the prompt that produces
+/// this output.
+pub mod source_demand;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

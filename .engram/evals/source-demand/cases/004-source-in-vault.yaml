@@ -1,0 +1,45 @@
+# AC: When a matching literature note exists, suggested_source is populated
+id: source-demand-source-in-vault
+description: >
+  An evergreen note makes an uncited factual claim, and a relevant
+  literature note exists in the vault. The agent should flag the claim
+  and set suggested_source to the literature note's title.
+
+vault_state:
+  notes:
+    - path: "deliberate-practice.md"
+      content: |
+        ---
+        title: Deliberate Practice
+        id: 01HDELPR0000000000EE
+        note_type: evergreen
+        ---
+        Expert performance in domains like chess or music is primarily
+        a product of accumulated deliberate practice hours, not innate
+        talent. Ten thousand hours of focused practice is the rough
+        threshold for world-class expertise.
+    - path: "ericsson-1993-deliberate-practice.md"
+      content: |
+        ---
+        title: Ericsson 1993 — The Role of Deliberate Practice
+        id: 01HERIC0000000000FF
+        note_type: literature
+        ---
+        Ericsson et al. study on deliberate practice and expert performance.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "deliberate-practice.md"
+
+available_literature_notes:
+  - title: "Ericsson 1993 — The Role of Deliberate Practice"
+    id: "01HERIC0000000000FF"
+
+expected_output:
+  flagged_claims:
+    - note_id: "01HDELPR0000000000EE"
+      severity: "high"
+      suggested_source: "Ericsson 1993 — The Role of Deliberate Practice"
+  confidence_min: 0.70
+  rationale_nonempty: true
