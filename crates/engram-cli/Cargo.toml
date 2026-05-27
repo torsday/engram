@@ -22,6 +22,7 @@ engram-mcp = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+serde_json = { workspace = true }
 sha2 = "0.10"
 toml = { workspace = true }
 tokio = { workspace = true }
@@ -30,7 +31,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [[test]]
