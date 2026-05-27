@@ -1,0 +1,31 @@
+# Predictor agent — track predictions and calibrate confidence over time.
+#
+# Runs daily at 09:00 to scan for new predictions, surface overdue ones,
+# and update Brier-score calibration profiles once enough data is resolved.
+
+[agent]
+name = "predictor"
+description = "Finds predictions and confidence claims in notes, maintains the prediction ledger, and computes Brier-score calibration profiles per topic."
+model_tier = "fast"
+
+[schedule]
+trigger = "cron"
+cron = "0 9 * * *"
+
+[permissions]
+may_create_notes = true
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["fleeting", "journal", "evergreen"]
+max_invasiveness = "editorial"
+
+[autonomy]
+auto_land_min_confidence = 0.75
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 40000
+auto_pause = true
