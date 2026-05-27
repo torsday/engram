@@ -98,8 +98,15 @@ enum Command {
     },
     /// Run an agent evaluation
     Eval {
-        /// Agent name to evaluate
+        /// Agent name to evaluate (matches `.engram/evals/<agent>/cases/`).
         agent: String,
+        /// Optional comma-separated case-id filter. Runs every case if absent.
+        #[arg(long, value_delimiter = ',')]
+        cases: Option<Vec<String>>,
+        /// Vault root containing `.engram/evals/<agent>/cases/` and
+        /// `.engram/index.sqlite`. Defaults to the current directory.
+        #[arg(long, default_value = ".")]
+        vault: PathBuf,
     },
     /// Verify vault backup recency
     Backup {
@@ -229,7 +236,16 @@ async fn main() {
         Command::Council { .. } => unimplemented!("engram council"),
         Command::Proposals { .. } => unimplemented!("engram proposals"),
         Command::Flow { .. } => unimplemented!("engram flow"),
-        Command::Eval { .. } => unimplemented!("engram eval"),
+        Command::Eval {
+            agent,
+            cases,
+            vault,
+        } => {
+            if let Err(e) = run_eval(agent, cases, vault).await {
+                eprintln!("engram eval: {e}");
+                std::process::exit(1);
+            }
+        }
         Command::Backup { action } => match action {
             BackupAction::Verify { vault } => {
                 let cfg = EngramConfig::load(&vault)
@@ -382,4 +398,180 @@ async fn main() {
             }
         },
     }
+}
+
+// ─── `engram eval` implementation ──────────────────────────────────────────
+
+/// Run the eval framework against `agent` at `vault`, optionally
+/// filtering to a subset of `cases`.
+///
+/// This slice wires every layer together end-to-end against an
+/// **EchoLlmProvider** that returns a canned low-confidence
+/// response. Cases score deterministically against that fixed
+/// output; the framework's wiring (SnapshotCache → EvalRunner →
+/// scorer → aggregate → JSON write → DB persist → scorecard print)
+/// is exercised on every invocation.
+///
+/// Production-provider wiring (Anthropic / OpenAI / Ollama
+/// composed via the resilience stack) is a separate slice; the
+/// AgentRunner here uses EchoLlmProvider as a deterministic
+/// placeholder so operators can validate their case fixtures
+/// before secrets are configured.
+async fn run_eval(
+    agent: String,
+    cases: Option<Vec<String>>,
+    vault: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::{Arc, Mutex};
+
+    use async_trait::async_trait;
+    use engram_agents::{
+        eval_adapter::agent_runner_invoker,
+        locks::{LockConfig, LockManager},
+        runner::AgentRunner,
+    };
+    use engram_eval::{EvalRunner, PersistParams, SnapshotCache};
+    use engram_llm::{
+        CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider, Model, ModelProvider,
+        PromptStructured, StreamedCompletion, Usage,
+    };
+
+    // EchoLlmProvider: deterministic placeholder. Returns a
+    // low-confidence JSON response that classifies every case as
+    // NoAction. Useful for CLI smoke-testing the eval pipeline
+    // before production-provider wiring lands.
+    struct EchoLlmProvider;
+    #[async_trait]
+    impl LlmProvider for EchoLlmProvider {
+        async fn complete(
+            &self,
+            _prompt: &PromptStructured,
+            model: &Model,
+            _options: &CompleteOptions,
+        ) -> engram_llm::Result<Completion> {
+            Ok(Completion {
+                text: r#"{"confidence":0.1,"kind":"echo","rationale":"placeholder echo response (production-provider wiring pending)"}"#.to_string(),
+                usage: Usage {
+                    input_tokens_total: 10,
+                    output_tokens: 10,
+                    ..Default::default()
+                },
+                cost: Cost {
+                    input_cents: 0.0,
+                    cache_create_cents: 0.0,
+                    cache_read_cents: 0.0,
+                    output_cents: 0.0,
+                    total_cents: 0.0,
+                },
+                model_used: format!("echo/{}", model.name),
+                latency_ms: 0,
+            })
+        }
+        async fn complete_streamed(
+            &self,
+            _: &PromptStructured,
+            _: &Model,
+            _: &CompleteOptions,
+        ) -> engram_llm::Result<StreamedCompletion> {
+            Err(engram_llm::Error::Decode(
+                "EchoLlmProvider does not support streaming".into(),
+            ))
+        }
+        async fn embed(&self, _: &str, _: &EmbeddingModel) -> engram_llm::Result<Vec<f32>> {
+            Err(engram_llm::Error::Decode(
+                "EchoLlmProvider does not embed".into(),
+            ))
+        }
+    }
+
+    // Resolve paths under the vault.
+    let agents_dir = vault.join("agents");
+    let evals_root = vault.join(".engram").join("evals");
+    let cases_dir = evals_root.join(&agent).join("cases");
+    let runs_dir = evals_root.join(&agent).join("runs");
+    let snapshots_dir = evals_root.join("snapshots");
+    let db_path = vault.join(".engram").join("index.sqlite");
+
+    if !cases_dir.is_dir() {
+        return Err(format!("cases directory missing: {}", cases_dir.display()).into());
+    }
+
+    // Open + migrate SQLite.
+    std::fs::create_dir_all(db_path.parent().unwrap())?;
+    let conn = Connection::open(&db_path)?;
+    Migrator::new(&conn).apply_all()?;
+    let sqlite = Arc::new(Mutex::new(conn));
+
+    // Build AgentRunner with EchoLlmProvider.
+    let runner = Arc::new(AgentRunner::new(
+        Arc::clone(&sqlite),
+        Arc::new(EchoLlmProvider),
+        Model {
+            provider: ModelProvider::Anthropic,
+            name: "echo-stub".into(),
+        },
+        agents_dir,
+        LockManager::new(
+            Arc::clone(&sqlite),
+            LockConfig {
+                ttl_secs: 60,
+                max_retries: 2,
+                retry_base_ms: 5,
+            },
+        ),
+        vault.clone(),
+    ));
+
+    let cache = SnapshotCache::new(snapshots_dir);
+    let invoker = agent_runner_invoker(Arc::clone(&runner), agent.clone());
+    let eval_runner = EvalRunner::new(&agent, &cases_dir, cache, invoker);
+
+    let started_at = chrono::Utc::now().to_rfc3339();
+    let report = match cases.as_deref() {
+        Some(ids) => {
+            let id_refs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+            eval_runner.run_subset(&id_refs)?
+        }
+        None => eval_runner.run_all()?,
+    };
+    let completed_at = chrono::Utc::now().to_rfc3339();
+
+    // Compute SHAs of the agent's prompt + config so eval_runs ties
+    // each run to the exact prompt/config that produced it.
+    fn sha_file(path: &PathBuf) -> String {
+        use sha2::{Digest, Sha256};
+        match std::fs::read(path) {
+            Ok(bytes) => format!("{:x}", Sha256::digest(&bytes)),
+            Err(_) => "missing".into(),
+        }
+    }
+    let agent_prompt_sha = sha_file(&vault.join("agents").join(&agent).join("prompt.md"));
+    let agent_config_sha = sha_file(&vault.join("agents").join(&agent).join("config.toml"));
+
+    // Write JSON artifact first so persist() has the path to record.
+    let json_path = report.write_json(&runs_dir)?;
+
+    // Persist the eval_runs + eval_case_results rows.
+    let total_tokens: i64 = 0; // EchoLlmProvider returns a small fixed usage; aggregate not threaded here.
+    let params = PersistParams {
+        agent_prompt_sha: &agent_prompt_sha,
+        agent_config_sha: &agent_config_sha,
+        model_used: "echo-stub",
+        output_path: &json_path,
+        started_at: &started_at,
+        completed_at: &completed_at,
+        total_tokens,
+    };
+    let run_id = {
+        let mut conn = sqlite.lock().unwrap();
+        report.persist(&mut conn, &params)?
+    };
+
+    // Print summary scorecard to stdout.
+    let md = engram_eval::render_scorecard(&agent, &report.aggregate, &[]);
+    println!("{md}");
+    println!("eval_run_id: {run_id}");
+    println!("artifact: {}", json_path.display());
+
+    Ok(())
 }
