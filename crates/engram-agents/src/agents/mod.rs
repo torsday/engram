@@ -148,6 +148,15 @@ pub mod gardener;
 /// output.
 pub mod witness;
 
+/// Historian — create weekly activity-log entries that summarise vault
+/// changes and agent activity. Never modifies existing notes; every
+/// output is a new file under `meta/activity-log/YYYY-W<nn>.md`.
+/// Runs on a Monday-morning cron (06:00).
+///
+/// See `agents/historian/prompt.md` for the prompt that produces this
+/// output.
+pub mod historian;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

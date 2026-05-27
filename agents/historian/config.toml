@@ -1,0 +1,31 @@
+# Historian agent — creates weekly activity-log entries.
+#
+# Runs every Monday at 06:00 to summarise the previous week's vault
+# changes and agent activity. Never modifies existing notes.
+
+[agent]
+name = "historian"
+description = "Creates weekly activity-log entries summarising vault changes and agent activity. Never modifies existing notes."
+model_tier = "fast"
+
+[schedule]
+trigger = "cron"
+cron = "0 6 * * 1"
+
+[permissions]
+may_create_notes = true
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["log"]
+max_invasiveness = "additive"
+
+[autonomy]
+auto_land_min_confidence = 0.85
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 30000
+auto_pause = true

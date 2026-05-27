@@ -1,0 +1,42 @@
+# AC: Historian never emits modification operations — only creates new entries
+id: historian-no-modification
+description: >
+  The Historian must never produce output that modifies an existing note.
+  Even if an activity-log file for the same week already exists, the agent
+  should create a new entry (or signal a conflict) rather than overwriting.
+  The may_modify_notes permission is false; this eval confirms the output
+  schema carries no modification fields.
+
+vault_state:
+  notes:
+    - path: "meta/activity-log/2026-W22.md"
+      content: |
+        ---
+        title: "Week 22 activity log"
+        type: log
+        ---
+        Existing entry — must not be overwritten by Historian.
+
+trigger:
+  kind: cron
+  cron: "0 6 * * 1"
+  period_start: "2026-05-25"
+  period_end: "2026-05-31"
+
+inputs:
+  agent_run_summary: "linker: 2 runs, 2 auto-lands, 0 proposals, 0 rejections"
+  notes_changed_this_week: |
+    - concepts/resilience.md (modified)
+
+expected_output:
+  confidence_min: 0.75
+  rationale_nonempty: true
+  log_entry_nonempty: true
+  # Schema must not contain any field that modifies an existing note.
+  # The typed struct has no modify/delete fields — this eval verifies
+  # the output validates against HistorianOutput (create-only schema).
+  schema_validates_as: "historian"
+  must_not_contain_fields:
+    - "modify_path"
+    - "delete_path"
+    - "patch"

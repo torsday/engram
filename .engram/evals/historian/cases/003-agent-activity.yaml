@@ -1,0 +1,37 @@
+# AC: Agent activity table is populated when agents ran
+id: historian-agent-activity
+description: >
+  When multiple agents ran during the week, the output must include an
+  agent_activity_summary array with one entry per agent, and the
+  log_entry markdown must contain an activity table.
+
+vault_state:
+  notes: []
+
+trigger:
+  kind: cron
+  cron: "0 6 * * 1"
+  period_start: "2026-05-11"
+  period_end: "2026-05-17"
+
+inputs:
+  agent_run_summary: |
+    linker: 7 runs, 5 auto-lands, 2 proposals, 1 rejection
+    scribe: 3 runs, 3 auto-lands, 0 proposals, 0 rejections
+    gardener: 2 runs, 1 auto-land, 1 proposal, 0 rejections
+    synthesizer: 1 run, 0 auto-lands, 1 proposal, 1 rejection
+  notes_changed_this_week: |
+    - concepts/feedback-loops.md (modified)
+    - inbox/2026-05-12-capture.md (created)
+
+expected_output:
+  confidence_min: 0.78
+  rationale_nonempty: true
+  log_entry_nonempty: true
+  output_path: "meta/activity-log/2026-W20.md"
+  agent_activity_summary_min_rows: 4
+  agent_names_present:
+    - "linker"
+    - "scribe"
+    - "gardener"
+    - "synthesizer"

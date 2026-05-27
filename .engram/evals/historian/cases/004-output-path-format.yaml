@@ -1,0 +1,26 @@
+# AC: output_path follows the ISO week pattern meta/activity-log/YYYY-Wnn.md
+id: historian-output-path-format
+description: >
+  The output_path must exactly match the pattern
+  meta/activity-log/YYYY-W<nn>.md where <nn> is the ISO week number
+  zero-padded to two digits matching the period provided.
+
+vault_state:
+  notes: []
+
+trigger:
+  kind: cron
+  cron: "0 6 * * 1"
+  period_start: "2026-01-05"
+  period_end: "2026-01-11"
+
+inputs:
+  agent_run_summary: "No agent runs this week."
+  notes_changed_this_week: |
+    - inbox/2026-01-07-capture.md (created)
+
+expected_output:
+  confidence_min: 0.80
+  output_path: "meta/activity-log/2026-W02.md"
+  output_path_prefix: "meta/activity-log/"
+  output_path_pattern: "^meta/activity-log/\\d{4}-W\\d{2}\\.md$"
