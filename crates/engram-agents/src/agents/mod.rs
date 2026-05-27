@@ -72,3 +72,12 @@ pub mod voice_keeper;
 /// See `agents/pair-thinking/prompt.md` for the prompt that
 /// produces this output.
 pub mod pair_thinking;
+
+/// Synthesizer — identify clusters of related notes and propose
+/// new evergreen notes that name the concept they circle.
+/// Structural invasiveness; every output downgrades to a council
+/// proposal per ADR 0004 regardless of confidence.
+///
+/// See `agents/synthesizer/prompt.md` for the prompt that
+/// produces this output.
+pub mod synthesizer;
