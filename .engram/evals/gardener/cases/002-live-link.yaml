@@ -1,0 +1,28 @@
+# AC: Live wikilink → no removal proposed
+id: gardener-live-link
+description: >
+  When a note contains a [[Target]] wikilink whose title exists in the
+  vault, the Gardener must NOT emit a removal for that link.
+
+vault_state:
+  notes:
+    - path: "memory-systems.md"
+      content: |
+        ---
+        title: Memory Systems
+        id: 01J9XXXXXXXXXXXXXXXX
+        ---
+        This connects to [[Spaced Repetition]] and [[Active Recall]].
+  known_titles:
+    - "Memory Systems"
+    - "Spaced Repetition"
+    - "Active Recall"
+
+trigger:
+  kind: cron
+  note_id: "memory-systems"
+
+expected_output:
+  removals: []
+  confidence_min: 0.80
+  rationale_nonempty: true

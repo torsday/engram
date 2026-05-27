@@ -1,0 +1,36 @@
+# Gardener agent — prunes dead wikilinks, resolved TODOs, and flags
+# decayed evergreens.
+#
+# Runs on a daily cron at 03:00. Uses the ADR 0013 pre-filter-then-
+# judge pattern: deterministic code finds candidates; the LLM decides
+# which to act on.
+
+[agent]
+name = "gardener"
+description = "Prunes dead wikilinks and resolved TODOs; flags stale evergreen notes for review."
+model_tier = "fast"
+
+[schedule]
+trigger = "cron"
+cron = "0 3 * * *"
+
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen", "literature", "fleeting"]
+max_invasiveness = "editorial"
+
+[autonomy]
+# Dead-link removals are near-deterministic (0.99) and auto-land.
+# TODO removals are LLM-self-scored; the 0.90 floor keeps low-
+# confidence judgments in council review.
+auto_land_min_confidence = 0.90
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 30000
+auto_pause = true

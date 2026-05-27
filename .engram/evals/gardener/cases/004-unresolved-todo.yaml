@@ -1,0 +1,30 @@
+# AC: Unresolved TODO → no removal proposed
+id: gardener-unresolved-todo
+description: >
+  When a note contains a - [ ] checkbox item for a task that is NOT
+  complete (there is no evidence in the note body that it is done),
+  the Gardener must NOT emit a removal for that TODO.
+
+vault_state:
+  notes:
+    - path: "reading-list.md"
+      content: |
+        ---
+        title: Reading List
+        id: 01JBXXXXXXXXXXXXXXXX
+        ---
+        Books to read this quarter.
+
+        - [ ] Finish "Thinking, Fast and Slow"
+        - [ ] Read "The Pragmatic Programmer"
+
+trigger:
+  kind: cron
+  note_id: "reading-list"
+  todo_candidates:
+    - "Finish \"Thinking, Fast and Slow\""
+    - "Read \"The Pragmatic Programmer\""
+
+expected_output:
+  removals: []
+  rationale_nonempty: true

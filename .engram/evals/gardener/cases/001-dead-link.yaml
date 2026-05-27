@@ -1,0 +1,32 @@
+# AC: Dead wikilink → removal proposed at high confidence
+id: gardener-dead-link
+description: >
+  When a note contains a [[Target]] wikilink whose title does not exist
+  in the vault, the Gardener should emit a dead_link removal with
+  confidence >= 0.95.
+
+vault_state:
+  notes:
+    - path: "rust-ownership.md"
+      content: |
+        ---
+        title: Rust Ownership
+        id: 01J8XXXXXXXXXXXXXXXX
+        ---
+        Rust's ownership system is explained in [[Nonexistent Reference]].
+        See also [[Borrow Checker]] for more details.
+  known_titles:
+    - "Rust Ownership"
+    - "Borrow Checker"
+
+trigger:
+  kind: cron
+  note_id: "rust-ownership"
+
+expected_output:
+  removals:
+    - kind: dead_link
+      target: "Nonexistent Reference"
+      confidence_min: 0.95
+  confidence_min: 0.90
+  rationale_nonempty: true

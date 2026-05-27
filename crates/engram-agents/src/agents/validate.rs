@@ -43,8 +43,8 @@ use thiserror::Error;
 
 use super::{
     bridge_builder::BridgeBuilderOutput, devils_advocate::DevilsAdvocateOutput,
-    inquirer::InquirerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn,
-    scribe::ScribeOutput, splitter::SplitterOutput,
+    gardener::GardenerOutput, inquirer::InquirerOutput, merger::MergerOutput,
+    pair_thinking::PairThinkingTurn, scribe::ScribeOutput, splitter::SplitterOutput,
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     voice_keeper::VoiceKeeperOutput,
 };
@@ -124,6 +124,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "bridge-builder" => check::<BridgeBuilderOutput>(agent_name, text),
         "cartographer" => check::<CartographerContinuousOutput>(agent_name, text),
         "scribe" => check::<ScribeOutput>(agent_name, text),
+        "gardener" => check::<GardenerOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -147,6 +148,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "bridge-builder",
         "cartographer",
         "scribe",
+        "gardener",
     ]
 }
 
@@ -221,6 +223,7 @@ mod tests {
                 "scribe",
                 r#"{"confidence":0.5,"rationale":"r","cleaned_body":"x","mode":"fleeting_cleanup","length_ratio":1.0}"#,
             ),
+            ("gardener", r#"{"confidence":0.5,"rationale":"r"}"#),
         ] {
             validate(agent, sample)
                 .unwrap_or_else(|e| panic!("{agent} minimal sample failed: {e}"));

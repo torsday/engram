@@ -1,0 +1,32 @@
+# AC: Stale evergreen with no incoming links → flag emitted
+id: gardener-stale-note
+description: >
+  When an evergreen note has no incoming links and has not been touched
+  in over two years, the Gardener should emit a flag recommending the
+  engram/needs-review tag. No removal should be proposed.
+
+vault_state:
+  notes:
+    - path: "old-idea-2021.md"
+      content: |
+        ---
+        title: Old Idea From 2021
+        id: 01JCXXXXXXXXXXXXXXXX
+        type: evergreen
+        updated: "2021-03-15"
+        ---
+        Some idea I had in 2021 that never went anywhere and nobody
+        has linked to since.
+  incoming_links:
+    "old-idea-2021": []
+
+trigger:
+  kind: cron
+  note_id: "old-idea-2021"
+
+expected_output:
+  removals: []
+  flags:
+    - note_id: "old-idea-2021"
+      reason_contains: "stale"
+  rationale_nonempty: true
