@@ -108,3 +108,9 @@ pub mod merger;
 /// See `agents/bridge-builder/prompt.md` for the prompt that
 /// produces this output.
 pub mod bridge_builder;
+
+/// Single dispatch entry point over all 9 typed agent outputs.
+/// Used by callers (eval cases, CLI dry-runs, schema-drift CI
+/// checks) that want strict validation; the runner's hot path
+/// stays on the permissive `parse_confidence` lookup.
+pub mod validate;
