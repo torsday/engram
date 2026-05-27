@@ -16,8 +16,13 @@ engram-index = { workspace = true }
 rusqlite = { workspace = true }
 engram-agents = { workspace = true }
 engram-api = { workspace = true }
+engram-eval = { workspace = true }
+engram-llm = { workspace = true }
 engram-mcp = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true }
+sha2 = "0.10"
 toml = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
