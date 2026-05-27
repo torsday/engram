@@ -488,7 +488,7 @@ async fn run_eval(
     // tier-selection-per-case is out of scope for this slice.
     let cfg = EngramConfig::load(&vault).unwrap_or_default();
     let model_entry = &cfg.models.fast;
-    let (provider, model) = build_provider_and_model(model_entry, &vault)?;
+    let (provider, model) = build_provider_and_model(model_entry, &cfg, &vault)?;
 
     // Build AgentRunner with the chosen provider.
     let runner = Arc::new(AgentRunner::new(
@@ -687,6 +687,7 @@ async fn run_eval_all(vault: PathBuf) -> Result<(), Box<dyn std::error::Error>> 
 /// operators a clearer error when secrets aren't configured.
 fn build_provider_and_model(
     entry: &engram_core::config::ModelEntry,
+    cfg: &EngramConfig,
     vault: &std::path::Path,
 ) -> Result<
     (
@@ -790,11 +791,9 @@ fn build_provider_and_model(
         }
         "ollama" => {
             // Ollama runs locally; no secrets store needed. Base
-            // URL defaults to localhost:11434 (the daemon's stock
-            // bind). A future EngramConfig field can let operators
-            // override the host; for now we keep the wiring tight
-            // by hardcoding the convention.
-            let base_url = "http://localhost:11434";
+            // URL is read from EngramConfig.models.local.ollama_base_url
+            // (defaults to http://localhost:11434).
+            let base_url = cfg.models.local.ollama_base_url.as_str();
             let inner = OllamaProvider::new(base_url)
                 .map_err(|e| format!("OllamaProvider init failed: {e}"))?;
             let stacked = CircuitBreakerProvider::new(
