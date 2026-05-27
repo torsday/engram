@@ -9,10 +9,10 @@
 //! 1. `agent_runs` row lands with the same `run_id` the runner
 //!    returned on `RunReport`
 //! 2. `correlation_id` is populated on the `RunReport` (a non-empty
-//!    ULID distinct from `run_id`) so downstream sub-agent calls
-//!    and tracing spans can share it. A future schema slice will
-//!    persist it onto `agent_runs` as well — when that happens this
-//!    test will tighten to assert the DB column.
+//!    ULID distinct from `run_id`) AND persists into the
+//!    `agent_runs.correlation_id` column so downstream tools and
+//!    sub-agent chains can reconstruct the call without parsing
+//!    tracing logs.
 //! 3. AutoLand path: file lands on disk under the vault root AND an
 //!    `agent_actions` row joins back to it via `RunReport.action_id`
 //! 4. No-AutoLand path: proposal JSON lands at
@@ -195,15 +195,30 @@ async fn autoland_e2e_persists_run_action_and_file() {
         "correlation_id and run_id are distinct identifiers"
     );
     let conn = sqlite.lock().unwrap();
-    let (agent_name, outcome): (String, String) = conn
+    let (agent_name, outcome, row_correlation, row_parent): (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+    ) = conn
         .query_row(
-            "SELECT agent_name, outcome FROM agent_runs WHERE id = ?1",
+            "SELECT agent_name, outcome, correlation_id, parent_run_id \
+             FROM agent_runs WHERE id = ?1",
             rusqlite::params![report.run_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .expect("agent_runs row must exist");
     assert_eq!(agent_name, "linker");
     assert_eq!(outcome, "auto_land");
+    assert_eq!(
+        row_correlation.as_deref(),
+        Some(report.correlation_id.as_str()),
+        "correlation_id must round-trip through agent_runs"
+    );
+    assert!(
+        row_parent.is_none(),
+        "top-level runs must leave parent_run_id NULL"
+    );
     drop(conn);
 
     // 3. File landed on disk under vault root.

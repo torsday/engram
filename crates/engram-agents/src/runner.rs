@@ -791,8 +791,9 @@ impl AgentRunner {
         {
             let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
             conn.execute(
-                "INSERT INTO agent_runs (id, agent_name, started_at, trigger, notes_affected, deliberation_id) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO agent_runs (id, agent_name, started_at, trigger, notes_affected, \
+                  deliberation_id, correlation_id, parent_run_id) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 rusqlite::params![
                     run_id,
                     name,
@@ -800,6 +801,8 @@ impl AgentRunner {
                     config.trigger.as_sql(),
                     notes_affected,
                     trigger.deliberation_id(),
+                    correlation_id,
+                    parent_run_id,
                 ],
             )?;
         }
@@ -3807,6 +3810,27 @@ confidence_threshold = 0.7"#,
             )
             .unwrap();
         assert_eq!(stored_parent.as_deref(), Some(parent_run_id.as_str()));
+
+        // The sub-run's own agent_runs row carries the parent_run_id
+        // FK too — letting a SQL JOIN reconstruct the full call chain
+        // without parsing tracing logs.
+        let (runs_correlation, runs_parent): (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT correlation_id, parent_run_id FROM agent_runs WHERE id = ?1",
+                rusqlite::params![report.run_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            runs_correlation.as_deref(),
+            Some(parent_correlation.as_str()),
+            "agent_runs.correlation_id inherits the parent's correlation"
+        );
+        assert_eq!(
+            runs_parent.as_deref(),
+            Some(parent_run_id.as_str()),
+            "agent_runs.parent_run_id points at the invoking parent"
+        );
     }
 
     /// A normal (non-sub) `run_agent` leaves `parent_run_id` NULL on
