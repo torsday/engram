@@ -1,0 +1,31 @@
+# AC: Open TODO items → nudge with reason open_todo
+id: completion-nudger-open-todos
+description: >
+  When a note contains unchecked - [ ] items, the Completion Nudger
+  should emit a nudge with reason open_todo.
+
+vault_state:
+  notes:
+    - path: "reading-list.md"
+      content: |
+        ---
+        title: Reading List
+        id: 01JAXXXXXXXXXXXXXXXX
+        status: evergreen
+        ---
+        Books to read this quarter:
+
+        - [x] The Pragmatic Programmer
+        - [ ] Structure and Interpretation of Computer Programs
+        - [ ] Gödel, Escher, Bach
+      days_since_modified: 30
+
+trigger:
+  kind: cron
+
+expected_output:
+  nudges:
+    - note_id: "reading-list"
+      reason: "open_todo"
+  confidence_min: 0.65
+  rationale_nonempty: true

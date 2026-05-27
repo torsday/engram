@@ -164,6 +164,14 @@ pub mod witness;
 /// this output.
 pub mod source_demand;
 
+/// Completion Nudger — surface unfinished notes (draft, open TODOs,
+/// mid-thought, stale in-progress) as a daily digest. Read-only;
+/// never modifies the vault. Runs on a daily cron at 07:00.
+///
+/// See `agents/completion-nudger/prompt.md` for the prompt that
+/// produces this output.
+pub mod completion_nudger;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path
