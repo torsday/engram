@@ -68,6 +68,36 @@ pub struct EvalRunReport {
     pub aggregate: Aggregate,
 }
 
+/// Caller-supplied metadata for persisting an [`EvalRunReport`]
+/// to the `eval_runs` table.
+///
+/// `agent_prompt_sha` / `agent_config_sha` are SHA-256 hashes of
+/// the agent's `prompt.md` / `config.toml` at run time — the eval
+/// framework uses them to gate "prompt-evolution variants must
+/// beat the active prompt." Computing these is the
+/// AgentRunner-adapter slice's job; this slice just persists what
+/// the caller provides.
+#[derive(Debug, Clone)]
+pub struct PersistParams<'a> {
+    /// SHA-256 of the agent's prompt.md at run time.
+    pub agent_prompt_sha: &'a str,
+    /// SHA-256 of the agent's config.toml at run time.
+    pub agent_config_sha: &'a str,
+    /// Model the run invoked (e.g. `"claude-3-5-haiku-20250901"`).
+    pub model_used: &'a str,
+    /// Path to the JSON artifact this run wrote (or will write).
+    /// Stored verbatim in `eval_runs.output_path`.
+    pub output_path: &'a std::path::Path,
+    /// RFC3339 start time of the run.
+    pub started_at: &'a str,
+    /// RFC3339 completion time of the run.
+    pub completed_at: &'a str,
+    /// Total tokens consumed across every case. Caller computes
+    /// from the per-case Observations (the runner doesn't see
+    /// token counts directly — that's the invoker's province).
+    pub total_tokens: i64,
+}
+
 impl EvalRunReport {
     /// Write a JSON artifact of this report under `runs_dir`.
     ///
@@ -105,6 +135,88 @@ impl EvalRunReport {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(&path, body)?;
         Ok(path)
+    }
+
+    /// Persist this report to SQLite per the `eval_runs` /
+    /// `eval_case_results` schema from `001_initial.sql`.
+    ///
+    /// Generates a fresh ULID for the run, INSERTs the `eval_runs`
+    /// row, then one `eval_case_results` row per case — all inside
+    /// a single transaction so partial writes never appear. The
+    /// returned `String` is the new run id, also the FK in every
+    /// case_results row.
+    ///
+    /// `aggregate_metrics` is stored as a JSON-serialized
+    /// [`Aggregate`] so the row remains stable even when the
+    /// in-memory struct grows new fields. `scores` per case is the
+    /// same: JSON-serialized [`Score`].
+    pub fn persist(
+        &self,
+        conn: &mut rusqlite::Connection,
+        params: &PersistParams<'_>,
+    ) -> rusqlite::Result<String> {
+        let run_id = ulid::Ulid::new().to_string();
+        let aggregate_json = serde_json::to_string(&self.aggregate).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e,
+            )))
+        })?;
+        let total_cost_usd: f64 = self.results.iter().map(|r| r.score.cost_usd).sum();
+        let cases_run = self.aggregate.total_cases as i64;
+        let cases_passed = self.aggregate.passed as i64;
+
+        let txn = conn.transaction()?;
+        txn.execute(
+            "INSERT INTO eval_runs ( \
+                id, agent, started_at, completed_at, \
+                agent_prompt_sha, agent_config_sha, model_used, \
+                cases_run, cases_passed, total_tokens, total_cost_usd, \
+                aggregate_metrics, output_path \
+              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![
+                run_id,
+                self.agent,
+                params.started_at,
+                params.completed_at,
+                params.agent_prompt_sha,
+                params.agent_config_sha,
+                params.model_used,
+                cases_run,
+                cases_passed,
+                params.total_tokens,
+                total_cost_usd,
+                aggregate_json,
+                params.output_path.to_string_lossy().into_owned(),
+            ],
+        )?;
+
+        for r in &self.results {
+            let scores_json = serde_json::to_string(&r.score).map_err(|e| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e,
+                )))
+            })?;
+            // failure_reason is NULL for this slice — the runner
+            // doesn't yet capture per-case error messages on the
+            // Verdict::Error path. Future enhancement.
+            let failure_reason: Option<&str> = None;
+            txn.execute(
+                "INSERT INTO eval_case_results ( \
+                    eval_run_id, case_id, result, scores, failure_reason \
+                  ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![
+                    run_id,
+                    r.case_id,
+                    r.verdict.as_sql(),
+                    scores_json,
+                    failure_reason
+                ],
+            )?;
+        }
+        txn.commit()?;
+        Ok(run_id)
     }
 }
 
@@ -511,5 +623,200 @@ mod tests {
         let body = std::fs::read_to_string(&path).unwrap();
         let parsed: EvalRunReport = serde_json::from_str(&body).unwrap();
         assert_eq!(parsed, report);
+    }
+
+    // ─── persist (DB) tests ───────────────────────────────────────
+
+    fn setup_sqlite() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        engram_index::sqlite::Migrator::new(&conn)
+            .apply_all()
+            .unwrap();
+        conn
+    }
+
+    fn one_case_pass() -> CaseRunResult {
+        CaseRunResult {
+            case_id: "001-a".into(),
+            verdict: Verdict::Pass,
+            score: crate::Score {
+                precision: 1.0,
+                recall: 1.0,
+                calibration: 1.0,
+                cost: 0.9,
+                cost_usd: 0.10,
+            },
+            proposals_emitted: 1,
+        }
+    }
+
+    fn one_case_fail() -> CaseRunResult {
+        CaseRunResult {
+            case_id: "002-b".into(),
+            verdict: Verdict::Fail,
+            score: crate::Score {
+                precision: 0.5,
+                recall: 0.0,
+                calibration: 1.0,
+                cost: 0.95,
+                cost_usd: 0.05,
+            },
+            proposals_emitted: 2,
+        }
+    }
+
+    #[test]
+    fn persist_inserts_run_row_and_returns_ulid() {
+        let mut conn = setup_sqlite();
+        let report = EvalRunReport {
+            agent: "linker".into(),
+            results: vec![one_case_pass()],
+            aggregate: Aggregate::from_results(&[one_case_pass()]),
+        };
+        let path = std::path::PathBuf::from("/tmp/run.json");
+        let params = PersistParams {
+            agent_prompt_sha: "promptsha",
+            agent_config_sha: "configsha",
+            model_used: "claude-3-5-haiku",
+            output_path: &path,
+            started_at: "2026-05-27T00:00:00Z",
+            completed_at: "2026-05-27T00:00:10Z",
+            total_tokens: 1234,
+        };
+        let run_id = report.persist(&mut conn, &params).unwrap();
+        assert_eq!(run_id.len(), 26, "ULID is 26 chars");
+
+        let (agent, cases_run, cases_passed, total_tokens, total_cost): (
+            String,
+            i64,
+            i64,
+            i64,
+            f64,
+        ) = conn
+            .query_row(
+                "SELECT agent, cases_run, cases_passed, total_tokens, total_cost_usd \
+                 FROM eval_runs WHERE id = ?1",
+                rusqlite::params![run_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(agent, "linker");
+        assert_eq!(cases_run, 1);
+        assert_eq!(cases_passed, 1);
+        assert_eq!(total_tokens, 1234);
+        assert!((total_cost - 0.10).abs() < 1e-9);
+    }
+
+    #[test]
+    fn persist_writes_one_case_results_row_per_case() {
+        let mut conn = setup_sqlite();
+        let results = vec![one_case_pass(), one_case_fail()];
+        let report = EvalRunReport {
+            agent: "linker".into(),
+            aggregate: Aggregate::from_results(&results),
+            results,
+        };
+        let params = PersistParams {
+            agent_prompt_sha: "p",
+            agent_config_sha: "c",
+            model_used: "m",
+            output_path: std::path::Path::new("/tmp/r.json"),
+            started_at: "2026-05-27T00:00:00Z",
+            completed_at: "2026-05-27T00:00:10Z",
+            total_tokens: 100,
+        };
+        let run_id = report.persist(&mut conn, &params).unwrap();
+
+        let row_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM eval_case_results WHERE eval_run_id = ?1",
+                rusqlite::params![run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(row_count, 2);
+
+        // Verdict round-trips through as_sql.
+        let pass_result: String = conn
+            .query_row(
+                "SELECT result FROM eval_case_results \
+                 WHERE eval_run_id = ?1 AND case_id = '001-a'",
+                rusqlite::params![run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(pass_result, "pass");
+        let fail_result: String = conn
+            .query_row(
+                "SELECT result FROM eval_case_results \
+                 WHERE eval_run_id = ?1 AND case_id = '002-b'",
+                rusqlite::params![run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(fail_result, "fail");
+    }
+
+    #[test]
+    fn persist_stores_aggregate_as_json() {
+        let mut conn = setup_sqlite();
+        let results = vec![one_case_pass()];
+        let report = EvalRunReport {
+            agent: "linker".into(),
+            aggregate: Aggregate::from_results(&results),
+            results,
+        };
+        let params = PersistParams {
+            agent_prompt_sha: "p",
+            agent_config_sha: "c",
+            model_used: "m",
+            output_path: std::path::Path::new("/tmp/r.json"),
+            started_at: "2026-05-27T00:00:00Z",
+            completed_at: "2026-05-27T00:00:10Z",
+            total_tokens: 0,
+        };
+        let run_id = report.persist(&mut conn, &params).unwrap();
+        let json: String = conn
+            .query_row(
+                "SELECT aggregate_metrics FROM eval_runs WHERE id = ?1",
+                rusqlite::params![run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let parsed: Aggregate = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, report.aggregate);
+    }
+
+    #[test]
+    fn persist_empty_run_writes_zero_case_rows() {
+        let mut conn = setup_sqlite();
+        let report = empty_report("nobody");
+        let params = PersistParams {
+            agent_prompt_sha: "p",
+            agent_config_sha: "c",
+            model_used: "m",
+            output_path: std::path::Path::new("/tmp/r.json"),
+            started_at: "2026-05-27T00:00:00Z",
+            completed_at: "2026-05-27T00:00:10Z",
+            total_tokens: 0,
+        };
+        let run_id = report.persist(&mut conn, &params).unwrap();
+        let row_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM eval_case_results WHERE eval_run_id = ?1",
+                rusqlite::params![run_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(row_count, 0);
+        // eval_runs row still landed.
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM eval_runs WHERE id = ?1)",
+                rusqlite::params![run_id],
+                |r| r.get::<_, i64>(0).map(|v| v != 0),
+            )
+            .unwrap();
+        assert!(exists);
     }
 }
