@@ -32,3 +32,7 @@ pub mod reconcile;
 
 /// Hybrid retrieval: BM25 + dense ANN + RRF fusion + cross-encoder rerank + graph expansion.
 pub mod search;
+
+/// SQLite queries for token usage tracking, agent budget enforcement, and
+/// cost summaries. Backed by `token_usage` and `agent_budgets` tables.
+pub mod budget_store;
