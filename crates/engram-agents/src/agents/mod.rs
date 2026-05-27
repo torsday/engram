@@ -64,3 +64,11 @@ pub mod inquirer;
 /// See `agents/voice-keeper/prompt.md` for the prompt that
 /// produces this output.
 pub mod voice_keeper;
+
+/// Pair-Thinking — live writing collaborator; bounded 3–5 round
+/// conversation, one question per round. Conversation-mode
+/// agent; each LLM call produces one `PairThinkingTurn`.
+///
+/// See `agents/pair-thinking/prompt.md` for the prompt that
+/// produces this output.
+pub mod pair_thinking;
