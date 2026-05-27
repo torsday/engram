@@ -1,0 +1,51 @@
+# Devil's Advocate — critical agent. Argues against claims, surfaces
+# counter-evidence, identifies unstated assumptions.
+#
+# Per `docs/design/01-agents-and-council.md` §Devil's Advocate:
+#   - **All output passes the Steelman rationality gate (#35) before
+#     landing** — contrarianism for its own sake is rejected (ADR 0007).
+#   - Annotations auto-land (additive, clearly attributed) *only* after
+#     the rationality gate signs off; standalone critique notes go
+#     through council review.
+#
+# Operates via council deliberation when a critique is being evaluated,
+# and via on-demand `engram run devils-advocate` against a specific note.
+
+[agent]
+name = "devils-advocate"
+description = "Argue against claims; surface counter-evidence and unstated assumptions. All output gated by Steelman per ADR 0007."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Annotations land inline (after the Steelman gate passes). Standalone
+# critique notes classify as `editorial` and go through council review.
+# The runner's invasiveness gate downgrades anything above `editorial`
+# to a proposal automatically.
+may_create_notes = true
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["fleeting", "literature", "evergreen", "moc"]
+max_invasiveness = "editorial"
+
+[autonomy]
+# Auto-land floor for additive critique annotations. Higher than the
+# Steelman constructive floor (0.85) because the rationality gate adds
+# its own check on top — confidence here only governs whether *we*
+# self-rate the critique as ground-truth-quality.
+auto_land_min_confidence = 0.90
+
+[council]
+# Devil's Advocate participates as the critic counterweight to Steelman
+# (per ADR 0007). It convenes councils when its critique exceeds the
+# invasiveness ceiling (standalone critique notes).
+participates = true
+may_convene = true
+
+[budget]
+# Standard tier; modest monthly cap. Operators tune via
+# `engram secrets` + agent_budgets table updates.
+monthly_tokens = 100000
+auto_pause = true
