@@ -44,11 +44,12 @@ use thiserror::Error;
 use super::{
     bridge_builder::BridgeBuilderOutput, completion_nudger::CompletionNudgerOutput,
     confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput,
-    gardener::GardenerOutput, inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
-    pair_thinking::PairThinkingTurn, predictor::PredictorOutput, scribe::ScribeOutput,
-    source_demand::SourceDemandOutput, splitter::SplitterOutput,
-    steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
-    tutor::TutorOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
+    gardener::GardenerOutput, historian::HistorianOutput, inquirer::InquirerOutput,
+    linker::LinkerOutput, merger::MergerOutput, pair_thinking::PairThinkingTurn,
+    predictor::PredictorOutput, scribe::ScribeOutput, source_demand::SourceDemandOutput,
+    splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput,
+    synthesizer::SynthesizerOutput, tutor::TutorOutput, voice_keeper::VoiceKeeperOutput,
+    witness::WitnessOutput,
 };
 use crate::cartographer::CartographerContinuousOutput;
 
@@ -134,6 +135,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "source-demand" => check::<SourceDemandOutput>(agent_name, text),
         "completion-nudger" => check::<CompletionNudgerOutput>(agent_name, text),
         "tutor" => check::<TutorOutput>(agent_name, text),
+        "historian" => check::<HistorianOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -165,6 +167,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "source-demand",
         "completion-nudger",
         "tutor",
+        "historian",
     ]
 }
 
@@ -253,6 +256,10 @@ mod tests {
             ("source-demand", r#"{"confidence":0.5,"rationale":"r"}"#),
             ("completion-nudger", r#"{"confidence":0.5,"rationale":"r"}"#),
             ("tutor", r#"{"confidence":0.5,"rationale":"r"}"#),
+            (
+                "historian",
+                r#"{"confidence":0.5,"rationale":"r","log_entry":"x","output_path":"y"}"#,
+            ),
         ] {
             validate(agent, sample)
                 .unwrap_or_else(|e| panic!("{agent} minimal sample failed: {e}"));

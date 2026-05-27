@@ -192,6 +192,14 @@ pub mod source_demand;
 /// produces this output.
 pub mod completion_nudger;
 
+/// Historian — write a weekly activity-log entry summarising agent
+/// runs, auto-lands, proposals, and rejections. Creates a changelog
+/// note in `.engram/history/`; read-only with respect to vault notes.
+///
+/// See `agents/historian/prompt.md` for the prompt that produces this
+/// output.
+pub mod historian;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

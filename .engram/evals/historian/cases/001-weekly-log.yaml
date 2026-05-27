@@ -1,0 +1,39 @@
+# AC: Typical active week produces a well-formed log entry
+id: historian-weekly-log
+description: >
+  A week with several note edits and a few agent runs should produce a
+  log entry that references the note count, the period, and the agent
+  activity table. Confidence must be >= 0.80.
+
+vault_state:
+  notes:
+    - path: "meta/activity-log/2026-W21.md"
+      content: |
+        ---
+        title: "Week 21 activity log"
+        type: log
+        ---
+        Previous week placeholder.
+
+trigger:
+  kind: cron
+  cron: "0 6 * * 1"
+  period_start: "2026-05-25"
+  period_end: "2026-05-31"
+
+inputs:
+  agent_run_summary: |
+    linker: 4 runs, 3 auto-lands, 1 proposal, 0 rejections
+    gardener: 1 run, 1 auto-land, 0 proposals, 0 rejections
+  notes_changed_this_week: |
+    - concepts/emergence.md (modified)
+    - inbox/2026-05-27-capture.md (created)
+    - inbox/2026-05-29-capture.md (created)
+    - projects/engram-build.md (modified)
+
+expected_output:
+  confidence_min: 0.80
+  rationale_nonempty: true
+  log_entry_nonempty: true
+  output_path: "meta/activity-log/2026-W22.md"
+  agent_activity_summary_min_rows: 2

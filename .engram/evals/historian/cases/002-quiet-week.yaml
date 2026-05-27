@@ -1,0 +1,30 @@
+# AC: A quiet week with no changes produces a minimal but valid log entry
+id: historian-quiet-week
+description: >
+  A week with no vault changes and no agent runs should still produce a
+  valid log entry that records the quiet period. The entry should not
+  fabricate activity. Confidence must be >= 0.80.
+
+vault_state:
+  notes: []
+
+trigger:
+  kind: cron
+  cron: "0 6 * * 1"
+  period_start: "2026-05-18"
+  period_end: "2026-05-24"
+
+inputs:
+  agent_run_summary: "No agent runs this week."
+  notes_changed_this_week: "No notes changed this week."
+
+expected_output:
+  confidence_min: 0.80
+  rationale_nonempty: true
+  log_entry_nonempty: true
+  output_path: "meta/activity-log/2026-W21.md"
+  agent_activity_summary_min_rows: 0
+  must_not_contain:
+    - "modified"
+    - "created"
+    - "runs"
