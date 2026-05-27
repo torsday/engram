@@ -1,0 +1,39 @@
+# AC: Journal entry receives acknowledgment without analysis
+id: witness-journal-entry
+description: >
+  A longer journal entry reflecting on a significant life event should be
+  acknowledged briefly. The agent must not attempt to interpret the meaning
+  or offer any perspective on what was written.
+
+vault_state:
+  notes:
+    - path: "journal/2026-04-10.md"
+      content: |
+        ---
+        title: April 10
+        id: 01JRXXXXXXXXXXXXXXXX
+        type: journal
+        ---
+        My grandmother passed away this morning. We knew it was coming but
+        it still felt sudden. I kept thinking about the last time I saw her,
+        at Christmas. She seemed tired but happy. I don't know what else to
+        write right now. I just needed to put it somewhere.
+
+trigger:
+  kind: file_change
+  note_path: "journal/2026-04-10.md"
+  captured_at: "2026-04-10T11:52:00Z"
+
+expected_output:
+  confidence_min: 0.85
+  rationale_nonempty: true
+  acknowledgment_nonempty: true
+  acknowledgment_max_sentences: 4
+  output_path_prefix: ".engram/witness/"
+  must_not_contain:
+    - "grief"
+    - "process"
+    - "healing"
+    - "you should"
+    - "consider"
+    - "it sounds like you"
