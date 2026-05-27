@@ -156,6 +156,14 @@ pub mod predictor;
 /// output.
 pub mod witness;
 
+/// Source Demand — flag uncited factual claims in evergreen notes
+/// and suggest vault literature notes that could serve as citations.
+/// Additive invasiveness; annotations auto-land at confidence ≥ 0.75.
+///
+/// See `agents/source-demand/prompt.md` for the prompt that produces
+/// this output.
+pub mod source_demand;
+
 /// Completion Nudger — surface unfinished notes (draft, open TODOs,
 /// mid-thought, stale in-progress) as a daily digest. Read-only;
 /// never modifies the vault. Runs on a daily cron at 07:00.
