@@ -1229,6 +1229,45 @@ impl AgentRunner {
                     landings,
                 ],
             )?;
+
+            // Auto-pause: if THIS run's spend pushed the cumulative
+            // total at or past the agent's monthly cap, flip the
+            // agent_budgets row to paused so the next call rejects
+            // at the slice-6 budget gate. Self-heals from drift —
+            // even if the operator manually un-pauses, the next
+            // breach will re-engage. Closes the runner-side half of
+            // #38's per-agent auto-pause AC.
+            //
+            // We use a one-shot UPDATE conditioned on the WHERE
+            // clause so the UPDATE is a no-op when:
+            // - no agent_budgets row exists (unlimited agent),
+            // - already paused (idempotent),
+            // - or spend hasn't crossed the cap yet.
+            //
+            // Reading the updated row count from `conn.execute` lets
+            // tracing observe the auto-pause event without a second
+            // query.
+            let paused_changed = conn.execute(
+                "UPDATE agent_budgets \
+                 SET paused_for_budget = 1, \
+                     paused_at = ?2, \
+                     paused_reason = 'monthly_token_cap' \
+                 WHERE agent_name = ?1 \
+                   AND paused_for_budget = 0 \
+                   AND monthly_token_cap <= ( \
+                     SELECT input_tokens + output_tokens \
+                       FROM token_usage \
+                      WHERE agent_name = ?1 AND period = ?3 \
+                   )",
+                rusqlite::params![name, completed_at, period],
+            )?;
+            if paused_changed > 0 {
+                tracing::warn!(
+                    agent = name,
+                    period = %period,
+                    "auto-paused on budget exhaustion (monthly_token_cap reached)"
+                );
+            }
         }
 
         Ok(RunReport {
@@ -4531,6 +4570,152 @@ confidence_threshold = 0.99"#,
             .run_agent("ample", TriggerContext::OnDemand { note_id: None })
             .await
             .expect("under-cap run must succeed");
+    }
+
+    /// A run that pushes cumulative spend at or past the cap
+    /// auto-flips `agent_budgets.paused_for_budget`. The next run
+    /// is rejected by the existing budget gate.
+    #[tokio::test]
+    async fn run_crossing_cap_auto_pauses_agent() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "tipping",
+            r#"name = "tipping"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let period = current_period(&Utc::now().to_rfc3339());
+        // Cap = 100; ScriptedProvider returns 125 tokens (input=100,
+        // output=25) per call — first run pushes us past the cap.
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_budgets \
+                  (agent_name, monthly_token_cap, current_period, paused_for_budget) \
+                 VALUES (?1, 100, ?2, 0)",
+                rusqlite::params!["tipping", period],
+            )
+            .unwrap();
+        }
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(r#"{"confidence": 0.1}"#),
+            Ok(r#"{"confidence": 0.1}"#),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        // First run succeeds (budget gate read 0 spent < 100 cap),
+        // accumulates 125 spent, then trips auto-pause.
+        runner
+            .run_agent("tipping", TriggerContext::OnDemand { note_id: None })
+            .await
+            .expect("first run is under cap at gate-time");
+
+        // Verify auto-pause persisted.
+        let (paused, reason): (i64, Option<String>) = {
+            let conn = sqlite.lock().unwrap();
+            conn.query_row(
+                "SELECT paused_for_budget, paused_reason \
+                 FROM agent_budgets WHERE agent_name = ?1",
+                rusqlite::params!["tipping"],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap()
+        };
+        assert_eq!(paused, 1, "exhausting the cap must flip paused_for_budget");
+        assert_eq!(reason.as_deref(), Some("monthly_token_cap"));
+
+        // Second run is rejected at the slice-6 gate.
+        let err = runner
+            .run_agent("tipping", TriggerContext::OnDemand { note_id: None })
+            .await
+            .expect_err("follow-up run must be rejected by paused gate");
+        match err {
+            RunnerError::BudgetExhausted { paused_suffix, .. } => {
+                assert!(paused_suffix.contains("operator pause"));
+            }
+            other => panic!("expected BudgetExhausted, got {other:?}"),
+        }
+    }
+
+    /// An under-cap run leaves `paused_for_budget` at 0 (the
+    /// auto-pause UPDATE is a no-op).
+    #[tokio::test]
+    async fn run_under_cap_does_not_auto_pause() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "comfortable",
+            r#"name = "comfortable"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let period = current_period(&Utc::now().to_rfc3339());
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_budgets \
+                  (agent_name, monthly_token_cap, current_period, paused_for_budget) \
+                 VALUES (?1, 10000, ?2, 0)",
+                rusqlite::params!["comfortable", period],
+            )
+            .unwrap();
+        }
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.1}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+        runner
+            .run_agent("comfortable", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let paused: i64 = sqlite
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT paused_for_budget FROM agent_budgets WHERE agent_name = ?1",
+                rusqlite::params!["comfortable"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(paused, 0, "well under cap → no auto-pause");
+    }
+
+    /// An agent with no `agent_budgets` row never auto-pauses
+    /// (the UPDATE matches no rows).
+    #[tokio::test]
+    async fn no_budget_row_means_no_auto_pause() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "unbounded",
+            r#"name = "unbounded"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.1}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+        runner
+            .run_agent("unbounded", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        let row_count: i64 = sqlite
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM agent_budgets WHERE agent_name = ?1",
+                rusqlite::params!["unbounded"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            row_count, 0,
+            "no agent_budgets row means there's nothing to flip"
+        );
     }
 
     #[tokio::test]
