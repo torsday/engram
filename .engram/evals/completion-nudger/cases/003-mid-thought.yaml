@@ -1,0 +1,31 @@
+# AC: Note ending abruptly → nudge with reason mid_thought
+id: completion-nudger-mid-thought
+description: >
+  When a note ends abruptly without a conclusion (e.g. trailing ellipsis,
+  incomplete sentence, or sudden stop), the Completion Nudger should emit
+  a nudge with reason mid_thought.
+
+vault_state:
+  notes:
+    - path: "cognitive-load-theory.md"
+      content: |
+        ---
+        title: Cognitive Load Theory
+        id: 01JBXXXXXXXXXXXXXXXX
+        status: evergreen
+        ---
+        Cognitive load theory distinguishes between intrinsic, extraneous,
+        and germane load. Intrinsic load is determined by the complexity of
+        the material itself. Extraneous load is introduced by poor instructional
+        design. Germane load refers to the effort used to create schemas and...
+      days_since_modified: 21
+
+trigger:
+  kind: cron
+
+expected_output:
+  nudges:
+    - note_id: "cognitive-load-theory"
+      reason: "mid_thought"
+  confidence_min: 0.55
+  rationale_nonempty: true
