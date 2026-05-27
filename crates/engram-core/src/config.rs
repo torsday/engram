@@ -388,6 +388,14 @@ impl EmbeddingsConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrivacyConfig {
+    /// Global privacy mode. Defaults to [`PrivacyMode::Cloud`] — cloud
+    /// providers (Anthropic, OpenAI) are allowed. Set to
+    /// [`PrivacyMode::LocalOnly`] to route every LLM call through
+    /// local providers ([`ModelsConfig::local`]) regardless of which
+    /// tier an agent declared. The eval CLI honours this switch when
+    /// picking the model entry per case run.
+    #[serde(default)]
+    pub mode: PrivacyMode,
     /// Note paths excluded from all external-facing surfaces (MCP, cloud LLM).
     #[serde(default = "PrivacyConfig::default_excluded_paths")]
     pub excluded_paths: Vec<String>,
@@ -396,9 +404,23 @@ pub struct PrivacyConfig {
 impl Default for PrivacyConfig {
     fn default() -> Self {
         Self {
+            mode: PrivacyMode::default(),
             excluded_paths: Self::default_excluded_paths(),
         }
     }
+}
+
+/// Global privacy mode controlling which providers are eligible.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyMode {
+    /// Cloud providers (Anthropic, OpenAI) are allowed. The default.
+    #[default]
+    Cloud,
+    /// Every LLM call routes through local providers
+    /// ([`ModelsConfig::local`]), regardless of per-agent tier
+    /// declarations. Useful for `privacy: local-only` deployments.
+    LocalOnly,
 }
 
 impl PrivacyConfig {
