@@ -1,16 +1,23 @@
-name: eval smoke gate
+name: eval gate
 
-# Smoke-level gate for changes that touch agent prompts or configs.
-# Per #39 the eventual full gate runs that agent's eval suite and
-# rejects regressions > 5%. This is the first piece: any PR that
-# modifies an agent's prompt/config (or the eval framework itself)
-# must keep the `engram-eval` unit tests + the runner integration
-# tests green before merge.
+# Two-tier gate for changes that touch agent prompts/configs or
+# the eval framework itself:
 #
-# Scopes deliberately narrow to keep CI cheap. The full-workspace
-# `ci.yml` already runs cargo test, but its trigger is broad; this
-# workflow makes the eval-relevant signal explicit and required so
-# future branch protection can require this check directly.
+#   1. **smoke** — runs `cargo test -p engram-eval --all-targets`
+#      on every PR matching the path filter. Catches regressions
+#      in the eval framework itself.
+#   2. **regression** — for every agent whose `prompt.md` or
+#      `config.toml` changed in the PR, runs
+#      `engram eval <agent> --baseline .engram/evals/<agent>/baseline.json`
+#      when that baseline file exists. The CLI exits non-zero
+#      if any aggregate metric regresses by > 5% per the spec's
+#      "PR cannot merge if any aggregate metric regresses by >
+#      5%" requirement (slice 17).
+#
+# Agents without a committed baseline skip the regression check
+# (the smoke gate still runs). To enable the regression gate for
+# a new agent, commit `.engram/evals/<agent>/baseline.json` as a
+# serialized `engram_eval::Aggregate` from a known-good run.
 
 on:
   pull_request:
@@ -48,3 +55,71 @@ jobs:
 
       - name: cargo test -p engram-eval
         run: cargo test -p engram-eval --all-targets
+
+  eval-regression:
+    name: eval regression
+    runs-on: ubuntu-latest
+    # Only depend on smoke for trigger-ordering; regression failures
+    # are themselves merge-blocking via this job's required status.
+    needs: eval-smoke
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the PR base + head to diff which agent files changed.
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+
+      - name: build engram-cli
+        run: cargo build --release -p engram-cli
+
+      - name: identify changed agents
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          # Find any agents/<name>/{prompt.md,config.toml} in the diff
+          # and emit the unique <name> list.
+          mapfile -t agents < <(
+            git diff --name-only "$base" HEAD -- 'agents/**/prompt.md' 'agents/**/config.toml' \
+              | awk -F'/' 'NF>=3 {print $2}' \
+              | sort -u
+          )
+          if [[ ${#agents[@]} -eq 0 ]]; then
+            echo "no agent prompt/config files changed; skipping regression gate"
+            echo "agents=" >> "$GITHUB_OUTPUT"
+          else
+            printf 'agents=%s\n' "$(IFS=' '; echo "${agents[*]}")" >> "$GITHUB_OUTPUT"
+            printf 'changed agents: %s\n' "${agents[*]}"
+          fi
+
+      - name: run regression check per agent
+        if: steps.changed.outputs.agents != ''
+        env:
+          AGENTS: ${{ steps.changed.outputs.agents }}
+        run: |
+          set -euo pipefail
+          failed=0
+          for agent in $AGENTS; do
+            baseline=".engram/evals/${agent}/baseline.json"
+            if [[ ! -f "$baseline" ]]; then
+              echo "::warning::no baseline committed for ${agent} — skipping regression check"
+              continue
+            fi
+            echo "::group::eval ${agent}"
+            if ! ./target/release/engram eval "${agent}" --baseline "$baseline"; then
+              echo "::error::${agent} regression check failed"
+              failed=$((failed + 1))
+            fi
+            echo "::endgroup::"
+          done
+          if (( failed > 0 )); then
+            echo "${failed} agent(s) regressed past threshold"
+            exit 1
+          fi
