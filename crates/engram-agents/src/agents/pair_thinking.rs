@@ -134,8 +134,7 @@ mod tests {
 
     #[test]
     fn parses_end_turn() {
-        let parsed: PairThinkingTurn =
-            serde_json::from_str(END_TURN).expect("end turn must parse");
+        let parsed: PairThinkingTurn = serde_json::from_str(END_TURN).expect("end turn must parse");
         assert_eq!(parsed.mode, PairThinkingMode::End);
         assert!(parsed.should_end);
         assert!(parsed.question.is_empty());
@@ -199,8 +198,8 @@ mod tests {
             "should_end": false,
             "future_field": "should not parse"
         }"#;
-        let err = serde_json::from_str::<PairThinkingTurn>(extra)
-            .expect_err("unknown field must fail");
+        let err =
+            serde_json::from_str::<PairThinkingTurn>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error message should point at the offending field; got: {err}"
@@ -230,10 +229,7 @@ mod tests {
         let mode_idx = json.find("\"mode\"").expect("mode present");
         let q_idx = json.find("\"question\"").expect("question present");
         assert!(
-            conf_idx < rat_idx
-                && rat_idx < round_idx
-                && round_idx < mode_idx
-                && mode_idx < q_idx,
+            conf_idx < rat_idx && rat_idx < round_idx && round_idx < mode_idx && mode_idx < q_idx,
             "field order must be confidence < rationale < round < mode < question \
              (got {conf_idx}, {rat_idx}, {round_idx}, {mode_idx}, {q_idx})"
         );

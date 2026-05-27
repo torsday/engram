@@ -235,8 +235,7 @@ mod tests {
         for sample in [SPLIT_SAMPLE, DECLINE_SAMPLE] {
             let parsed: SplitterOutput = serde_json::from_str(sample).expect("parse");
             let re_serialized = serde_json::to_string(&parsed).expect("serialize");
-            let re_parsed: SplitterOutput =
-                serde_json::from_str(&re_serialized).expect("re-parse");
+            let re_parsed: SplitterOutput = serde_json::from_str(&re_serialized).expect("re-parse");
             assert_eq!(parsed, re_parsed);
         }
     }
@@ -278,8 +277,7 @@ mod tests {
                 ]
             }
         }"#;
-        let parsed: SplitterOutput =
-            serde_json::from_str(with_unassigned).expect("parse");
+        let parsed: SplitterOutput = serde_json::from_str(with_unassigned).expect("parse");
         let split = parsed.proposed_split.expect("present");
         assert_eq!(split.unassigned_incoming_links.len(), 1);
         // Surfacing the unassigned link is valid output; the
@@ -298,8 +296,8 @@ mod tests {
             "coherence_signals": ["x"],
             "future_field": "should not parse"
         }"#;
-        let err = serde_json::from_str::<SplitterOutput>(extra)
-            .expect_err("unknown field must fail");
+        let err =
+            serde_json::from_str::<SplitterOutput>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error message should point at the offending field; got: {err}"

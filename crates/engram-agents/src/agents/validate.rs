@@ -47,6 +47,7 @@ use super::{
     splitter::SplitterOutput, steelman_constructive::SteelmanConstructiveOutput,
     synthesizer::SynthesizerOutput, voice_keeper::VoiceKeeperOutput,
 };
+use crate::cartographer::CartographerContinuousOutput;
 
 /// Errors produced by [`validate`].
 #[derive(Debug, Error)]
@@ -120,6 +121,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "splitter" => check::<SplitterOutput>(agent_name, text),
         "merger" => check::<MergerOutput>(agent_name, text),
         "bridge-builder" => check::<BridgeBuilderOutput>(agent_name, text),
+        "cartographer" => check::<CartographerContinuousOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -141,6 +143,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "splitter",
         "merger",
         "bridge-builder",
+        "cartographer",
     ]
 }
 
@@ -206,9 +209,10 @@ mod tests {
                 "merger",
                 r#"{"confidence":0.5,"rationale":"r","decline":true}"#,
             ),
+            ("bridge-builder", r#"{"confidence":0.5,"rationale":"r"}"#),
             (
-                "bridge-builder",
-                r#"{"confidence":0.5,"rationale":"r"}"#,
+                "cartographer",
+                r#"{"confidence":0.5,"rationale":"r","index_updates":[]}"#,
             ),
         ] {
             validate(agent, sample)

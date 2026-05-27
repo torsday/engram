@@ -262,8 +262,8 @@ mod tests {
             "mode": "review",
             "future_field": "this should not parse"
         }"#;
-        let err = serde_json::from_str::<VoiceKeeperOutput>(extra)
-            .expect_err("unknown field must fail");
+        let err =
+            serde_json::from_str::<VoiceKeeperOutput>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error message should point at the offending field; got: {err}"

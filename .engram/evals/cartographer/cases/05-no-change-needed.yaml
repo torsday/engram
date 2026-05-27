@@ -1,0 +1,27 @@
+# AC: Index already accurate → no updates emitted, high confidence
+id: cartographer-no-change-needed
+description: >
+  When the changed note's index entry is already accurate, the Cartographer
+  should recognise this and emit an empty `index_updates` list with a high
+  confidence score.
+
+vault_state:
+  notes:
+    - path: "stable-note.md"
+      content: |
+        ---
+        title: Stable Note
+        id: 01JBXXXXXXXXXXXXXXXX
+        ---
+        A note whose content has not materially changed since last indexed.
+  index_md: |
+    - [[Stable Note]]: Content unchanged since last indexed; summary remains accurate.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "stable-note.md"  # minor whitespace edit, no content change
+
+expected_output:
+  index_updates: []  # or only updates that are semantically no-ops
+  confidence_min: 0.8

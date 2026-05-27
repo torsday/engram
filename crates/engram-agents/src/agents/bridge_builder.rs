@@ -302,9 +302,7 @@ mod tests {
         let json = serde_json::to_string(&out).expect("serialize");
         let conf_idx = json.find("\"confidence\"").expect("present");
         let rat_idx = json.find("\"rationale\"").expect("present");
-        let verdicts_idx = json
-            .find("\"cluster_pair_verdicts\"")
-            .expect("present");
+        let verdicts_idx = json.find("\"cluster_pair_verdicts\"").expect("present");
         assert!(
             conf_idx < rat_idx && rat_idx < verdicts_idx,
             "field order must be confidence < rationale < cluster_pair_verdicts \
