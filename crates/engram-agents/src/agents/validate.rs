@@ -43,7 +43,7 @@ use thiserror::Error;
 
 use super::{
     bridge_builder::BridgeBuilderOutput, devils_advocate::DevilsAdvocateOutput,
-    gardener::GardenerOutput, inquirer::InquirerOutput, merger::MergerOutput,
+    gardener::GardenerOutput, inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
     pair_thinking::PairThinkingTurn, scribe::ScribeOutput, splitter::SplitterOutput,
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     voice_keeper::VoiceKeeperOutput,
@@ -123,6 +123,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "merger" => check::<MergerOutput>(agent_name, text),
         "bridge-builder" => check::<BridgeBuilderOutput>(agent_name, text),
         "cartographer" => check::<CartographerContinuousOutput>(agent_name, text),
+        "linker" => check::<LinkerOutput>(agent_name, text),
         "scribe" => check::<ScribeOutput>(agent_name, text),
         "gardener" => check::<GardenerOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
@@ -147,6 +148,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "merger",
         "bridge-builder",
         "cartographer",
+        "linker",
         "scribe",
         "gardener",
     ]
@@ -219,6 +221,7 @@ mod tests {
                 "cartographer",
                 r#"{"confidence":0.5,"rationale":"r","index_updates":[]}"#,
             ),
+            ("linker", r#"{"confidence":0.5,"rationale":"r"}"#),
             (
                 "scribe",
                 r#"{"confidence":0.5,"rationale":"r","cleaned_body":"x","mode":"fleeting_cleanup","length_ratio":1.0}"#,

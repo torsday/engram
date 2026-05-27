@@ -109,6 +109,16 @@ pub mod merger;
 /// produces this output.
 pub mod bridge_builder;
 
+/// Linker — discover missing wikilinks between notes and propose
+/// bidirectional connections. Additive invasiveness; proposals
+/// auto-land at confidence ≥ 0.85, council-routed below that.
+/// Confidence formula: 0.5×LLM + 0.3×retrieval_agreement +
+/// 0.2×calibration_adjustment.
+///
+/// See `agents/linker/prompt.md` for the prompt that produces
+/// this output.
+pub mod linker;
+
 /// Scribe — clean fleeting notes (voice transcripts, quick captures)
 /// and format literature notes without changing meaning. Two modes:
 /// `fleeting_cleanup` (compress filler, fix transcript errors) and
