@@ -13,6 +13,7 @@ members = [
     "crates/engram-cli",
     "crates/engram-secrets",
     "crates/engram-test-support",
+    "crates/engram-eval",
 ]
 
 [workspace.package]
