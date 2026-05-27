@@ -12,16 +12,14 @@
 //! - **Directory**: a vault tree on disk. `unpack_snapshot` does a
 //!   recursive copy under `dest`. Useful for hand-curated case
 //!   fixtures during early development.
-//! - **(future) Tarball**: `.tar` files — extraction support lands
-//!   in a follow-up. For now a `.tar` source returns
-//!   [`SnapshotError::UnsupportedKind`] so callers fail loudly
-//!   instead of silently doing the wrong thing.
+//! - **Tarball** (`.tar`): stream-extracted into `dest`. The spec's
+//!   preferred shipping format for case fixtures.
 //!
 //! Out of scope for this slice (separate follow-ups):
 //!
 //! - Content-addressed snapshot cache at
 //!   `.engram/evals/snapshots/<sha>/` (the spec's preferred layout)
-//! - `.tar.gz` / compression-format detection
+//! - `.tar.gz` / `.zip` / other compressed formats
 //! - Permission/ACL preservation beyond what `std::fs::copy` does
 
 use std::path::{Path, PathBuf};
@@ -75,19 +73,22 @@ pub fn unpack_snapshot(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
     })?;
 
     if meta.is_file() {
-        // Only directory-style snapshots are supported today.
-        // Detect a tar extension and surface a precise error.
         let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
-        let hint = match ext {
-            "tar" => "tar extraction is a follow-up slice",
-            "gz" | "tgz" => "compressed-tar extraction is a follow-up slice",
-            "zip" => "zip extraction is a follow-up slice",
-            _ => "only directory snapshots are supported in this slice",
+        return match ext {
+            "tar" => unpack_tar(src, dest),
+            "gz" | "tgz" => Err(SnapshotError::UnsupportedKind {
+                path: src.to_path_buf(),
+                hint: "compressed-tar extraction is a follow-up slice",
+            }),
+            "zip" => Err(SnapshotError::UnsupportedKind {
+                path: src.to_path_buf(),
+                hint: "zip extraction is a follow-up slice",
+            }),
+            _ => Err(SnapshotError::UnsupportedKind {
+                path: src.to_path_buf(),
+                hint: "snapshot file must be a .tar or a directory",
+            }),
         };
-        return Err(SnapshotError::UnsupportedKind {
-            path: src.to_path_buf(),
-            hint,
-        });
     }
 
     if !meta.is_dir() {
@@ -103,6 +104,29 @@ pub fn unpack_snapshot(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
         source: e,
     })?;
     copy_dir_recursive(src, dest)
+}
+
+/// Extract a `.tar` archive into `dest`. Wraps the `tar` crate's
+/// streaming reader so memory use stays O(largest entry) regardless
+/// of archive size. Permissions are NOT preserved (`set_preserve_permissions(false)`)
+/// because case fixtures shouldn't carry executable bits from the
+/// originating filesystem into the eval-runner's temp directory.
+fn unpack_tar(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
+    let file = std::fs::File::open(src).map_err(|e| SnapshotError::Io {
+        path: src.to_path_buf(),
+        source: e,
+    })?;
+    std::fs::create_dir_all(dest).map_err(|e| SnapshotError::Io {
+        path: dest.to_path_buf(),
+        source: e,
+    })?;
+    let mut archive = tar::Archive::new(file);
+    archive.set_preserve_permissions(false);
+    archive.set_overwrite(true);
+    archive.unpack(dest).map_err(|e| SnapshotError::Io {
+        path: src.to_path_buf(),
+        source: e,
+    })
 }
 
 fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
@@ -203,17 +227,53 @@ mod tests {
         }
     }
 
+    /// A real `.tar` source unpacks into `dest` with file contents
+    /// preserved across nested paths.
     #[test]
-    fn tar_source_returns_unsupported_kind_with_hint() {
+    fn tar_source_extracts_contents_into_dest() {
+        // Build a tar from a real directory so the archive header
+        // is well-formed.
+        let src = tempdir().unwrap();
+        std::fs::create_dir_all(src.path().join("notes")).unwrap();
+        std::fs::write(src.path().join("notes/a.md"), "alpha-body").unwrap();
+        std::fs::write(src.path().join("top.md"), "top-body").unwrap();
+
         let parent = tempdir().unwrap();
         let tar_path = parent.path().join("vault.tar");
-        std::fs::write(&tar_path, b"\0\0\0\0").unwrap();
-        match unpack_snapshot(&tar_path, parent.path()) {
-            Err(SnapshotError::UnsupportedKind { path, hint }) => {
+        {
+            let file = std::fs::File::create(&tar_path).unwrap();
+            let mut builder = tar::Builder::new(file);
+            builder.append_dir_all(".", src.path()).unwrap();
+            builder.finish().unwrap();
+        }
+
+        let dest = tempdir().unwrap();
+        unpack_snapshot(&tar_path, dest.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("notes/a.md")).unwrap(),
+            "alpha-body"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("top.md")).unwrap(),
+            "top-body"
+        );
+    }
+
+    /// A truncated / malformed `.tar` surfaces the underlying tar
+    /// error as an `Io` variant (not silently succeeding).
+    #[test]
+    fn malformed_tar_source_surfaces_io_error() {
+        let parent = tempdir().unwrap();
+        let tar_path = parent.path().join("vault.tar");
+        std::fs::write(&tar_path, b"not-a-real-tar-header").unwrap();
+        let dest = tempdir().unwrap();
+        match unpack_snapshot(&tar_path, dest.path()) {
+            Err(SnapshotError::Io { path, .. }) => {
+                // Source path is what we tried to read, not the
+                // dest, when the archive itself is the problem.
                 assert_eq!(path, tar_path);
-                assert!(hint.contains("tar"));
             }
-            other => panic!("expected UnsupportedKind, got {other:?}"),
+            other => panic!("expected Io, got {other:?}"),
         }
     }
 

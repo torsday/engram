@@ -60,6 +60,9 @@ comrak = "0.29"
 # SQLite
 rusqlite = { version = "0.32", features = ["bundled", "vtab"] }
 
+# archives
+tar = "0.4"
+
 # git
 gix = "0.83"
 
