@@ -40,10 +40,13 @@ pub mod aggregate;
 pub mod case;
 /// Score / Verdict value types — what one case run produces.
 pub mod score;
+/// Markdown scorecard emitter with 8-run trend sparklines.
+pub mod scorecard;
 /// Pure scoring function: `ExpectedOutcome` + `Observation` → `(Score, Verdict)`.
 pub mod scorer;
 
 pub use aggregate::{Aggregate, CaseRunResult};
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
 pub use score::{Score, Verdict};
+pub use scorecard::{render_scorecard, sparkline};
 pub use scorer::{score_case, Observation};
