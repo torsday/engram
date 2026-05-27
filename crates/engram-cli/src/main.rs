@@ -697,9 +697,10 @@ fn build_provider_and_model(
 > {
     use async_trait::async_trait;
     use engram_llm::anthropic::AnthropicProvider;
+    use engram_llm::openai as openai_mod;
     use engram_llm::{
         CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider, Model, ModelProvider,
-        OllamaProvider, PromptStructured, StreamedCompletion, Usage,
+        OllamaProvider, OpenAIProvider, PromptStructured, StreamedCompletion, Usage,
     };
     use std::sync::Arc;
 
@@ -755,6 +756,19 @@ fn build_provider_and_model(
                 Arc::new(provider),
                 Model {
                     provider: ModelProvider::Anthropic,
+                    name: entry.model.clone(),
+                },
+            ))
+        }
+        "openai" => {
+            let secrets = engram_secrets::open_default(&vault.join(".engram"))
+                .map_err(|e| format!("secrets store init failed: {e}"))?;
+            let provider = OpenAIProvider::new(Arc::new(secrets), openai_mod::DEFAULT_BASE_URL)
+                .map_err(|e| format!("OpenAIProvider init failed: {e}"))?;
+            Ok((
+                Arc::new(provider),
+                Model {
+                    provider: ModelProvider::OpenAi,
                     name: entry.model.clone(),
                 },
             ))
