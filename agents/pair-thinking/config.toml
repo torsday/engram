@@ -1,0 +1,67 @@
+# Pair-Thinking — live writing collaborator. Conversation-mode agent.
+#
+# Per `docs/design/01-agents-and-council.md` §Pair-Thinking:
+#   - Live writing collaborator: asks one clarifying or probing
+#     question per completed paragraph (or after a brief inactivity
+#     pause). Bounded session, 3–5 rounds.
+#   - Output is the *strengthened draft itself*, not a separate
+#     critique — Pair-Thinking only asks; the user folds responses
+#     into the note.
+#   - Different from Socratic Prober: Socratic Prober runs at
+#     evergreen-promotion time on a finished note; Pair-Thinking runs
+#     during drafting. Both share the same conversation infrastructure.
+#
+# Trigger: manual activation by the user (Swift app side panel or
+# Obsidian command). The Rust-side file-watcher + paragraph-completion
+# heuristics are separate slices.
+
+[agent]
+name = "pair-thinking"
+description = "Live writing collaborator; bounded conversational session asking one question per paragraph. Never auto-writes."
+model_tier = "standard"
+
+[schedule]
+trigger = "on_demand"
+
+[permissions]
+# Pair-Thinking only asks — it never writes to the vault. The user
+# folds answers into the draft themselves. `mechanical` is the
+# strictest invasiveness floor: no semantic change at all.
+may_create_notes = false
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["fleeting", "literature", "evergreen", "moc"]
+max_invasiveness = "mechanical"
+
+[autonomy]
+# Confidence here governs whether the next *question* is worth asking,
+# not whether to land any write. Low-confidence questions waste the
+# user's attention during a bounded 3–5 round session, so the floor
+# sits a touch above 0.80 — questions either earn their turn or the
+# session ends a round early.
+auto_land_min_confidence = 0.82
+
+[council]
+# Pair-Thinking is a 1:1 collaborator, not a council participant. It
+# may surface ideas that *seed* a later Research Council (the user
+# can promote a Pair-Thinking transcript into a council topic) but it
+# doesn't vote, gate, or critique in one.
+participates = false
+may_convene = false
+
+[conversation]
+# Conversation-mode agent. Bounded 3–5 rounds per the spec; default
+# to 4 (the midpoint) so the average session ends before the user's
+# patience runs out. Operators can tune via the agent_overrides table
+# in the runtime config without a re-release.
+enabled = true
+max_rounds = 4
+
+[budget]
+# Standard tier. Conversation-mode agents amortize the static-head
+# cache across rounds (per ADR 0010), so the per-session marginal
+# cost is small; the budget here is the monthly aggregate across all
+# Pair-Thinking sessions. Operators tune via `engram secrets` +
+# agent_budgets table updates.
+monthly_tokens = 150000
+auto_pause = true
