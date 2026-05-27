@@ -140,6 +140,14 @@ pub mod scribe;
 /// output.
 pub mod gardener;
 
+/// Predictor — track predictions and confidence claims; maintain a
+/// prediction ledger; compute Brier-score calibration profiles per
+/// topic. Runs on a daily cron (09:00).
+///
+/// See `agents/predictor/prompt.md` for the prompt that produces
+/// this output.
+pub mod predictor;
+
 /// Witness — acknowledge personal and journal notes without analysis,
 /// suggestions, or vault modification. Strictly local-only; output
 /// goes to `.engram/witness/<date>.md`, never to the vault.

@@ -1,0 +1,32 @@
+# AC: Explicit prediction with stated confidence → extracted correctly
+id: predictor-prediction-found
+description: >
+  When a note contains an explicit forward-looking claim with a stated
+  probability and due date, the Predictor should extract it into
+  predictions_found with the correct fields.
+
+vault_state:
+  notes:
+    - path: "tech-forecast-2026.md"
+      content: |
+        ---
+        title: Tech Forecast 2026
+        id: 01J9AAAAAAAAAAAAAAA1
+        ---
+        I think there is an 80% chance Rust will be a top-3 systems language
+        by 2026-01-01. The momentum from WebAssembly adoption and Linux kernel
+        inclusion makes this highly likely.
+
+trigger:
+  kind: cron
+  note_id: "tech-forecast-2026"
+
+expected_output:
+  predictions_found:
+    - note_id: "tech-forecast-2026"
+      claim_text_contains: "Rust"
+      claimed_confidence_approx: 0.8
+      due_date: "2026-01-01"
+      topic_nonempty: true
+  confidence_min: 0.60
+  rationale_nonempty: true
