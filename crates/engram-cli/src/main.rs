@@ -699,8 +699,9 @@ fn build_provider_and_model(
     use engram_llm::anthropic::AnthropicProvider;
     use engram_llm::openai as openai_mod;
     use engram_llm::{
-        CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider, Model, ModelProvider,
-        OllamaProvider, OpenAIProvider, PromptStructured, StreamedCompletion, Usage,
+        CircuitBreakerProvider, CompleteOptions, Completion, Cost, EmbeddingModel, LlmProvider,
+        Model, ModelProvider, OllamaProvider, OpenAIProvider, PromptStructured, RetryProvider,
+        StreamedCompletion, TimeoutProvider, Usage,
     };
     use std::sync::Arc;
 
@@ -749,11 +750,21 @@ fn build_provider_and_model(
         "anthropic" => {
             let secrets = engram_secrets::open_default(&vault.join(".engram"))
                 .map_err(|e| format!("secrets store init failed: {e}"))?;
-            let provider =
+            let inner =
                 AnthropicProvider::new(Arc::new(secrets), AnthropicProvider::DEFAULT_BASE_URL)
                     .map_err(|e| format!("AnthropicProvider init failed: {e}"))?;
+            // Per ADR 0011: wrap raw provider with the resilience
+            // stack (timeout → retry → circuit-breaker, innermost
+            // out). Defaults are sensible for eval runs: timeouts
+            // bound each call, retries cover transient HTTP errors,
+            // the circuit breaker opens after repeated failures so
+            // one bad agent doesn't keep burning tokens.
+            let stacked = CircuitBreakerProvider::new(
+                RetryProvider::new(TimeoutProvider::new(inner)),
+                "anthropic",
+            );
             Ok((
-                Arc::new(provider),
+                Arc::new(stacked),
                 Model {
                     provider: ModelProvider::Anthropic,
                     name: entry.model.clone(),
@@ -763,10 +774,14 @@ fn build_provider_and_model(
         "openai" => {
             let secrets = engram_secrets::open_default(&vault.join(".engram"))
                 .map_err(|e| format!("secrets store init failed: {e}"))?;
-            let provider = OpenAIProvider::new(Arc::new(secrets), openai_mod::DEFAULT_BASE_URL)
+            let inner = OpenAIProvider::new(Arc::new(secrets), openai_mod::DEFAULT_BASE_URL)
                 .map_err(|e| format!("OpenAIProvider init failed: {e}"))?;
+            let stacked = CircuitBreakerProvider::new(
+                RetryProvider::new(TimeoutProvider::new(inner)),
+                "openai",
+            );
             Ok((
-                Arc::new(provider),
+                Arc::new(stacked),
                 Model {
                     provider: ModelProvider::OpenAi,
                     name: entry.model.clone(),
@@ -780,10 +795,14 @@ fn build_provider_and_model(
             // override the host; for now we keep the wiring tight
             // by hardcoding the convention.
             let base_url = "http://localhost:11434";
-            let provider = OllamaProvider::new(base_url)
+            let inner = OllamaProvider::new(base_url)
                 .map_err(|e| format!("OllamaProvider init failed: {e}"))?;
+            let stacked = CircuitBreakerProvider::new(
+                RetryProvider::new(TimeoutProvider::new(inner)),
+                "ollama",
+            );
             Ok((
-                Arc::new(provider),
+                Arc::new(stacked),
                 Model {
                     provider: ModelProvider::Ollama,
                     name: entry.model.clone(),
