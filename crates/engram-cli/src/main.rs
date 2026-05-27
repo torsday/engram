@@ -157,6 +157,41 @@ enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Agent introspection and schema-validation tooling.
+    ///
+    /// Operator-facing surface over `engram_agents::agents::validate`.
+    /// Use `list` to discover registered agents; use `validate` to
+    /// schema-check a captured agent response before feeding it into
+    /// the runner or eval framework.
+    Agents {
+        #[command(subcommand)]
+        action: AgentsAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentsAction {
+    /// Print the names of all agents with registered typed-output
+    /// validators (one per line). The list matches the on-disk
+    /// `agents/<name>/` directories.
+    List,
+    /// Schema-validate a captured agent output against its typed
+    /// Rust struct. Exits 0 on success; non-zero with a structured
+    /// error message on failure.
+    ///
+    /// Read from `--file <path>` (a JSON file on disk) or, when
+    /// `--file -` is passed, from stdin. The intent is to fit into
+    /// shell pipelines: `engram run <agent> | engram agents
+    /// validate <agent> --file -`.
+    Validate {
+        /// Agent name (e.g. `steelman-constructive`, `inquirer`).
+        /// Must match a name from `engram agents list`.
+        name: String,
+        /// Path to the JSON response to validate. Pass `-` to read
+        /// from stdin.
+        #[arg(long)]
+        file: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -423,6 +458,42 @@ async fn main() {
                             eprintln!("✗ Config error: {e}");
                             std::process::exit(1);
                         }
+                    }
+                }
+            }
+        },
+        Command::Agents { action } => match action {
+            AgentsAction::List => {
+                for name in engram_agents::agents::validate::registered_agents() {
+                    println!("{name}");
+                }
+            }
+            AgentsAction::Validate { name, file } => {
+                // `--file -` reads from stdin. Plays well with shell
+                // pipelines: `engram run <agent> | engram agents validate ... --file -`.
+                let raw = if file.as_os_str() == "-" {
+                    let mut buf = String::new();
+                    if let Err(e) = std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf) {
+                        eprintln!("✗ engram agents validate: read stdin: {e}");
+                        std::process::exit(1);
+                    }
+                    buf
+                } else {
+                    match std::fs::read_to_string(&file) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("✗ engram agents validate: read {}: {e}", file.display());
+                            std::process::exit(1);
+                        }
+                    }
+                };
+                match engram_agents::agents::validate::validate(&name, &raw) {
+                    Ok(()) => {
+                        println!("✓ {name}: output conforms to schema.");
+                    }
+                    Err(e) => {
+                        eprintln!("✗ engram agents validate: {e}");
+                        std::process::exit(1);
                     }
                 }
             }
