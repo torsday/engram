@@ -491,10 +491,18 @@ async fn run_eval(
     let tier = AgentConfig::load(&vault.join("agents"), &agent)
         .map(|ac| ac.agent.model_tier.clone())
         .unwrap_or(engram_core::config::ModelTier::Fast);
-    let model_entry = match tier {
-        engram_core::config::ModelTier::Fast => &cfg.models.fast,
-        engram_core::config::ModelTier::Standard => &cfg.models.standard,
-        engram_core::config::ModelTier::Deep => &cfg.models.deep,
+    // Privacy mode gates which model bundle to read from. LocalOnly
+    // forces every tier through cfg.models.local.* (Ollama by default);
+    // Cloud (the default) routes through cfg.models.* (Anthropic
+    // fast/standard, etc.).
+    use engram_core::config::{ModelTier, PrivacyMode};
+    let model_entry = match (&cfg.privacy.mode, &tier) {
+        (PrivacyMode::LocalOnly, ModelTier::Fast) => &cfg.models.local.fast,
+        (PrivacyMode::LocalOnly, ModelTier::Standard) => &cfg.models.local.standard,
+        (PrivacyMode::LocalOnly, ModelTier::Deep) => &cfg.models.local.deep,
+        (_, ModelTier::Fast) => &cfg.models.fast,
+        (_, ModelTier::Standard) => &cfg.models.standard,
+        (_, ModelTier::Deep) => &cfg.models.deep,
     };
     let (provider, model) = build_provider_and_model(model_entry, &cfg, &vault)?;
 
