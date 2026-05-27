@@ -1,0 +1,29 @@
+# AC: Note with no predictions → empty arrays, high confidence
+id: predictor-no-prediction
+description: >
+  When a note contains no forward-looking claims or confidence statements,
+  the Predictor should return empty payload arrays with high confidence
+  (the absence is clear-cut).
+
+vault_state:
+  notes:
+    - path: "rust-ownership.md"
+      content: |
+        ---
+        title: Rust Ownership
+        id: 01J9AAAAAAAAAAAAAAA2
+        ---
+        Rust's ownership system enforces memory safety at compile time.
+        Every value has a single owner; when the owner goes out of scope
+        the value is dropped.
+
+trigger:
+  kind: cron
+  note_id: "rust-ownership"
+
+expected_output:
+  predictions_found: []
+  predictions_due: []
+  calibration_updates: []
+  confidence_min: 0.85
+  rationale_nonempty: true

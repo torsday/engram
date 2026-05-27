@@ -1,0 +1,38 @@
+# AC: Overdue prediction in ledger → surfaced in predictions_due
+id: predictor-prediction-due
+description: >
+  When the ledger contains a prediction whose due date has passed,
+  the Predictor should include it in predictions_due with a positive
+  days_overdue value.
+
+vault_state:
+  notes:
+    - path: "market-predictions.md"
+      content: |
+        ---
+        title: Market Predictions
+        id: 01J9AAAAAAAAAAAAAAA3
+        ---
+        I expect inflation to be under 3% by 2024-12-31 (confidence: 70%).
+
+predictions_ledger:
+  - prediction_id: "pred-001"
+    claim_text: "Inflation under 3% by end of 2024"
+    due_date: "2024-12-31"
+    note_id: "market-predictions"
+    topic: "economics"
+    outcome: null
+
+run_date: "2025-03-15"
+
+trigger:
+  kind: cron
+  note_id: "market-predictions"
+
+expected_output:
+  predictions_due:
+    - prediction_id: "pred-001"
+      due_date: "2024-12-31"
+      days_overdue_min: 74
+  confidence_min: 0.70
+  rationale_nonempty: true

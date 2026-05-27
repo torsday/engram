@@ -1,0 +1,37 @@
+# AC: Fewer than min_resolved_for_report resolved predictions → no calibration_updates
+id: predictor-calibration-sparse
+description: >
+  When a topic has fewer than 10 resolved predictions, the Predictor
+  must NOT emit a CalibrationUpdate for that topic. Sparse data produces
+  misleading Brier scores.
+
+vault_state:
+  notes:
+    - path: "health-journal.md"
+      content: |
+        ---
+        title: Health Journal
+        id: 01J9AAAAAAAAAAAAAAA4
+        ---
+        I suspect my sleep will improve after cutting caffeine by
+        2025-06-01. Probably 60% likely.
+
+calibration_data:
+  health:
+    resolved_count: 3
+    predictions:
+      - outcome: true
+        claimed_confidence: 0.7
+      - outcome: false
+        claimed_confidence: 0.6
+      - outcome: true
+        claimed_confidence: 0.8
+
+trigger:
+  kind: cron
+  note_id: "health-journal"
+
+expected_output:
+  calibration_updates: []
+  confidence_min: 0.60
+  rationale_nonempty: true
