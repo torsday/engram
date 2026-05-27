@@ -84,3 +84,10 @@ pub mod memory;
 
 /// Conversation engine: bounded Pair-Thinking sessions.
 pub mod conversation {}
+
+/// Cartographer agent — keeps `index.md` (and MOC files) in sync with the
+/// live vault. Supports continuous mode (targeted add/update/remove) and
+/// quarterly audit mode (tag rename/merge/hierarchy proposals).
+/// See [`cartographer::CartographerContinuousOutput`] and
+/// [`cartographer::CartographerAuditOutput`].
+pub mod cartographer;

@@ -1,0 +1,33 @@
+# AC: New note → index entry added with ≤ 20-word summary
+id: cartographer-add-new-note
+description: >
+  When a new substantive note appears in the vault that has no corresponding
+  index entry, the Cartographer should emit an `add` operation with a
+  ≤ 20-word summary.
+
+vault_state:
+  notes:
+    - path: "rust-ownership.md"
+      content: |
+        ---
+        title: Rust Ownership
+        id: 01J8XXXXXXXXXXXXXXXX
+        ---
+        Rust's ownership system ensures memory safety without a garbage collector.
+        Each value has exactly one owner; when the owner goes out of scope the
+        value is dropped. References borrow values without taking ownership.
+  index_md: |
+    # Index
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "rust-ownership.md"
+
+expected_output:
+  index_updates:
+    - op: add
+      title: Rust Ownership
+      summary_max_words: 20
+  confidence_min: 0.7
+  rationale_nonempty: true

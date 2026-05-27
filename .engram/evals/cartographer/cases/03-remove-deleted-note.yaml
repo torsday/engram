@@ -1,0 +1,26 @@
+# AC: Deleted note + vault file gone → entry removed automatically (no council)
+id: cartographer-remove-deleted-note
+description: >
+  When a note is deleted from the vault (file no longer exists) but its entry
+  still appears in index.md, the Cartographer should emit a `remove` operation.
+  Because the vault file is absent, this should auto-land (no council required).
+
+vault_state:
+  notes: []  # vault is now empty
+  index_md: |
+    # Index
+
+    - [[Old Note]]: A note that has since been deleted.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "old-note.md"  # deleted
+
+expected_output:
+  index_updates:
+    - op: remove
+      title: Old Note
+  confidence_min: 0.7
+  # remove of absent vault file should NOT route to council
+  council_required: false

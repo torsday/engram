@@ -1,0 +1,34 @@
+# AC: Updated note → stale index summary replaced
+id: cartographer-update-stale-summary
+description: >
+  When a note already in the index is significantly changed such that the
+  existing summary no longer reflects its content, the Cartographer should
+  emit an `update` operation with a fresh summary.
+
+vault_state:
+  notes:
+    - path: "async-rust.md"
+      content: |
+        ---
+        title: Async Rust
+        id: 01J9XXXXXXXXXXXXXXXX
+        ---
+        Async Rust uses `async`/`await` syntax with an executor like Tokio
+        or async-std. Futures are lazy: they do nothing until polled.
+        Structured concurrency via `tokio::spawn` and `JoinHandle`.
+  index_md: |
+    # Index
+
+    - [[Async Rust]]: Old summary about threads that is no longer accurate.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "async-rust.md"
+
+expected_output:
+  index_updates:
+    - op: update
+      title: Async Rust
+      summary_max_words: 20
+  confidence_min: 0.6

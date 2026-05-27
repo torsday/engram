@@ -1,0 +1,23 @@
+# Cartographer agent configuration
+# Keeps index.md in sync with vault changes.
+
+name = "cartographer"
+description = "Maintains index.md by tracking vault changes and emitting targeted add/update/remove operations."
+
+# Auto-land threshold: operations with confidence >= this land unstaged immediately.
+# Remove operations on existing notes always go to council regardless of confidence.
+confidence_threshold = 0.75
+
+# Maximum invasiveness allowed for auto-land (editorial = line-level text changes).
+max_invasiveness = "editorial"
+
+# Trigger: run 30 seconds after any .md file changes in the vault.
+[[triggers]]
+kind = "file_change"
+glob = "**/*.md"
+debounce_secs = 30
+
+# Trigger: full audit pass every 90 days (quarterly).
+[[triggers]]
+kind = "cron"
+interval_secs = 7_776_000  # 90 days

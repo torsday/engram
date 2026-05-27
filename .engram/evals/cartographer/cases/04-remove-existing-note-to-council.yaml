@@ -1,0 +1,38 @@
+# AC: Remove op on existing vault file → routes to council, not auto-land
+id: cartographer-remove-existing-note-council
+description: >
+  When the LLM emits a `remove` operation for a note whose vault file still
+  exists, `apply_updates` must route that removal to council (return the title
+  in the council_titles list) and NOT remove it from the index.
+
+vault_state:
+  notes:
+    - path: "active-note.md"
+      content: |
+        ---
+        title: Active Note
+        id: 01JAXXXXXXXXXXXXXXXX
+        ---
+        This note still exists and is actively maintained.
+  index_md: |
+    - [[Active Note]]: Still exists and is actively used.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "active-note.md"
+
+llm_response:
+  confidence: 0.8
+  rationale: "Removing active note from index."
+  index_updates:
+    - op: remove
+      title: Active Note
+
+expected_output:
+  # Entry should remain in index (not removed)
+  index_entry_preserved: true
+  # Should be flagged for council review
+  council_required: true
+  council_titles:
+    - Active Note
