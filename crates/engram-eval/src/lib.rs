@@ -52,7 +52,7 @@ pub mod scorer;
 /// Vault-snapshot unpacker for the eval runner.
 pub mod snapshot;
 
-pub use aggregate::{Aggregate, CaseRunResult};
+pub use aggregate::{Aggregate, CaseRunResult, Regression};
 pub use cache::SnapshotCache;
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
 pub use runner::{

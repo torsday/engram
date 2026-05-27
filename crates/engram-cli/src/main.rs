@@ -114,6 +114,18 @@ enum Command {
         /// in turn. Mutually exclusive with `<agent>` and `--cases`.
         #[arg(long)]
         all: bool,
+        /// Path to a JSON `Aggregate` baseline. After the run, the
+        /// current aggregate is compared against it; any metric
+        /// that regresses by more than `--regression-threshold`
+        /// (default 5%) causes the command to exit non-zero.
+        /// Per the spec's "PR cannot merge if any aggregate metric
+        /// regresses by > 5%" CI gate.
+        #[arg(long, conflicts_with = "all")]
+        baseline: Option<PathBuf>,
+        /// Regression tolerance as a fraction. Default `0.05` (5%).
+        /// Has no effect without `--baseline`.
+        #[arg(long, default_value = "0.05")]
+        regression_threshold: f64,
     },
     /// Verify vault backup recency
     Backup {
@@ -248,6 +260,8 @@ async fn main() {
             cases,
             vault,
             all,
+            baseline,
+            regression_threshold,
         } => {
             let dispatch = if all {
                 run_eval_all(vault).await
@@ -255,7 +269,7 @@ async fn main() {
                 // `agent` is `required_unless_present = "all"`, so clap
                 // guarantees Some(_) here.
                 let agent_name = agent.expect("clap enforces agent is Some when --all is unset");
-                run_eval(agent_name, cases, vault).await
+                run_eval(agent_name, cases, vault, baseline, regression_threshold).await
             };
             if let Err(e) = dispatch {
                 eprintln!("engram eval: {e}");
@@ -437,6 +451,8 @@ async fn run_eval(
     agent: String,
     cases: Option<Vec<String>>,
     vault: PathBuf,
+    baseline: Option<PathBuf>,
+    regression_threshold: f64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::{Arc, Mutex};
 
@@ -589,6 +605,41 @@ async fn run_eval(
     println!("eval_run_id: {run_id}");
     println!("artifact: {}", json_path.display());
 
+    // Regression gate: compare current aggregate against a baseline
+    // JSON file. The CI workflow that enforces "PR cannot merge if
+    // any aggregate metric regresses by > 5%" reads the committed
+    // baseline and passes its path on the command line.
+    if let Some(baseline_path) = baseline {
+        let body = std::fs::read_to_string(&baseline_path)?;
+        let baseline_agg: engram_eval::Aggregate = serde_json::from_str(&body)?;
+        let regs = report
+            .aggregate
+            .regressions_against(&baseline_agg, regression_threshold);
+        if !regs.is_empty() {
+            println!(
+                "\n✗ regression check failed — {} metric(s) exceeded {:.0}% tolerance vs {}:",
+                regs.len(),
+                regression_threshold * 100.0,
+                baseline_path.display()
+            );
+            for r in &regs {
+                println!(
+                    "    {}: baseline {:.4} → current {:.4} ({:+.1}%)",
+                    r.metric,
+                    r.baseline,
+                    r.current,
+                    r.delta_pct * 100.0
+                );
+            }
+            return Err(format!("{} regression(s) past threshold", regs.len()).into());
+        }
+        println!(
+            "\n✓ regression check passed (threshold {:.0}% vs {})",
+            regression_threshold * 100.0,
+            baseline_path.display()
+        );
+    }
+
     Ok(())
 }
 
@@ -643,7 +694,7 @@ async fn run_eval_all(vault: PathBuf) -> Result<(), Box<dyn std::error::Error>> 
     let mut failed: Vec<(String, String)> = Vec::new();
     for agent in &agents {
         println!("─── eval: {agent} ────────────────────────────────");
-        if let Err(e) = run_eval(agent.clone(), None, vault.clone()).await {
+        if let Err(e) = run_eval(agent.clone(), None, vault.clone(), None, 0.05).await {
             eprintln!("engram eval {agent}: {e}");
             failed.push((agent.clone(), format!("{e}")));
         }
