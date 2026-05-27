@@ -33,3 +33,6 @@ pub mod error;
 /// Vault file watcher with debouncing, rename detection, and bounded
 /// backpressure. See module docs for the full event taxonomy.
 pub mod watcher;
+
+/// Budget domain types: per-agent status and system-wide cost summaries.
+pub mod budget;

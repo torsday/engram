@@ -33,3 +33,10 @@ pub mod agents {}
 
 /// Shared API response envelope and error types.
 pub mod response {}
+
+/// `GET /cost` — month-to-date USD spend, per-agent breakdown, projection.
+///
+/// Response: `{ "period": "2026-05", "total_usd": 12.34, "monthly_cap_usd": 50.0,
+///   "percent_consumed": 24.68, "at_warning": false, "at_cap": false,
+///   "per_agent": [...] }`
+pub mod cost {}

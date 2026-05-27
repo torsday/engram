@@ -157,6 +157,11 @@ enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Manage cost caps and view spending
+    Cost {
+        #[command(subcommand)]
+        action: CostAction,
+    },
     /// Agent introspection and schema-validation tooling.
     ///
     /// Operator-facing surface over `engram_agents::agents::validate`.
@@ -166,6 +171,23 @@ enum Command {
     Agents {
         #[command(subcommand)]
         action: AgentsAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum CostAction {
+    /// Show month-to-date spend and per-agent breakdown
+    Status,
+    /// Reset spending counters for a past month (requires confirmation)
+    Reset {
+        /// Month to reset in YYYY-MM format
+        #[arg(long)]
+        month: String,
+    },
+    /// Update the monthly USD cap
+    SetCap {
+        /// New cap in USD (e.g. 50.0)
+        usd: f64,
     },
 }
 
@@ -443,6 +465,7 @@ async fn main() {
                 }
             }
         }
+        Command::Cost { .. } => unimplemented!("engram cost <action>"),
         Command::Secrets { .. } => unimplemented!("engram secrets"),
         Command::Config { action } => match action {
             ConfigAction::Validate { vault } => match EngramConfig::load(&vault) {
