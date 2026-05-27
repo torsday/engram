@@ -1138,6 +1138,17 @@ impl AgentRunner {
         // is a resource conflict, not a failure.
         let errored = matches!(outcome, RunOutcome::Errored | RunOutcome::Panicked) as i64;
         let completed_at = Utc::now().to_rfc3339();
+        // Did this run actually land any file on disk? Used to
+        // increment token_usage.landings — surfaces "spending →
+        // outcomes" ratio in budget reports.
+        let landings: i64 = if matches!(outcome, RunOutcome::AutoLand) {
+            write_results
+                .iter()
+                .filter(|r| matches!(r, WriteResult::Written(_)))
+                .count() as i64
+        } else {
+            0
+        };
         {
             let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
             conn.execute(
@@ -1152,6 +1163,35 @@ impl AgentRunner {
                     cost_cents,
                     errored,
                     run_id,
+                ],
+            )?;
+            // token_usage upsert: attribute the spend to this
+            // agent's row for the current calendar month. The
+            // composite PK is (agent_name, period); ON CONFLICT
+            // accumulates rather than overwriting.
+            //
+            // Deferred runs go through `finalize_deferred` instead
+            // and don't reach this code path — they burn no tokens
+            // so there's nothing to attribute. Errored / Panicked
+            // runs that paid for an attempted provider call still
+            // accumulate the spend, since the cost was real.
+            let period = current_period(&completed_at);
+            conn.execute(
+                "INSERT INTO token_usage \
+                  (agent_name, period, input_tokens, output_tokens, estimated_cost, landings) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+                 ON CONFLICT(agent_name, period) DO UPDATE SET \
+                  input_tokens   = input_tokens   + excluded.input_tokens, \
+                  output_tokens  = output_tokens  + excluded.output_tokens, \
+                  estimated_cost = estimated_cost + excluded.estimated_cost, \
+                  landings       = landings       + excluded.landings",
+                rusqlite::params![
+                    name,
+                    period,
+                    input_tokens as i64,
+                    output_tokens as i64,
+                    cost_cents,
+                    landings,
                 ],
             )?;
         }
@@ -1582,6 +1622,21 @@ fn render_dynamic_tail(
 fn sha256_hex(data: &str) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(data.as_bytes()))
+}
+
+/// Extract a `"YYYY-MM"` calendar-month key from an RFC3339
+/// timestamp string. Used as the `period` partition column on
+/// `token_usage`. Falls back to the current UTC month if the input
+/// doesn't start with a `YYYY-MM` prefix (defensive — should
+/// never happen since `Utc::now().to_rfc3339()` is the caller).
+fn current_period(rfc3339: &str) -> String {
+    // RFC3339 begins with "YYYY-MM-DDTHH:MM:SS..." so the first 7
+    // chars are always "YYYY-MM" when the input is well-formed.
+    if rfc3339.len() >= 7 && rfc3339.as_bytes()[4] == b'-' {
+        rfc3339[..7].to_string()
+    } else {
+        Utc::now().format("%Y-%m").to_string()
+    }
 }
 
 /// Best-effort stringify of a tokio task panic payload. The payload is
@@ -4045,6 +4100,161 @@ confidence_threshold = 0.99"#,
             }
             other => panic!("expected SubAgentTimeout, got {other:?}"),
         }
+    }
+
+    /// Each completed run upserts a `token_usage` row for
+    /// (agent_name, YYYY-MM). Two runs of the same agent in the
+    /// same month accumulate into a single row.
+    #[tokio::test]
+    async fn token_usage_accumulates_per_agent_per_month() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "spender",
+            r#"name = "spender"
+trigger = "on_demand"
+confidence_threshold = 0.7"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(
+                r##"{"confidence": 0.95, "proposed_changes": [{"path": "notes/a.md", "new_content": "# A"}]}"##,
+            ),
+            Ok(
+                r##"{"confidence": 0.95, "proposed_changes": [{"path": "notes/b.md", "new_content": "# B"}]}"##,
+            ),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        runner
+            .run_agent("spender", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        runner
+            .run_agent("spender", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        let conn = sqlite.lock().unwrap();
+        // Exactly one token_usage row for this agent — the second
+        // run upserted into the first row, not a separate row.
+        let row_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM token_usage WHERE agent_name = ?1",
+                rusqlite::params!["spender"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(row_count, 1);
+
+        // ScriptedProvider returns Usage { input=100, output=25 }
+        // per call, so 2 runs accumulate to 200/50.
+        let (input_tokens, output_tokens, cost, landings): (i64, i64, f64, i64) = conn
+            .query_row(
+                "SELECT input_tokens, output_tokens, estimated_cost, landings \
+                 FROM token_usage WHERE agent_name = ?1",
+                rusqlite::params!["spender"],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(input_tokens, 200);
+        assert_eq!(output_tokens, 50);
+        // ScriptedProvider returns total_cents = 3.0 per call.
+        assert!((cost - 6.0).abs() < 1e-9);
+        // Two AutoLand runs each landed 1 file → landings = 2.
+        assert_eq!(landings, 2);
+    }
+
+    /// NoAction runs accumulate token spend but record 0 landings.
+    #[tokio::test]
+    async fn token_usage_records_zero_landings_for_no_action() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "no_op",
+            r#"name = "no_op"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.3}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        runner
+            .run_agent("no_op", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        let conn = sqlite.lock().unwrap();
+        let (input_tokens, landings): (i64, i64) = conn
+            .query_row(
+                "SELECT input_tokens, landings FROM token_usage WHERE agent_name = ?1",
+                rusqlite::params!["no_op"],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(input_tokens, 100);
+        assert_eq!(landings, 0);
+    }
+
+    /// Two distinct agents get distinct token_usage rows in the
+    /// same month (the composite primary key (agent_name, period)
+    /// keeps them isolated).
+    #[tokio::test]
+    async fn token_usage_isolates_agents_in_the_same_month() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "alpha",
+            r#"name = "alpha"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        write_agent(
+            tmp.path(),
+            "beta",
+            r#"name = "beta"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![
+            Ok(r#"{"confidence": 0.1}"#),
+            Ok(r#"{"confidence": 0.1}"#),
+        ]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+
+        runner
+            .run_agent("alpha", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+        runner
+            .run_agent("beta", TriggerContext::OnDemand { note_id: None })
+            .await
+            .unwrap();
+
+        let conn = sqlite.lock().unwrap();
+        let row_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM token_usage", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(row_count, 2);
+    }
+
+    /// `current_period` extracts YYYY-MM from a well-formed
+    /// RFC3339 timestamp and falls back to the current UTC month
+    /// for malformed input.
+    #[test]
+    fn current_period_extracts_yyyy_mm_or_falls_back() {
+        assert_eq!(current_period("2026-05-27T12:00:00Z"), "2026-05");
+        // Garbage input falls back to today's month — just assert
+        // the shape, since the value depends on wall clock.
+        let fallback = current_period("garbage");
+        assert_eq!(fallback.len(), 7);
+        assert_eq!(fallback.as_bytes()[4], b'-');
     }
 
     #[tokio::test]
