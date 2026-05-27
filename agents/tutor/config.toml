@@ -1,0 +1,31 @@
+# Tutor agent — generates spaced-repetition flashcards from evergreen notes.
+#
+# Runs daily at 08:00 to surface due cards and generate new flashcards
+# from evergreen notes that lack card coverage.
+
+[agent]
+name = "tutor"
+description = "Generates FSRS-4.5 spaced-repetition flashcards from evergreen notes and surfaces cards due for review."
+model_tier = "fast"
+
+[schedule]
+trigger = "cron"
+cron = "0 8 * * *"
+
+[permissions]
+may_create_notes = true
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["evergreen"]
+max_invasiveness = "additive"
+
+[autonomy]
+auto_land_min_confidence = 0.80
+
+[council]
+participates = false
+may_convene = false
+
+[budget]
+monthly_tokens = 75000
+auto_pause = true

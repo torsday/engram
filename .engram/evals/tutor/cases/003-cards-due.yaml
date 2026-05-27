@@ -1,0 +1,38 @@
+# AC: Due cards → cards_due populated with correct overdue counts
+id: tutor-cards-due
+description: >
+  When cards_due_today is non-empty, the Tutor should emit matching
+  entries in cards_due with correct card_id, front, scheduled_date,
+  and days_overdue values.
+
+vault_state:
+  notes:
+    - path: "spaced-repetition.md"
+      content: |
+        ---
+        title: Spaced Repetition
+        id: 01J8CCCCCCCCCCCCCCC3
+        tags: [evergreen, learning]
+        ---
+        Spaced repetition is a learning technique that schedules reviews at
+        increasing intervals to exploit the spacing effect.
+      note_type: evergreen
+
+cards_due_today:
+  - card_id: "01J8CCCCCCCCCCCCCCC3/0"
+    front: "What is spaced repetition?"
+    scheduled_date: "2026-05-25"
+    days_overdue: 2
+
+trigger:
+  kind: cron
+  note_id: "spaced-repetition"
+
+expected_output:
+  cards_due_min_count: 1
+  cards_due:
+    - card_id: "01J8CCCCCCCCCCCCCCC3/0"
+      scheduled_date: "2026-05-25"
+      days_overdue_min: 1
+  confidence_min: 0.50
+  rationale_nonempty: true

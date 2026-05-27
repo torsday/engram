@@ -1,0 +1,25 @@
+# AC: Stub note → no flashcards generated, low confidence
+id: tutor-no-cards-for-stub
+description: >
+  When a note is a stub (title only, no body content), the Tutor should
+  emit zero flashcards and score confidence <= 0.40.
+
+vault_state:
+  notes:
+    - path: "quantum-entanglement.md"
+      content: |
+        ---
+        title: Quantum Entanglement
+        id: 01J8BBBBBBBBBBBBBBB2
+        tags: [evergreen, physics]
+        ---
+      note_type: evergreen
+
+trigger:
+  kind: cron
+  note_id: "quantum-entanglement"
+
+expected_output:
+  flashcards_count: 0
+  confidence_max: 0.40
+  rationale_nonempty: true

@@ -1,0 +1,33 @@
+# AC: Dense evergreen note → flashcards generated at high confidence
+id: tutor-flashcard-from-note
+description: >
+  When an evergreen note contains a clear concept definition, the Tutor
+  should generate at least one flashcard with confidence >= 0.80.
+
+vault_state:
+  notes:
+    - path: "rust-ownership.md"
+      content: |
+        ---
+        title: Rust Ownership
+        id: 01J8AAAAAAAAAAAAAAA1
+        tags: [evergreen, rust, memory]
+        ---
+        Rust's ownership system ensures memory safety without a garbage collector.
+        Each value in Rust has a single owner. When the owner goes out of scope,
+        the value is dropped and its memory is freed automatically.
+      note_type: evergreen
+
+trigger:
+  kind: cron
+  note_id: "rust-ownership"
+
+expected_output:
+  flashcards_min_count: 1
+  flashcards:
+    - note_id: "01J8AAAAAAAAAAAAAAA1"
+      front_nonempty: true
+      back_nonempty: true
+      tags_includes: ["rust"]
+  confidence_min: 0.80
+  rationale_nonempty: true
