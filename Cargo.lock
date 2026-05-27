@@ -2304,7 +2304,9 @@ name = "engram-eval"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "engram-index",
  "flate2",
+ "rusqlite",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2312,6 +2314,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror 2.0.18",
+ "ulid",
 ]
 
 [[package]]

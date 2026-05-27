@@ -55,7 +55,9 @@ pub mod snapshot;
 pub use aggregate::{Aggregate, CaseRunResult};
 pub use cache::SnapshotCache;
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
-pub use runner::{EvalRunReport, EvalRunner, EvalRunnerError, Invoker, InvokerError};
+pub use runner::{
+    EvalRunReport, EvalRunner, EvalRunnerError, Invoker, InvokerError, PersistParams,
+};
 pub use score::{Score, Verdict};
 pub use scorecard::{render_scorecard, sparkline};
 pub use scorer::{score_case, Observation};
