@@ -35,3 +35,13 @@
 /// produces this output; the Rust types here mirror its documented
 /// JSON schema.
 pub mod steelman_constructive;
+
+/// Devil's Advocate — argue against claims; surface counter-
+/// evidence and unstated assumptions. Critical counterpart to
+/// `steelman_constructive`; all output passes the Steelman
+/// rationality gate per ADR 0007 before counting in council
+/// votes or landing as annotations.
+///
+/// See `agents/devils-advocate/prompt.md` for the prompt that
+/// produces this output.
+pub mod devils_advocate;
