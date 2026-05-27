@@ -1,0 +1,40 @@
+# AC: Obvious missing wikilink is proposed with high confidence
+id: linker-obvious-link
+description: >
+  A note discusses spaced repetition at length but never links the
+  dedicated [[spaced-repetition]] note that exists as a neighbour.
+  The Linker should propose exactly one link with high confidence.
+
+vault_state:
+  notes:
+    - path: "learning-strategies.md"
+      content: |
+        ---
+        title: Learning Strategies
+        id: 01HLEARN0000000000AA
+        ---
+        Effective learning requires active recall and spaced repetition.
+        Reviewing material at increasing intervals encodes it more deeply
+        than massed practice. Interleaving topics further strengthens
+        long-term retention.
+    - path: "spaced-repetition.md"
+      content: |
+        ---
+        title: Spaced Repetition
+        id: 01HSPACED0000000000
+        ---
+        Spaced repetition is a study technique that schedules reviews
+        at optimal intervals using the forgetting curve.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "learning-strategies.md"
+
+expected_output:
+  proposed_links:
+    - source_note_id: "01HLEARN0000000000AA"
+      target_note_id: "01HSPACED0000000000"
+      anchor_text: "spaced repetition"
+  confidence_min: 0.80
+  rationale_nonempty: true

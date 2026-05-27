@@ -1,0 +1,37 @@
+# AC: Weak keyword overlap does not produce a link proposal
+id: linker-low-signal
+description: >
+  Two notes share the word "system" but cover unrelated topics (a
+  software architecture note and a GTD productivity note). The Linker
+  should decline and return an empty proposed_links list — a shared
+  keyword is not enough justification for a link.
+
+vault_state:
+  notes:
+    - path: "hexagonal-architecture.md"
+      content: |
+        ---
+        title: Hexagonal Architecture
+        id: 01HHEX00000000000001
+        ---
+        Hexagonal architecture isolates domain logic from infrastructure
+        by inverting dependencies at the system boundary. Ports define
+        the interface; adapters provide concrete implementations.
+    - path: "gtd-weekly-review.md"
+      content: |
+        ---
+        title: GTD Weekly Review
+        id: 01HGTD00000000000001
+        ---
+        A weekly review clears the capture system and updates project
+        lists. The goal is a trusted system that reduces cognitive load.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "hexagonal-architecture.md"
+
+expected_output:
+  proposed_links: []
+  confidence_max: 0.60
+  rationale_nonempty: true

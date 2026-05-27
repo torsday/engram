@@ -1,0 +1,59 @@
+# AC: Multiple missing links in one note are all proposed in a single pass
+id: linker-multi-link-batch
+description: >
+  A dense evergreen note mentions three concepts that each have
+  dedicated neighbour notes with no existing outgoing links. The
+  Linker should propose all three links in a single output with
+  high overall confidence.
+
+vault_state:
+  notes:
+    - path: "writing-process.md"
+      content: |
+        ---
+        title: Writing Process
+        id: 01HWRITE000000000001
+        ---
+        Good writing starts with freewriting to bypass the inner critic,
+        then moves into deliberate practice for skill accumulation.
+        Editing is a separate cognitive mode from drafting; interleaving
+        them causes context switching that degrades both. A daily writing
+        habit depends on commitment devices to overcome activation energy.
+    - path: "freewriting.md"
+      content: |
+        ---
+        title: Freewriting
+        id: 01HFREE0000000000001
+        ---
+        Freewriting is timed, uncensored writing used to bypass
+        self-censorship and reach raw ideas quickly.
+    - path: "deliberate-practice.md"
+      content: |
+        ---
+        title: Deliberate Practice
+        id: 01HDELIB000000000001
+        ---
+        Deliberate practice targets weaknesses with immediate feedback
+        and operates near the edge of current competence.
+    - path: "commitment-devices.md"
+      content: |
+        ---
+        title: Commitment Devices
+        id: 01HCOMMIT00000000001
+        ---
+        A commitment device pre-commits future behaviour to overcome
+        present-bias and reduce activation energy barriers.
+
+trigger:
+  kind: file_change
+  changed_notes:
+    - "writing-process.md"
+
+expected_output:
+  proposed_link_count_min: 3
+  proposed_link_target_ids_expected:
+    - "01HFREE0000000000001"
+    - "01HDELIB000000000001"
+    - "01HCOMMIT00000000001"
+  confidence_min: 0.75
+  rationale_nonempty: true
