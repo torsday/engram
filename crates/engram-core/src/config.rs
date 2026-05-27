@@ -294,6 +294,11 @@ pub struct LocalModelsConfig {
     pub standard: ModelEntry,
     #[serde(default = "LocalModelsConfig::default_deep")]
     pub deep: ModelEntry,
+    /// Base URL for the local Ollama daemon. Defaults to
+    /// `http://localhost:11434` (stock bind). Operators running
+    /// Ollama on a non-default host/port can override here.
+    #[serde(default = "LocalModelsConfig::default_ollama_base_url")]
+    pub ollama_base_url: String,
 }
 
 impl Default for LocalModelsConfig {
@@ -302,6 +307,7 @@ impl Default for LocalModelsConfig {
             fast: Self::default_fast(),
             standard: Self::default_standard(),
             deep: Self::default_deep(),
+            ollama_base_url: Self::default_ollama_base_url(),
         }
     }
 }
@@ -324,6 +330,9 @@ impl LocalModelsConfig {
             provider: "ollama".to_owned(),
             model: "llama3.3:70b".to_owned(),
         }
+    }
+    fn default_ollama_base_url() -> String {
+        "http://localhost:11434".to_owned()
     }
 }
 
