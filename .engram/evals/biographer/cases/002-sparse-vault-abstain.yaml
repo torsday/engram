@@ -1,0 +1,29 @@
+# Case 002 — sparse-content abstention.
+#
+# A new vault with 85 human-authored notes spanning 3 weeks. The host's
+# `SparseContentGate::should_abstain` returns Some(reason) for this
+# input; the agent's output must be the empty stub, with
+# `sparse_content_gate: true` and a rationale that mentions the actual
+# numbers (85, 200, 21, 60).
+#
+# Confidence on the stub is 1.0 — high confidence in the *abstention*,
+# not in any biographical claim. See `BiographerOutput::sparse_stub`.
+id: 002-sparse-vault-abstain
+description: >
+  Below the sparse-content thresholds (85 notes / 21 days < 200 / 60).
+  Expect an empty-stub abstention with high confidence in the
+  abstention itself and a rationale that mentions the threshold figures.
+input:
+  vault_state: snapshot/cases/002/sparse-vault.tar
+expected:
+  # Stub confidence is 1.0; case passes as long as it's not below.
+  min_confidence: 0.99
+  max_confidence: 1.0
+  rationale_must_mention:
+    - sparse
+    - "200"
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 0.5
+  cost_weight: 0.5

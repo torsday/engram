@@ -1,0 +1,27 @@
+# Case 004 — calibration case: heterogeneous corpus.
+#
+# A 600-note vault that spans wildly different topics with little
+# corroboration per claim. A well-calibrated Biographer reports lower
+# confidence (0.50–0.80 range per the prompt's calibration guidance):
+# the corpus is large but there's not enough signal density to make
+# strong claims about any one identity.
+#
+# This case is the *negative* of 001: same size budget, different
+# coherence.
+id: 004-heterogeneous-low-confidence
+description: >
+  Large but heterogeneous vault. Well-calibrated agent reports
+  moderate-low confidence and acknowledges the lack of corroboration.
+input:
+  vault_state: snapshot/cases/004/heterogeneous-vault.tar
+expected:
+  min_confidence: 0.50
+  max_confidence: 0.80
+  rationale_must_mention:
+    - corroboration
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  # Calibration is the point of this case; weight it heavily.
+  calibration_weight: 2.0
+  cost_weight: 0.2
