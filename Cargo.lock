@@ -2227,6 +2227,7 @@ dependencies = [
  "chrono",
  "comrak",
  "engram-core",
+ "engram-eval",
  "engram-index",
  "engram-llm",
  "rusqlite",

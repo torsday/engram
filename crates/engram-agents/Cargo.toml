@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 engram-core = { workspace = true }
+engram-eval = { workspace = true }
 engram-index = { workspace = true }
 rusqlite = { workspace = true }
 ulid = { workspace = true }

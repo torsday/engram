@@ -36,6 +36,12 @@ pub mod scheduler;
 /// IDs. Scheduler / file-change dispatch / cron loop land in follow-ups.
 pub mod runner;
 
+/// Bridge between [`runner::AgentRunner`] and the [`engram_eval`]
+/// crate's `Invoker` contract. Exposes the production adapter that
+/// the eval framework's CLI / runner can use to invoke a real
+/// agent against a seeded vault.
+pub mod eval_adapter;
+
 /// Invasiveness classifier — deterministic, no-LLM verdict over a diff
 /// summary per `01-agents-and-council.md` §Invasiveness classifier.
 /// Consumed by the decision-matrix slice (`confidence × invasiveness`
