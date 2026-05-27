@@ -1,0 +1,52 @@
+# Scribe — clean fleeting notes (voice transcripts, quick captures)
+# and format literature notes without changing meaning.
+#
+# Per `docs/design/01-agents-and-council.md` §Scribe:
+#   - Trigger: file_change (debounced 10s) on fleeting and literature
+#     note types.
+#   - Output: cleaned/formatted note body + optional frontmatter
+#     updates. All writes are unstaged per ADR 0003.
+#   - Invasiveness: editorial — rewrites prose but never changes
+#     meaning. Auto-lands at high confidence; council-routes
+#     anything below the floor.
+#   - Tools: note body read; no link-graph or search needed.
+
+[agent]
+name = "scribe"
+description = "Clean fleeting notes and format literature notes without changing meaning."
+model_tier = "fast"
+
+[schedule]
+trigger = "file_change"
+debounce_seconds = 10
+
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["fleeting", "literature"]
+max_invasiveness = "editorial"
+
+[autonomy]
+# Scribe's output is low-risk (meaning-preserving cleanup) but
+# editorial changes are still invasive enough to warrant a
+# confidence floor above the additive-only agents. The
+# length-ratio confidence adjustment in the runner provides an
+# additional safety layer for outputs that deviate from expected
+# compression.
+auto_land_min_confidence = 0.80
+
+[council]
+# Scribe participates in councils that concern voice or prose
+# quality; it does not convene councils (it is not a structural
+# or analytical agent).
+participates = true
+may_convene = false
+
+[budget]
+# Fast tier; Scribe runs on every fleeting/literature file change.
+# Low per-call cost but potentially high frequency — keep a
+# monthly token cap and auto-pause to guard against a noisy
+# inbox flooding the budget.
+monthly_tokens = 50000
+auto_pause = true

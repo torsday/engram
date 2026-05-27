@@ -1,0 +1,43 @@
+id: scribe-001
+description: >
+  Raw voice memo with filler words and transcript errors. Scribe should
+  remove fillers, fix punctuation, and compress slightly without
+  changing meaning.
+
+mode: fleeting_cleanup
+
+vault_state:
+  notes:
+    - path: inbox/voice-2024-01-15.md
+      body: |
+        Um so I was thinking uh about the uh the project timeline and
+        you know we need to uh finish the API design before like we
+        can start on the frontend you know what I mean. And also um
+        the database schema needs to be finalized first like definitely.
+
+input:
+  note_path: inbox/voice-2024-01-15.md
+
+expected_output:
+  mode: fleeting_cleanup
+  length_ratio_range: [0.5, 1.1]
+  cleaned_body_must_contain:
+    - project timeline
+    - API design
+    - frontend
+    - database schema
+  cleaned_body_must_not_contain:
+    - "um"
+    - "uh"
+    - "you know"
+
+pass_criteria:
+  - length_ratio is between 0.5 and 1.1
+  - filler words removed
+  - core meaning preserved (timeline, API before frontend, schema first)
+  - confidence >= 0.7
+
+fail_criteria:
+  - any meaning-changing edits (e.g. order of tasks reversed)
+  - wikilinks added or removed
+  - new content invented

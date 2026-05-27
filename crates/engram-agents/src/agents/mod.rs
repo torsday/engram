@@ -119,6 +119,18 @@ pub mod bridge_builder;
 /// this output.
 pub mod linker;
 
+/// Scribe — clean fleeting notes (voice transcripts, quick captures)
+/// and format literature notes without changing meaning. Two modes:
+/// `fleeting_cleanup` (compress filler, fix transcript errors) and
+/// `literature_formatting` (normalize headings, tighten citations).
+/// Confidence is adjusted downward when the output length deviates
+/// from the mode's expected window, guarding against silent content
+/// drops or expansions.
+///
+/// See `agents/scribe/prompt.md` for the prompt that produces this
+/// output.
+pub mod scribe;
+
 /// Single dispatch entry point over all 9 typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

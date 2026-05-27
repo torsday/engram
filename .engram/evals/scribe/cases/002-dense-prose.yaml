@@ -1,0 +1,40 @@
+id: scribe-002
+description: >
+  Fleeting note written as dense run-on prose with no punctuation breaks.
+  Scribe should add sentence breaks and normalize punctuation without
+  adding content.
+
+mode: fleeting_cleanup
+
+vault_state:
+  notes:
+    - path: inbox/quick-thought-2024-01-16.md
+      body: |
+        read that paper on attention mechanisms and the key insight was
+        that self-attention lets the model weight all positions in the
+        sequence simultaneously not just adjacent ones and this is why
+        transformers outperform RNNs on long-range dependencies the
+        quadratic complexity is the tradeoff
+
+input:
+  note_path: inbox/quick-thought-2024-01-16.md
+
+expected_output:
+  mode: fleeting_cleanup
+  length_ratio_range: [0.9, 1.15]
+  cleaned_body_must_contain:
+    - self-attention
+    - transformers
+    - RNNs
+    - quadratic complexity
+
+pass_criteria:
+  - sentences properly punctuated
+  - all technical terms preserved verbatim
+  - no new claims or elaborations added
+  - length_ratio within [0.9, 1.15]
+
+fail_criteria:
+  - technical terms altered (e.g. "self-attention" → "attention")
+  - additional explanation added that was not in the original
+  - length_ratio below 0.8 (dropped content)
