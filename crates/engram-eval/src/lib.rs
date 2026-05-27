@@ -44,9 +44,12 @@ pub mod score;
 pub mod scorecard;
 /// Pure scoring function: `ExpectedOutcome` + `Observation` → `(Score, Verdict)`.
 pub mod scorer;
+/// Vault-snapshot unpacker for the eval runner.
+pub mod snapshot;
 
 pub use aggregate::{Aggregate, CaseRunResult};
 pub use case::{Case, CaseError, CaseInput, ExpectedOutcome, ScoringWeights};
 pub use score::{Score, Verdict};
 pub use scorecard::{render_scorecard, sparkline};
 pub use scorer::{score_case, Observation};
+pub use snapshot::{unpack_snapshot, SnapshotError};

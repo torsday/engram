@@ -1,0 +1,241 @@
+//! Vault snapshot unpacker for the eval framework.
+//!
+//! Each [`crate::Case`] points at a `vault_state` snapshot — the
+//! pre-seeded vault the runner unpacks before invoking the agent.
+//! This module turns that pointer into a real directory tree under
+//! a destination of the caller's choice (typically a `tempdir`).
+//!
+//! # Snapshot kinds
+//!
+//! This slice supports two source forms:
+//!
+//! - **Directory**: a vault tree on disk. `unpack_snapshot` does a
+//!   recursive copy under `dest`. Useful for hand-curated case
+//!   fixtures during early development.
+//! - **(future) Tarball**: `.tar` files — extraction support lands
+//!   in a follow-up. For now a `.tar` source returns
+//!   [`SnapshotError::UnsupportedKind`] so callers fail loudly
+//!   instead of silently doing the wrong thing.
+//!
+//! Out of scope for this slice (separate follow-ups):
+//!
+//! - Content-addressed snapshot cache at
+//!   `.engram/evals/snapshots/<sha>/` (the spec's preferred layout)
+//! - `.tar.gz` / compression-format detection
+//! - Permission/ACL preservation beyond what `std::fs::copy` does
+
+use std::path::{Path, PathBuf};
+
+use thiserror::Error;
+
+/// Errors from [`unpack_snapshot`].
+#[derive(Debug, Error)]
+pub enum SnapshotError {
+    /// The snapshot source path doesn't exist (or isn't readable).
+    #[error("snapshot source {path} not found or unreadable")]
+    SourceNotFound {
+        /// Source path the caller supplied.
+        path: PathBuf,
+    },
+
+    /// The snapshot source is a file format this slice doesn't
+    /// handle yet (e.g. `.tar`, `.tar.gz`). A follow-up will add
+    /// extraction support; surfacing this loudly today avoids
+    /// silent "vault is empty" failures during the seed step.
+    #[error("snapshot kind for {path} is not supported (yet): {hint}")]
+    UnsupportedKind {
+        /// Source path the caller supplied.
+        path: PathBuf,
+        /// Human-readable hint about what's missing
+        /// (e.g. `"tar extraction is a follow-up slice"`).
+        hint: &'static str,
+    },
+
+    /// A filesystem operation during copy failed.
+    #[error("snapshot unpack failed at {path}: {source}")]
+    Io {
+        /// Path being read or written when the failure occurred.
+        path: PathBuf,
+        /// Underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// Unpack the snapshot at `src` into `dest`. The `dest` directory
+/// is created (with parents) if missing; existing contents are
+/// **not** cleared — the caller picks a fresh location (typically a
+/// `tempdir`) for each case run.
+///
+/// Currently supports directory sources only; `.tar` / compressed
+/// formats return [`SnapshotError::UnsupportedKind`].
+pub fn unpack_snapshot(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
+    let meta = std::fs::metadata(src).map_err(|_| SnapshotError::SourceNotFound {
+        path: src.to_path_buf(),
+    })?;
+
+    if meta.is_file() {
+        // Only directory-style snapshots are supported today.
+        // Detect a tar extension and surface a precise error.
+        let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let hint = match ext {
+            "tar" => "tar extraction is a follow-up slice",
+            "gz" | "tgz" => "compressed-tar extraction is a follow-up slice",
+            "zip" => "zip extraction is a follow-up slice",
+            _ => "only directory snapshots are supported in this slice",
+        };
+        return Err(SnapshotError::UnsupportedKind {
+            path: src.to_path_buf(),
+            hint,
+        });
+    }
+
+    if !meta.is_dir() {
+        // Symlink / fifo / unknown — out of scope.
+        return Err(SnapshotError::UnsupportedKind {
+            path: src.to_path_buf(),
+            hint: "snapshot source must be a directory",
+        });
+    }
+
+    std::fs::create_dir_all(dest).map_err(|e| SnapshotError::Io {
+        path: dest.to_path_buf(),
+        source: e,
+    })?;
+    copy_dir_recursive(src, dest)
+}
+
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<(), SnapshotError> {
+    let entries = std::fs::read_dir(src).map_err(|e| SnapshotError::Io {
+        path: src.to_path_buf(),
+        source: e,
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|e| SnapshotError::Io {
+            path: src.to_path_buf(),
+            source: e,
+        })?;
+        let entry_path = entry.path();
+        let file_name = entry.file_name();
+        let dest_path = dest.join(&file_name);
+
+        let ft = entry.file_type().map_err(|e| SnapshotError::Io {
+            path: entry_path.clone(),
+            source: e,
+        })?;
+        if ft.is_dir() {
+            std::fs::create_dir_all(&dest_path).map_err(|e| SnapshotError::Io {
+                path: dest_path.clone(),
+                source: e,
+            })?;
+            copy_dir_recursive(&entry_path, &dest_path)?;
+        } else if ft.is_file() {
+            std::fs::copy(&entry_path, &dest_path).map_err(|e| SnapshotError::Io {
+                path: dest_path.clone(),
+                source: e,
+            })?;
+        }
+        // Symlinks: skipped silently. The spec doesn't require
+        // symlink preservation in case fixtures, and following
+        // them blindly invites loops / escape-the-snapshot issues.
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn unpack_copies_flat_directory_contents() {
+        let src = tempdir().unwrap();
+        std::fs::write(src.path().join("a.md"), "alpha").unwrap();
+        std::fs::write(src.path().join("b.md"), "beta").unwrap();
+
+        let dest = tempdir().unwrap();
+        unpack_snapshot(src.path(), dest.path()).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("a.md")).unwrap(),
+            "alpha"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("b.md")).unwrap(),
+            "beta"
+        );
+    }
+
+    #[test]
+    fn unpack_recurses_into_nested_subdirectories() {
+        let src = tempdir().unwrap();
+        std::fs::create_dir_all(src.path().join("notes/sub")).unwrap();
+        std::fs::write(src.path().join("notes/sub/deep.md"), "deep!").unwrap();
+
+        let dest = tempdir().unwrap();
+        unpack_snapshot(src.path(), dest.path()).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(dest.path().join("notes/sub/deep.md")).unwrap(),
+            "deep!"
+        );
+    }
+
+    #[test]
+    fn unpack_creates_missing_dest_directory() {
+        let src = tempdir().unwrap();
+        std::fs::write(src.path().join("only.md"), "x").unwrap();
+
+        let parent = tempdir().unwrap();
+        let dest = parent.path().join("created/by/unpack");
+        assert!(!dest.exists());
+        unpack_snapshot(src.path(), &dest).unwrap();
+        assert!(dest.join("only.md").exists());
+    }
+
+    #[test]
+    fn missing_source_returns_source_not_found() {
+        let parent = tempdir().unwrap();
+        let missing = parent.path().join("not-there");
+        match unpack_snapshot(&missing, parent.path()) {
+            Err(SnapshotError::SourceNotFound { path }) => assert_eq!(path, missing),
+            other => panic!("expected SourceNotFound, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tar_source_returns_unsupported_kind_with_hint() {
+        let parent = tempdir().unwrap();
+        let tar_path = parent.path().join("vault.tar");
+        std::fs::write(&tar_path, b"\0\0\0\0").unwrap();
+        match unpack_snapshot(&tar_path, parent.path()) {
+            Err(SnapshotError::UnsupportedKind { path, hint }) => {
+                assert_eq!(path, tar_path);
+                assert!(hint.contains("tar"));
+            }
+            other => panic!("expected UnsupportedKind, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compressed_tar_returns_unsupported_with_distinct_hint() {
+        let parent = tempdir().unwrap();
+        let gz_path = parent.path().join("vault.tar.gz");
+        std::fs::write(&gz_path, b"\0\0\0\0").unwrap();
+        match unpack_snapshot(&gz_path, parent.path()) {
+            Err(SnapshotError::UnsupportedKind { hint, .. }) => {
+                assert!(hint.contains("compressed"));
+            }
+            other => panic!("expected UnsupportedKind, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_source_directory_unpacks_to_empty_destination() {
+        let src = tempdir().unwrap();
+        let dest = tempdir().unwrap();
+        unpack_snapshot(src.path(), dest.path()).unwrap();
+        let entries: Vec<_> = std::fs::read_dir(dest.path()).unwrap().collect();
+        assert!(entries.is_empty());
+    }
+}
