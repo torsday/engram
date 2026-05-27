@@ -165,6 +165,32 @@ pub enum RunnerError {
         /// The timeout the caller specified.
         timeout: std::time::Duration,
     },
+
+    /// The agent's monthly token budget is exhausted. Either
+    /// `agent_budgets.paused_for_budget = 1` (operator-set pause) or
+    /// the sum of `token_usage.input_tokens + output_tokens` for the
+    /// current month has reached/exceeded `monthly_token_cap`. The
+    /// run is rejected **before** any provider call so no tokens
+    /// burn against an already-exhausted budget.
+    ///
+    /// Per the spec, parents handling sub-agent invocations should
+    /// catch this and proceed without the sub-agent's contribution
+    /// rather than abort the whole flow.
+    #[error(
+        "agent `{agent}` budget exhausted ({spent} / {cap} tokens this period{paused_suffix})"
+    )]
+    BudgetExhausted {
+        /// Agent whose budget was exhausted.
+        agent: String,
+        /// Tokens spent this period (`input + output`).
+        spent: i64,
+        /// `agent_budgets.monthly_token_cap` for this agent.
+        cap: i64,
+        /// `" — operator pause"` when paused; empty string otherwise.
+        /// Lets the formatted message disambiguate "spent it all" vs
+        /// "operator yanked the cord" without an extra enum arm.
+        paused_suffix: String,
+    },
 }
 
 /// Outcome recorded in `agent_runs.outcome` and returned in [`RunReport`].
@@ -780,6 +806,15 @@ impl AgentRunner {
         let cached = self.load_cached(name)?;
         let config = &cached.config;
         let prompt = &cached.prompt;
+
+        // Budget gate. Read agent_budgets + current period's
+        // token_usage and reject the run BEFORE any DB write or
+        // provider call when the budget is exhausted. No
+        // `agent_runs` row is created — the spend never happened,
+        // so there's nothing to audit.
+        if let Some(verdict) = self.check_budget(name)? {
+            return Err(verdict);
+        }
 
         // INSERT agent_runs row with started_at; we'll UPDATE with
         // completed_at + outcome at the end.
@@ -1559,6 +1594,63 @@ impl AgentRunner {
     /// to spawn for each configured agent. Goes through the same
     /// hot-reload cache the runner uses for `run_agent`, so a
     /// successful call warms the cache for the imminent first run.
+    /// Returns `Ok(Some(BudgetExhausted))` when the budget gate
+    /// should reject the run, `Ok(None)` when the run may proceed.
+    /// `Err(RunnerError)` on SQLite failure reading the budget tables.
+    ///
+    /// Budget rejection fires when EITHER:
+    /// - `agent_budgets.paused_for_budget = 1` (operator pause), or
+    /// - current-period `token_usage.input + output >= monthly_token_cap`.
+    ///
+    /// An agent with no `agent_budgets` row is treated as
+    /// budget-unlimited (returns `Ok(None)`) — explicitly setting a
+    /// cap is an opt-in.
+    fn check_budget(&self, agent_name: &str) -> Result<Option<RunnerError>, RunnerError> {
+        let conn = self.sqlite.lock().expect("sqlite mutex poisoned");
+        let budget: Option<(i64, i64)> = conn
+            .query_row(
+                "SELECT monthly_token_cap, paused_for_budget \
+                 FROM agent_budgets WHERE agent_name = ?1",
+                rusqlite::params![agent_name],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+            )
+            .ok();
+        let (cap, paused) = match budget {
+            None => return Ok(None), // no cap configured
+            Some(b) => b,
+        };
+
+        // Operator pause: short-circuit regardless of spend.
+        if paused != 0 {
+            return Ok(Some(RunnerError::BudgetExhausted {
+                agent: agent_name.to_string(),
+                spent: 0,
+                cap,
+                paused_suffix: " — operator pause".into(),
+            }));
+        }
+
+        // Sum current-period spend. Missing row → 0 spent.
+        let period = current_period(&Utc::now().to_rfc3339());
+        let spent: i64 = conn
+            .query_row(
+                "SELECT IFNULL(input_tokens + output_tokens, 0) \
+                 FROM token_usage WHERE agent_name = ?1 AND period = ?2",
+                rusqlite::params![agent_name, period],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if spent >= cap {
+            return Ok(Some(RunnerError::BudgetExhausted {
+                agent: agent_name.to_string(),
+                spent,
+                cap,
+                paused_suffix: String::new(),
+            }));
+        }
+        Ok(None)
+    }
+
     pub fn peek_trigger_and_period(&self, name: &str) -> Result<(TriggerKind, u64), RunnerError> {
         let cached = self.load_cached(name)?;
         Ok((
@@ -4255,6 +4347,190 @@ confidence_threshold = 0.99"#,
         let fallback = current_period("garbage");
         assert_eq!(fallback.len(), 7);
         assert_eq!(fallback.as_bytes()[4], b'-');
+    }
+
+    /// An agent with no `agent_budgets` row runs without limit —
+    /// the cap is opt-in.
+    #[tokio::test]
+    async fn run_succeeds_when_no_budget_row_exists() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "uncapped",
+            r#"name = "uncapped"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.1}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+        runner
+            .run_agent("uncapped", TriggerContext::OnDemand { note_id: None })
+            .await
+            .expect("no budget row = unlimited; must run");
+    }
+
+    /// Setting `paused_for_budget = 1` rejects every run with
+    /// `BudgetExhausted` regardless of spend.
+    #[tokio::test]
+    async fn paused_budget_short_circuits_before_provider() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "paused",
+            r#"name = "paused"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        // Insert paused budget row.
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_budgets \
+                  (agent_name, monthly_token_cap, current_period, paused_for_budget) \
+                 VALUES (?1, ?2, ?3, 1)",
+                rusqlite::params!["paused", 10_000_i64, "2026-05"],
+            )
+            .unwrap();
+        }
+        // Provider would panic if invoked — proves the gate fires
+        // before the provider call.
+        struct ExplodingProvider;
+        #[async_trait]
+        impl LlmProvider for ExplodingProvider {
+            async fn complete(
+                &self,
+                _p: &PromptStructured,
+                _m: &Model,
+                _o: &CompleteOptions,
+            ) -> engram_llm::Result<Completion> {
+                panic!("provider must not be invoked when budget paused");
+            }
+            async fn complete_streamed(
+                &self,
+                _: &PromptStructured,
+                _: &Model,
+                _: &CompleteOptions,
+            ) -> engram_llm::Result<StreamedCompletion> {
+                unreachable!()
+            }
+            async fn embed(&self, _: &str, _: &EmbeddingModel) -> engram_llm::Result<Vec<f32>> {
+                unreachable!()
+            }
+        }
+        let runner = make_runner(&sqlite, Arc::new(ExplodingProvider), tmp.path());
+        let err = runner
+            .run_agent("paused", TriggerContext::OnDemand { note_id: None })
+            .await
+            .expect_err("paused budget must error");
+        match err {
+            RunnerError::BudgetExhausted {
+                agent,
+                cap,
+                paused_suffix,
+                ..
+            } => {
+                assert_eq!(agent, "paused");
+                assert_eq!(cap, 10_000);
+                assert!(paused_suffix.contains("operator pause"));
+            }
+            other => panic!("expected BudgetExhausted, got {other:?}"),
+        }
+        // No agent_runs row should have been created.
+        let conn = sqlite.lock().unwrap();
+        let row_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM agent_runs WHERE agent_name = ?1",
+                rusqlite::params!["paused"],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(row_count, 0, "rejection must short-circuit before INSERT");
+    }
+
+    /// Spent tokens reaching cap rejects subsequent runs.
+    #[tokio::test]
+    async fn capped_budget_rejects_when_spent_reaches_cap() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "thrifty",
+            r#"name = "thrifty"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        // Set cap of 100; pre-populate token_usage at 100 (exhausted).
+        let period = current_period(&Utc::now().to_rfc3339());
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_budgets \
+                  (agent_name, monthly_token_cap, current_period, paused_for_budget) \
+                 VALUES (?1, 100, ?2, 0)",
+                rusqlite::params!["thrifty", period],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO token_usage \
+                  (agent_name, period, input_tokens, output_tokens, estimated_cost, landings) \
+                 VALUES (?1, ?2, 80, 20, 0.0, 0)",
+                rusqlite::params!["thrifty", period],
+            )
+            .unwrap();
+        }
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.1}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+        let err = runner
+            .run_agent("thrifty", TriggerContext::OnDemand { note_id: None })
+            .await
+            .expect_err("exhausted budget must error");
+        match err {
+            RunnerError::BudgetExhausted {
+                spent, cap, agent, ..
+            } => {
+                assert_eq!(agent, "thrifty");
+                assert_eq!(spent, 100);
+                assert_eq!(cap, 100);
+            }
+            other => panic!("expected BudgetExhausted, got {other:?}"),
+        }
+    }
+
+    /// Spent tokens below cap still lets the run proceed.
+    #[tokio::test]
+    async fn capped_budget_permits_run_when_under_cap() {
+        let tmp = tempdir().unwrap();
+        write_agent(
+            tmp.path(),
+            "ample",
+            r#"name = "ample"
+trigger = "on_demand"
+confidence_threshold = 0.99"#,
+            DEMO_PROMPT,
+        );
+        let sqlite = setup_sqlite();
+        let period = current_period(&Utc::now().to_rfc3339());
+        {
+            let conn = sqlite.lock().unwrap();
+            conn.execute(
+                "INSERT INTO agent_budgets \
+                  (agent_name, monthly_token_cap, current_period, paused_for_budget) \
+                 VALUES (?1, 10000, ?2, 0)",
+                rusqlite::params!["ample", period],
+            )
+            .unwrap();
+        }
+        let provider = Arc::new(ScriptedProvider::new(vec![Ok(r#"{"confidence": 0.1}"#)]));
+        let runner = make_runner(&sqlite, provider, tmp.path());
+        runner
+            .run_agent("ample", TriggerContext::OnDemand { note_id: None })
+            .await
+            .expect("under-cap run must succeed");
     }
 
     #[tokio::test]
