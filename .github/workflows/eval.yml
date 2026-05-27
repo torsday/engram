@@ -1,0 +1,50 @@
+name: eval smoke gate
+
+# Smoke-level gate for changes that touch agent prompts or configs.
+# Per #39 the eventual full gate runs that agent's eval suite and
+# rejects regressions > 5%. This is the first piece: any PR that
+# modifies an agent's prompt/config (or the eval framework itself)
+# must keep the `engram-eval` unit tests + the runner integration
+# tests green before merge.
+#
+# Scopes deliberately narrow to keep CI cheap. The full-workspace
+# `ci.yml` already runs cargo test, but its trigger is broad; this
+# workflow makes the eval-relevant signal explicit and required so
+# future branch protection can require this check directly.
+
+on:
+  pull_request:
+    paths:
+      - "agents/**"
+      - "crates/engram-eval/**"
+      - ".engram/evals/**"
+      - ".github/workflows/eval.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  eval-smoke:
+    name: eval smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      # cache-targets: false per the same disk-overflow constraint
+      # that `ci.yml` documents (see #212).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+
+      - name: cargo test -p engram-eval
+        run: cargo test -p engram-eval --all-targets
