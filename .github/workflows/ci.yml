@@ -20,6 +20,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Reclaim ~20-30 GB by removing preinstalled toolchains this build
+      # never uses (Android SDK, .NET, GHC, large CLIs). The single build
+      # job runs fmt → clippy --all-targets → test --workspace, so the
+      # shared `target/` accumulates across steps; by the `test` link of
+      # the LanceDB/datafusion/lance test binaries the stock ubuntu-latest
+      # runner (~14 GB free) hits `rustc-LLVM ERROR: IO failure on output
+      # stream: No space left on device`. Freeing disk up front is the
+      # lowest-risk fix (no job restructure, no behavior change). Sibling
+      # of the `cache-targets: false` mitigation below (see #212).
+      - name: free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false # apt purge is slow; tool-cache + the dirs below reclaim enough
+          docker-images: false
+          swap-storage: false
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
