@@ -11,16 +11,13 @@ permissions:
   contents: read
 
 jobs:
-  audit:
-    name: audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
+  # NOTE: a separate `audit` job (rustsec/audit-check) was removed —
+  # cargo-deny below is the single source of advisory policy. audit-check
+  # doesn't read `deny.toml`, so it re-flagged unmaintained advisories the
+  # project has already triaged and ignored there (RUSTSEC-2025-0141,
+  # -2024-0320, -2021-0153, -2024-0436), gating merges on dupe signal.
+  # cargo-deny checks the same RustSec advisory DB plus licenses and bans,
+  # with one curated ignore list. One tool, one source of truth.
   deny:
     name: deny
     runs-on: ubuntu-latest
