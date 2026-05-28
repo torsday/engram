@@ -20,8 +20,8 @@ vault_state:
 trigger:
   kind: file_change
   changed_notes:
-    - "stable-note.md"  # minor whitespace edit, no content change
+    - "stable-note.md" # minor whitespace edit, no content change
 
 expected_output:
-  index_updates: []  # or only updates that are semantically no-ops
+  index_updates: [] # or only updates that are semantically no-ops
   confidence_min: 0.8
