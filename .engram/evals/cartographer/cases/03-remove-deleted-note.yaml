@@ -6,7 +6,7 @@ description: >
   Because the vault file is absent, this should auto-land (no council required).
 
 vault_state:
-  notes: []  # vault is now empty
+  notes: [] # vault is now empty
   index_md: |
     # Index
 
@@ -15,7 +15,7 @@ vault_state:
 trigger:
   kind: file_change
   changed_notes:
-    - "old-note.md"  # deleted
+    - "old-note.md" # deleted
 
 expected_output:
   index_updates:

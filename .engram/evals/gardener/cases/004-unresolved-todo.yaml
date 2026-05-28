@@ -22,8 +22,8 @@ trigger:
   kind: cron
   note_id: "reading-list"
   todo_candidates:
-    - "Finish \"Thinking, Fast and Slow\""
-    - "Read \"The Pragmatic Programmer\""
+    - 'Finish "Thinking, Fast and Slow"'
+    - 'Read "The Pragmatic Programmer"'
 
 expected_output:
   removals: []
