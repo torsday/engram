@@ -139,11 +139,9 @@ pub fn find_todo_candidates(body: &str) -> Vec<String> {
         .filter_map(|line| {
             let trimmed = line.trim();
             // Match `- [ ] <text>` (case-sensitive `[ ]` per GFM spec)
-            if let Some(rest) = trimmed.strip_prefix("- [ ] ") {
-                Some(rest.trim().to_string())
-            } else {
-                None
-            }
+            trimmed
+                .strip_prefix("- [ ] ")
+                .map(|rest| rest.trim().to_string())
         })
         .collect()
 }
