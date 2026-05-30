@@ -1,0 +1,46 @@
+# Inbox Triage — classify new fleeting notes and propose downstream routing.
+#
+# Per `docs/design/01-agents-and-council.md` §Inbox Triage:
+#   - Trigger: file_change on type=fleeting, after Scribe's cleanup pass.
+#   - Output: adds `triage:` frontmatter suggestion + `triage_rationale` comment.
+#     Discards are always proposals; user approves routing in the Swift app.
+#   - Invasiveness: additive — only adds frontmatter suggestion, never modifies content.
+#   - Tools: hybrid_search (deterministic redundancy detection), read_note,
+#     note-shape heuristics. LLM only judges; it does not generate the search.
+
+[agent]
+name = "inbox-triage"
+description = "Classify new fleeting notes and propose downstream routing (keep/promote/merge/discard)."
+model_tier = "fast"
+
+[schedule]
+trigger = "file_change"
+# Debounce slightly longer than Scribe (10s) to run after Scribe's cleanup.
+debounce_seconds = 15
+
+[permissions]
+may_create_notes = false
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["fleeting"]
+max_invasiveness = "additive"
+
+[autonomy]
+# Triage is additive — it only appends a frontmatter suggestion, never changes
+# existing content. Even so, a mid-confidence floor prevents noisy routing
+# recommendations from polluting the review queue.
+auto_land_min_confidence = 0.70
+
+[council]
+# Inbox Triage is a processing agent, not a deliberative one. It feeds outputs
+# into the diff-review queue for human approval; it does not convene or join
+# councils. Pair-Thinking is the right surface for deliberative exploration.
+participates = false
+may_convene = false
+
+[budget]
+# Fast tier; runs on every new fleeting note. Cap is set high enough for a
+# busy-capture day (~200 notes/month) but low enough to auto-pause if something
+# floods the inbox.
+monthly_tokens = 100000
+auto_pause = true

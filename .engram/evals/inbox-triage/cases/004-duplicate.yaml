@@ -1,0 +1,43 @@
+id: inbox-triage-004
+description: >
+  A note whose core claim substantially overlaps with an existing
+  evergreen note in the vault. Inbox Triage should recommend merging
+  it into the existing note and supply redundancy evidence.
+
+vault_state:
+  notes:
+    - path: evergreen/capture-shapes-retrieval.md
+      body: |
+        The act of writing determines the grain size of future search.
+        Capture and retrieval are not separable problems — how you write
+        determines what you can later find. A coarse capture layer produces
+        coarse retrieval.
+
+input:
+  note_path: inbox/2024-01-18-capture.md
+  note_body: |
+    Capture determines retrieval. How you write sets the granularity of
+    what you can find later. This is why atomic notes matter — finer
+    grain = finer search resolution.
+  shape:
+    char_count: 190
+    link_density: 0.0
+    style: prose
+  redundancy_candidates:
+    - note_id: evergreen/capture-shapes-retrieval.md
+      similarity: 0.91
+      excerpt: "capture and retrieval are not separable problems — how you write determines what you can later find"
+
+expected_output:
+  recommended_disposition: merge_into
+  redundancy_evidence:
+    - note_id: evergreen/capture-shapes-retrieval.md
+
+pass_criteria:
+  - recommended_disposition is merge_into
+  - redundancy_evidence contains evergreen/capture-shapes-retrieval.md
+  - confidence >= 0.75
+
+fail_criteria:
+  - recommended_disposition is promote_evergreen_candidate (ignoring the high-similarity candidate)
+  - empty redundancy_evidence when disposition is merge_into

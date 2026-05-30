@@ -1,0 +1,11 @@
+{
+  "confidence": 0.91,
+  "rationale": "Hybrid search returned a high-similarity match (0.91) for 'evergreen/capture-shapes-retrieval.md'. The incoming note's core claim — that capture determines retrieval grain size — is substantively the same as the existing note. Adding atomic-notes framing could be an additive edit to the existing note rather than a new one.",
+  "recommended_disposition": "merge_into",
+  "redundancy_evidence": [
+    {
+      "note_id": "evergreen/capture-shapes-retrieval.md",
+      "reason": "Same core claim: capture determines retrieval grain size; incoming note adds atomic-notes framing"
+    }
+  ]
+}

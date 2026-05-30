@@ -1,0 +1,6 @@
+{
+  "confidence": 0.94,
+  "rationale": "The note contains a direct block quote from a named book (Ahrens, 'How to Take Smart Notes') with a source URL. Over 50% of the body is quoted external content. Route through Scribe in literature-mode to format the citation and normalize the note structure.",
+  "recommended_disposition": "promote_literature",
+  "redundancy_evidence": []
+}

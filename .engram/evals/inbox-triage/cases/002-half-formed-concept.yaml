@@ -1,0 +1,34 @@
+id: inbox-triage-002
+description: >
+  An early-draft argument that is original and self-contained. It is
+  not a quote or literature note, and no redundant notes exist. Inbox
+  Triage should recommend promoting it as an evergreen candidate.
+
+vault_state:
+  notes: []
+
+input:
+  note_path: inbox/2024-01-16-concept.md
+  note_body: |
+    The reason most knowledge management systems fail is that they
+    treat capture and retrieval as separate problems. But capture
+    shapes what is retrievable — the act of writing determines the
+    grain size of future search. A system that ignores this will
+    always feel like searching through a warehouse of unsorted boxes.
+  shape:
+    char_count: 340
+    link_density: 0.0
+    style: prose
+  redundancy_candidates: []
+
+expected_output:
+  recommended_disposition: promote_evergreen_candidate
+  redundancy_evidence: []
+
+pass_criteria:
+  - recommended_disposition is promote_evergreen_candidate
+  - confidence >= 0.70
+
+fail_criteria:
+  - recommended_disposition is keep_fleeting (too conservative for a fully-formed argument)
+  - recommended_disposition is promote_literature (no external source cited)

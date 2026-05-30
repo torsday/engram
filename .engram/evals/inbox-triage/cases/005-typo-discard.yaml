@@ -1,0 +1,29 @@
+id: inbox-triage-005
+description: >
+  A single-character accidental capture. Inbox Triage should recommend
+  discarding it. This is always a proposal — the user must approve.
+
+vault_state:
+  notes: []
+
+input:
+  note_path: inbox/2024-01-19-accidental.md
+  note_body: "k"
+  shape:
+    char_count: 1
+    link_density: 0.0
+    style: minimal
+  redundancy_candidates: []
+
+expected_output:
+  recommended_disposition: discard
+  redundancy_evidence: []
+
+pass_criteria:
+  - recommended_disposition is discard
+  - confidence >= 0.90
+  - rationale mentions accidental capture or insufficient content
+
+fail_criteria:
+  - any disposition other than discard
+  - implied automatic deletion (discard must always be a proposal per design)
