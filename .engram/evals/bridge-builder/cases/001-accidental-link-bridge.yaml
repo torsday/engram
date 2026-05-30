@@ -1,0 +1,21 @@
+# Case 001 — accidental gap, propose a bridge link (nominal).
+#
+# Two clusters reach for the same idea (lossy compression) and a specific
+# anchor in one cluster fits a note in the other. Bridge Builder should
+# return an accidental_link verdict with a proposed Link bridge — the
+# lowest-invasiveness option, a single wikilink that closes a real gap.
+#
+# Confidence floor 0.83 — matches the agent's auto-land floor for links.
+id: 001-accidental-link-bridge
+description: >
+  Two clusters with a specific cross-anchor. Expect an accidental_link
+  verdict with a proposed bridge link.
+input:
+  vault_state: snapshot/cases/001/accidental-gap-pair.tar
+expected:
+  min_confidence: 0.83
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

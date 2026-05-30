@@ -1,0 +1,22 @@
+# Case 003 — broad shared abstraction, propose a bridge note.
+#
+# Two clusters circle the same abstraction (feedback loops in self-
+# improving systems) but no single existing note is the right place for one
+# link. Bridge Builder should return accidental_note and propose a new
+# bridge note (council-routed, higher invasiveness) that names the shared
+# abstraction and links into both clusters.
+id: 003-accidental-note-bridge
+description: >
+  Two clusters sharing a broad abstraction with no single anchor. Expect an
+  accidental_note verdict proposing a bridge note.
+input:
+  vault_state: snapshot/cases/003/shared-abstraction-pair.tar
+expected:
+  min_confidence: 0.80
+  rationale_must_mention:
+    - abstraction
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
