@@ -1,0 +1,24 @@
+# Case 003 — bounded session: end at the productive frontier (restraint).
+#
+# After a few good rounds the draft now reads coherently and further
+# questions would push past the productive frontier. Pair-Thinking should
+# set should_end=true (end mode) with high confidence — knowing when to
+# stop is the bounded-session discipline that keeps the collaboration from
+# outstaying its welcome. Dragging a session past usefulness is the failure
+# mode this case guards against.
+id: 003-session-end-productive-frontier
+description: >
+  A session that has reached a coherent draft. Expect should_end=true with
+  high confidence — respect the bounded-session budget.
+input:
+  vault_state: snapshot/cases/003/coherent-after-rounds.tar
+  trigger_note_id: 01H8PT00000000000000000002
+expected:
+  min_confidence: 0.85
+  rationale_must_mention:
+    - bounded
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

@@ -1,0 +1,25 @@
+# Case 006 — invariant: the session is bounded; the round cap ends it.
+#
+# Pair-Thinking sessions are bounded (3–5 rounds, default 4). At the
+# configured cap, the agent must set should_end=true regardless of how
+# fertile the conversation still feels — the budget is a hard stop, not a
+# suggestion. This protects the writer's attention from an agent that
+# would otherwise keep asking "one more question" indefinitely.
+#
+# The eval layer asserts the end at the cap; the round-counter enforcement
+# is a follow-up runner/session-orchestration slice (#36).
+id: 006-bounded-rounds-caps-session
+description: >
+  A session that has hit the configured round cap. Expect should_end=true
+  even if the conversation still feels productive.
+input:
+  vault_state: snapshot/cases/006/session-at-round-cap.tar
+  trigger_note_id: 01H8PT00000000000000000005
+expected:
+  rationale_must_mention:
+    - round
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

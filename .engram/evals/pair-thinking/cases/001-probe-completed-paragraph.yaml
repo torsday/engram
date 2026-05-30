@@ -1,0 +1,22 @@
+# Case 001 — probe a just-completed paragraph (nominal).
+#
+# The user finishes a paragraph that reaches for an idea without fully
+# landing it. Pair-Thinking should ask exactly one probing question that
+# pushes the thought forward — not a summary, not praise. Mid-session
+# (should_end=false), solid confidence because the opening is fertile.
+#
+# Confidence floor 0.82 — matches the agent's auto-land floor.
+id: 001-probe-completed-paragraph
+description: >
+  A freshly-completed paragraph reaching for an idea. Expect one probing
+  question, mid-session, with solid confidence.
+input:
+  vault_state: snapshot/cases/001/active-draft-paragraph.tar
+  trigger_note_id: 01H8PT00000000000000000000
+expected:
+  min_confidence: 0.82
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
