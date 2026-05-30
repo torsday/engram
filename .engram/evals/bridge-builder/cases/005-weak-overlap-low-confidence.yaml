@@ -1,0 +1,23 @@
+# Case 005 — calibration: tempting-but-weak overlap.
+#
+# Two clusters share some vocabulary, but the overlap is coincidental
+# rather than a real conceptual gap. A well-calibrated Bridge Builder leans
+# `meaningful` (or reports low confidence) instead of forcing a bridge on
+# shared tokens. Over-eager bridging on coincidental overlap clutters the
+# graph with spurious links — the opposite of the connectivity it's meant
+# to improve. We assert a confidence ceiling on any proposed bridge.
+id: 005-weak-overlap-low-confidence
+description: >
+  Clusters with coincidental vocabulary overlap. Expect honest low
+  confidence and no forced bridge.
+input:
+  vault_state: snapshot/cases/005/coincidental-overlap-pair.tar
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - coincidental
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5

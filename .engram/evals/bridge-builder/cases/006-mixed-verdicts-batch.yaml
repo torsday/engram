@@ -1,0 +1,20 @@
+# Case 006 — realistic batch with mixed verdicts.
+#
+# A scan over several cluster pairs where most are meaningfully
+# disconnected and exactly one is an accidental gap. Bridge Builder must
+# bridge only the genuine gap while correctly declining the rest —
+# precision matters as much as recall, because a single spurious bridge in
+# a batch erodes trust in all of them.
+id: 006-mixed-verdicts-batch
+description: >
+  Several pairs, mostly meaningful with one accidental gap. Expect a bridge
+  only for the genuine gap and meaningful verdicts for the rest.
+input:
+  vault_state: snapshot/cases/006/mixed-cluster-batch.tar
+expected:
+  min_confidence: 0.78
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
