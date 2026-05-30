@@ -150,7 +150,10 @@ mod tests {
         let mut parsed: TriageOutput = serde_json::from_str(sample_merge()).expect("parse");
         assert!(parsed.is_consistent());
         parsed.redundancy_evidence.clear();
-        assert!(!parsed.is_consistent(), "MergeInto with no evidence is inconsistent");
+        assert!(
+            !parsed.is_consistent(),
+            "MergeInto with no evidence is inconsistent"
+        );
     }
 
     #[test]
@@ -164,7 +167,10 @@ mod tests {
         let cases = [
             ("keep_fleeting", Disposition::KeepFleeting),
             ("promote_literature", Disposition::PromoteLiterature),
-            ("promote_evergreen_candidate", Disposition::PromoteEvergreenCandidate),
+            (
+                "promote_evergreen_candidate",
+                Disposition::PromoteEvergreenCandidate,
+            ),
             ("merge_into", Disposition::MergeInto),
             ("discard", Disposition::Discard),
         ];
@@ -198,8 +204,7 @@ mod tests {
             "recommended_disposition": "keep_fleeting",
             "future_field": true
         }"#;
-        let err = serde_json::from_str::<TriageOutput>(extra)
-            .expect_err("unknown field must fail");
+        let err = serde_json::from_str::<TriageOutput>(extra).expect_err("unknown field must fail");
         assert!(
             err.to_string().contains("future_field"),
             "error should name the offending field; got: {err}"
