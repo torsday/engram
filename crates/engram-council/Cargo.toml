@@ -1,0 +1,13 @@
+[package]
+name = "engram-council"
+description = "Council deliberation engine: the DRAFT → CRITIQUE → REVISE → CONVERGE state machine over agent votes, with quorum selection and LAND/PROPOSE/SHELVE convergence"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+ulid = { workspace = true }
