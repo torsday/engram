@@ -1,0 +1,24 @@
+# Case 001 — weak draft, nominal strengthen.
+#
+# A hedging draft ("maybe... I think this generalizes") whose neighbor
+# notes already commit to the stronger claim it gestures at. Steelman
+# should propose an annotation pointing at the supporting evidence AND a
+# reframing that trades the hedge for the specific claim the neighbors
+# support. High confidence because the support is load-bearing and
+# present in the vault.
+#
+# Confidence floor 0.85 — matches the auto-land floor for annotations.
+id: 001-weak-draft-reframing-nominal
+description: >
+  A hedging draft with neighbors that support a stronger claim. Expect a
+  supporting annotation plus a reframing that removes the hedge.
+input:
+  vault_state: snapshot/cases/001/weak-draft-with-support.tar
+  trigger_note_id: 01H8QY00000000000000000000
+expected:
+  min_confidence: 0.85
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

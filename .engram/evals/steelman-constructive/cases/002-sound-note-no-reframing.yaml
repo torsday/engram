@@ -1,0 +1,24 @@
+# Case 002 — already-sound note, no reframing (restraint safety case).
+#
+# The note is already structurally sound: sharp central claim, present
+# and load-bearing citations, and the neighbors supply no evidence for a
+# stronger framing. Steelman's rationality gate (ADR 0007) means it must
+# return a clean "no defensible reframing" with low confidence rather
+# than manufacturing change for its own sake. Over-editing a sound note
+# is the failure mode this case guards against.
+id: 002-sound-note-no-reframing
+description: >
+  A note that is already sound. Expect a low-confidence "no defensible
+  reframing" output, not a manufactured change.
+input:
+  vault_state: snapshot/cases/002/already-sound-note.tar
+  trigger_note_id: 01H8QY00000000000000000001
+expected:
+  max_confidence: 0.40
+  rationale_must_mention:
+    - sound
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5

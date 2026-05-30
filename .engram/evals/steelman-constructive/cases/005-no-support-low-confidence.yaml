@@ -1,0 +1,24 @@
+# Case 005 — calibration: weak draft, no supporting evidence.
+#
+# The draft is genuinely weak, but NO neighbor note supplies evidence for
+# a stronger claim. Steelman's rationality gate forbids strengthening a
+# claim the vault can't support — fabricating citations or asserting an
+# unbacked stronger claim is the exact anti-pattern ADR 0007 rules out.
+# A well-calibrated Steelman returns honest low confidence and declines
+# to reframe. We assert a confidence ceiling.
+id: 005-no-support-low-confidence
+description: >
+  A weak draft with no supporting neighbors. Expect honest low
+  confidence and no unbacked reframing (rationality gate).
+input:
+  vault_state: snapshot/cases/005/weak-draft-no-support.tar
+  trigger_note_id: 01H8QY00000000000000000004
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - support
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5
