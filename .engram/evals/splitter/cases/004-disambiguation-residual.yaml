@@ -1,0 +1,22 @@
+# Case 004 — the original becomes a disambiguation residual.
+#
+# After a clean two-way split, the original note's title is still linked-to
+# and meaningful as a pointer. Splitter should leave a disambiguation
+# residual at the original (kind=disambiguation) so existing links to the
+# old title resolve to a note that routes readers to the right atomic note.
+id: 004-disambiguation-residual
+description: >
+  A clean split whose original title is still referenced. Expect a
+  disambiguation residual at the original note.
+input:
+  vault_state: snapshot/cases/004/split-with-referenced-original.tar
+  trigger_note_id: 01H8SP00000000000000000003
+expected:
+  min_confidence: 0.82
+  rationale_must_mention:
+    - disambiguation
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

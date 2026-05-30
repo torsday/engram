@@ -1,0 +1,23 @@
+# Case 001 — multi-concept note, nominal split.
+#
+# A note opens with three paragraphs on rate-distortion theory and then
+# pivots to editing-as-compression — two distinct concepts sharing
+# vocabulary. Splitter should propose two atomic notes, move the right
+# sections into each, and leave a disambiguation residual at the original.
+# Solid confidence because the topic shift is structurally visible.
+#
+# Confidence floor 0.82 — matches the council-convening floor.
+id: 001-multi-concept-split-nominal
+description: >
+  A note covering two distinct concepts. Expect a split into two atomic
+  notes with a disambiguation residual.
+input:
+  vault_state: snapshot/cases/001/two-concept-note.tar
+  trigger_note_id: 01H8SP00000000000000000000
+expected:
+  min_confidence: 0.82
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
