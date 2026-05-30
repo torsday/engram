@@ -1,0 +1,24 @@
+# Case 006 — calibration: fuzzy conceptual boundary, low confidence.
+#
+# The note arguably covers two things, but the boundary between them is
+# genuinely fuzzy — the second topic grows out of the first rather than
+# standing apart. A well-calibrated Splitter reports low confidence (or
+# declines) rather than forcing a split on a soft seam. Over-confident
+# splitting on a fuzzy boundary fragments a still-coherent note; we assert
+# a confidence ceiling.
+id: 006-fuzzy-boundary-low-confidence
+description: >
+  A note with a fuzzy internal boundary. Expect honest low confidence, not
+  a forced split on a soft seam.
+input:
+  vault_state: snapshot/cases/006/fuzzy-boundary-note.tar
+  trigger_note_id: 01H8SP00000000000000000005
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - boundary
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5

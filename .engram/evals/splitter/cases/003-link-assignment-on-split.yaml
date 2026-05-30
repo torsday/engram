@@ -1,0 +1,21 @@
+# Case 003 — split assigns incoming links to the right resulting note.
+#
+# The note being split has inbound links whose anchors clearly belong to
+# one resulting note or the other. Splitter's proposed_split must route
+# each incoming link to the correct resulting note (incoming_link_
+# assignment) so no link is left pointing at a note that no longer holds
+# the relevant content.
+id: 003-link-assignment-on-split
+description: >
+  A splittable note with clearly-attributable inbound links. Expect each
+  incoming link routed to the correct resulting note.
+input:
+  vault_state: snapshot/cases/003/splittable-with-links.tar
+  trigger_note_id: 01H8SP00000000000000000002
+expected:
+  min_confidence: 0.82
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

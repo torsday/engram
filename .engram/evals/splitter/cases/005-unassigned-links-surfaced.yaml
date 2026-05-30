@@ -1,0 +1,22 @@
+# Case 005 — ambiguous incoming links surfaced, not guessed.
+#
+# Some inbound links anchor on text that could belong to either resulting
+# note. Splitter should route the clear ones and surface the genuinely
+# ambiguous ones in unassigned_incoming_links rather than guessing — a
+# wrong link reassignment silently sends readers to the wrong note.
+id: 005-unassigned-links-surfaced
+description: >
+  A split with some ambiguous inbound links. Expect the clear links routed
+  and the ambiguous ones surfaced as unassigned.
+input:
+  vault_state: snapshot/cases/005/split-with-ambiguous-links.tar
+  trigger_note_id: 01H8SP00000000000000000004
+expected:
+  min_confidence: 0.80
+  rationale_must_mention:
+    - ambiguous
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.3
