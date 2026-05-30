@@ -1,0 +1,34 @@
+{
+  "confidence": 0.79,
+  "rationale": "The note treats note atomicity as an unqualified good, but a defensible tradition holds that aggressive atomization fragments arguments whose force depends on their connective tissue. The counter-position has real adherents and vault evidence; the risk is that it overstates how often connective notes actually get read.",
+  "shelved": false,
+  "target_note_id": "01H8X9ATOMIC",
+  "counter_note": {
+    "proposed_title": "Against: Every note should contain exactly one idea",
+    "central_counter_claim": "Strict one-idea atomicity can destroy the argumentative structure that makes a set of ideas more than the sum of its parts.",
+    "body": "The atomicity rule is sold as pure upside: small notes link better, recombine better, decay slower. But an argument is not a bag of claims — it is claims held in a particular relation. Split the relation across three atomic notes and the link graph records that they are related while losing *how*. The reader who follows the links reconstructs a sequence the author never has to defend as a whole. Atomicity optimizes for retrieval and recombination at the cost of the one thing a sustained argument needs: a place where its steps are committed to in order, where a weak inference cannot hide behind a wikilink.",
+    "engages_with": [
+      {
+        "original_quote": "Every note should contain exactly one idea.",
+        "counter": "An argument's load-bearing content is often the relation between ideas, not the ideas themselves; 'exactly one idea' has no place to put that relation, so it silently drops it."
+      }
+    ],
+    "counter_evidence": [
+      {
+        "note_id": "01H8XBLONGFORM",
+        "external_url": null,
+        "supports": "An earlier note where the author credits a breakthrough to writing a single long, sequential argument rather than atomic fragments."
+      },
+      {
+        "note_id": "01H8XCZETTEL",
+        "external_url": null,
+        "supports": "A note observing that the author's most-linked atomic notes are rarely revisited as a connected chain."
+      }
+    ],
+    "concedes": [
+      "For reference material and reusable definitions, atomicity genuinely does improve linking and reuse, exactly as the note claims.",
+      "Atomic notes decay more gracefully because each can be updated in isolation."
+    ],
+    "real_world_adherents": "Writers in the rhetoric and composition tradition who treat argument structure as primary; critics of pure Zettelkasten practice who argue it favors collection over composition."
+  }
+}

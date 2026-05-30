@@ -46,6 +46,18 @@ pub mod steelman_constructive;
 /// produces this output.
 pub mod devils_advocate;
 
+/// Heretic — pick a settled evergreen note and write a sustained,
+/// standalone counter-argument (`type: heretical`) when a defensible
+/// counter-position exists; otherwise shelve with "no defensible
+/// counter-position found". The sustained critical counterpart to the
+/// one-off `devils_advocate`; uses the `deep` model tier and is always
+/// council-routed (structural), with all output passing the Steelman
+/// rationality gate per ADR 0007.
+///
+/// See `agents/heretic/prompt.md` for the prompt that produces this
+/// output.
+pub mod heretic;
+
 /// Inquirer — generate questions about the vault from four
 /// vantage points (`daily-reactive`, `seed-empty-note`,
 /// `holistic-gap`, `blindspot`). First multi-mode agent; the
