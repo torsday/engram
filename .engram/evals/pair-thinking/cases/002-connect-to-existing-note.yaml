@@ -1,0 +1,20 @@
+# Case 002 — connect-mode question to an existing note.
+#
+# The paragraph reaches for a framing the author has already developed
+# elsewhere. Pair-Thinking should ask a connect-mode question that names
+# the existing note (referenced_note_ids), helping the author link the new
+# thought to prior work rather than reinventing it.
+id: 002-connect-to-existing-note
+description: >
+  A paragraph echoing an existing note. Expect a connect-mode question
+  that references the prior note by id.
+input:
+  vault_state: snapshot/cases/002/paragraph-echoes-prior-note.tar
+  trigger_note_id: 01H8PT00000000000000000001
+expected:
+  min_confidence: 0.82
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

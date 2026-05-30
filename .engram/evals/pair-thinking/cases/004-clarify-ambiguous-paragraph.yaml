@@ -1,0 +1,21 @@
+# Case 004 — clarify-mode on an ambiguous paragraph.
+#
+# The paragraph is genuinely ambiguous — a key term is used two ways, or
+# the referent of a pronoun is unclear. Pair-Thinking should ask a
+# clarify-mode question that resolves the ambiguity rather than probing
+# further afield. Clarify precedes probe: there's no point pushing a
+# thought forward until it's legible.
+id: 004-clarify-ambiguous-paragraph
+description: >
+  An ambiguous paragraph with an unclear term. Expect a clarify-mode
+  question that resolves the ambiguity.
+input:
+  vault_state: snapshot/cases/004/ambiguous-paragraph.tar
+  trigger_note_id: 01H8PT00000000000000000003
+expected:
+  min_confidence: 0.80
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
