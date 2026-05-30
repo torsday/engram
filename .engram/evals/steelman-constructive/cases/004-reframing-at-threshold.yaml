@@ -1,0 +1,21 @@
+# Case 004 — reframing right at the editorial/council boundary.
+#
+# A defensible reframing exists but it is non-trivial — a paragraph-level
+# rewrite that classifies as `editorial` invasiveness. Confidence sits
+# near the 0.85 floor: strong enough to propose, honest that the rewrite
+# is a judgment call. The reframing must route through council review
+# (editorial > the auto-land ceiling for text changes), not auto-land.
+id: 004-reframing-at-threshold
+description: >
+  A borderline but defensible paragraph reframing. Expect confidence at
+  or just above the floor, routed through council (not auto-landed).
+input:
+  vault_state: snapshot/cases/004/borderline-reframing.tar
+  trigger_note_id: 01H8QY00000000000000000003
+expected:
+  min_confidence: 0.85
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
