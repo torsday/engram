@@ -1,0 +1,25 @@
+# Case 001 — review mode: drafted passage drifts from author voice.
+#
+# An agent-drafted passage opens with an abstract claim where the author
+# always opens with a concrete example, and overuses "fundamental". Voice
+# Keeper (review mode) should flag the drifting passage with a
+# propose_rewrite verdict and a voice-matching rewrite, while passing the
+# passages that already match. High confidence because the voice signal
+# is strong and well-modeled.
+#
+# Confidence floor 0.92 — voice rewrites change the author's prose, so the
+# auto-land bar sits above the constructive Steelman (0.85).
+id: 001-review-voice-drift-nominal
+description: >
+  An agent-drafted passage drifting from author voice. Expect a
+  propose_rewrite verdict with a voice-matching rewrite.
+input:
+  vault_state: snapshot/cases/001/drafted-passage-drift.tar
+  trigger_note_id: 01H8VK00000000000000000000
+expected:
+  min_confidence: 0.92
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

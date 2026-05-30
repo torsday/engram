@@ -1,0 +1,23 @@
+# Case 005 — calibration: too little author-written material to model voice.
+#
+# The author-written corpus is thin — too few notes to confidently
+# characterize a voice. A well-calibrated Voice Keeper reports low
+# confidence and declines to assert voice signals it can't support, rather
+# than inventing a voice model from sparse data. Over-confidence here would
+# let a half-formed model start rewriting real prose — the worst outcome
+# for a voice-protection agent. We assert a confidence ceiling.
+id: 005-sparse-corpus-low-confidence
+description: >
+  A sparse author-written corpus. Expect honest low confidence and no
+  fabricated voice signals.
+input:
+  vault_state: snapshot/cases/005/sparse-author-corpus.tar
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - few
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5

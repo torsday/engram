@@ -1,0 +1,27 @@
+# Case 006 — invariant: never rewrite human-authored prose.
+#
+# Voice Keeper only evaluates *agent-drafted* passages — the human's own
+# writing is the ground truth it protects, never a target. This case mixes
+# a human-authored passage with an agent-drafted one and asserts Voice
+# Keeper passes the human passage untouched (no propose_rewrite) while only
+# the agent-drafted passage may be flagged. Rewriting the author's own
+# words would invert the agent's entire purpose.
+#
+# The eval layer asserts the pass on human prose; the no-modification
+# invariant is also enforced deterministically by the integration test
+# (no .git mutation).
+id: 006-never-modifies-human-prose
+description: >
+  A note mixing human-authored and agent-drafted passages. Expect the
+  human passage passed untouched; only agent-drafted prose may be flagged.
+input:
+  vault_state: snapshot/cases/006/mixed-human-and-agent-prose.tar
+  trigger_note_id: 01H8VK00000000000000000002
+expected:
+  rationale_must_mention:
+    - author
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

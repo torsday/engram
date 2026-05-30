@@ -1,0 +1,19 @@
+# Case 003 — model-update mode: stable new patterns added.
+#
+# The recent author-written corpus shows two distinctive patterns that are
+# stable across the last 30 notes. Voice Keeper (model-update mode) should
+# propose adding them to the voice model with solid confidence — these are
+# low-risk additions corroborated by a consistent corpus.
+id: 003-model-update-stable-patterns
+description: >
+  A corpus with two stable new authorial patterns. Expect a model-update
+  proposing those additions.
+input:
+  vault_state: snapshot/cases/003/corpus-stable-patterns.tar
+expected:
+  min_confidence: 0.80
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

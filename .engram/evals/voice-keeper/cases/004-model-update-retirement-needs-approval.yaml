@@ -1,0 +1,21 @@
+# Case 004 — model-update mode: a retired pattern flagged for approval.
+#
+# A pattern that was a 2024 habit has vanished from the 2025 corpus. Voice
+# Keeper should surface the retirement in the model_update — but flag it as
+# the higher-risk change that warrants human confirmation (retiring a voice
+# signal is sharper than adding one). The rationale must name the
+# retirement and recommend approval.
+id: 004-model-update-retirement-needs-approval
+description: >
+  A voice pattern that disappeared from the recent corpus. Expect a
+  model-update that surfaces the retirement and flags it for approval.
+input:
+  vault_state: snapshot/cases/004/corpus-retired-pattern.tar
+expected:
+  rationale_must_mention:
+    - retirement
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.3
