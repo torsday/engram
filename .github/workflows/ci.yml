@@ -65,6 +65,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Reclaim disk before the heavy compile. The workspace dep tree
+      # (lance, datafusion, arrow, lance-*) plus `--all-targets` linking
+      # every binary with debuginfo=2 exhausts the default ~14 GB free on
+      # the ubuntu-latest runner ("No space left on device" / linker bus
+      # error). Removing the preinstalled toolchains we don't use frees
+      # ~25 GB. Complements `cache-targets: false` below — that prevents
+      # the post-run cache-save overflow; this prevents the during-run one.
+      - name: free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          df -h /
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -91,6 +105,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      # Reclaim disk before the heavy compile. The workspace dep tree
+      # (lance, datafusion, arrow, lance-*) plus `cargo test --workspace`
+      # linking every test binary with debuginfo=2 exhausts the default
+      # ~14 GB free on the ubuntu-latest runner ("No space left on device"
+      # / linker bus error). Removing the preinstalled toolchains we don't
+      # use frees ~25 GB. Complements `cache-targets: false` below — that
+      # prevents the post-run cache-save overflow; this prevents the
+      # during-run one.
+      - name: free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          df -h /
 
       - uses: dtolnay/rust-toolchain@stable
 
