@@ -135,6 +135,125 @@ pub struct ModelUpdate {
     pub rationale: String,
 }
 
+// ── Sparse-content bootstrap gate ──────────────────────────────────────────
+//
+// Per `docs/design/08-first-run.md` §Sparse-content bootstrap → Voice Keeper,
+// the agent's behavior is *tiered* by how much human-authored material exists,
+// because voice analysis needs a baseline before it can be trusted:
+//
+//   - `< 50` human notes  → observe-only: build the voice model passively, but
+//     do NOT join council or critique agent output.
+//   - `≥ 50` notes        → propose-only: join council; rewrites are always
+//     reviewed, never auto-landed.
+//   - `≥ 200` notes AND `≥ 30` days → mature: operate per the full design.
+//
+// These are the canonical thresholds. (Issue #137's original acceptance
+// criteria listed `≥ 10 notes / 2K words`; that predated 08-first-run.md and is
+// superseded by the tiered design above, which the rest of the bootstrap story
+// — Biographer's 200/60 `SparseContentGate`, Annual Review's 12-month
+// `MaturityGate` — already follows.)
+//
+// The snapshot type is shared with the Biographer gate; both are pure
+// deterministic checks the runtime evaluates before spending LLM tokens. (A
+// future slice may promote `VaultSnapshot` into a shared `sparse_content`
+// module; today it lives with the Biographer gate that introduced it.)
+
+pub use super::biographer::VaultSnapshot;
+
+/// Which operating tier Voice Keeper is in, given the vault's size and age.
+///
+/// The tier is a deterministic function of a [`VaultSnapshot`] (see
+/// [`VoiceKeeperBootstrap::tier`]); it gates *behavior*, not output schema —
+/// the runtime reads the tier to decide whether Voice Keeper joins council and
+/// whether its rewrites may ever auto-land.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VoiceKeeperTier {
+    /// `< 50` human notes. Build the voice model passively; do not join
+    /// council or critique. The honest stance when there isn't yet enough
+    /// authorial material to model a voice without fabricating one.
+    ObserveOnly,
+    /// `≥ 50` notes (but not yet mature). Join council; every rewrite is
+    /// reviewed, never auto-landed.
+    ProposeOnly,
+    /// `≥ 200` notes and `≥ 30` days. Operate per the full mature design.
+    Mature,
+}
+
+impl VoiceKeeperTier {
+    /// Whether Voice Keeper participates in council deliberations in this
+    /// tier. False only in [`ObserveOnly`](VoiceKeeperTier::ObserveOnly).
+    pub fn participates_in_council(self) -> bool {
+        !matches!(self, Self::ObserveOnly)
+    }
+
+    /// Whether a Voice Keeper rewrite may ever auto-land in this tier. Only
+    /// the mature tier may auto-land; below it, every rewrite is reviewed.
+    pub fn may_auto_land(self) -> bool {
+        matches!(self, Self::Mature)
+    }
+}
+
+/// Deterministic gate that classifies Voice Keeper's operating tier from a
+/// vault snapshot. Thresholds default to the design-doc values; they are
+/// fields so a test (or a future per-user override) can vary them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VoiceKeeperBootstrap {
+    /// Below this human-note count, Voice Keeper is observe-only.
+    pub observe_below_notes: u32,
+    /// At or above `observe_below_notes` but below this, Voice Keeper is
+    /// propose-only. At or above this (with sufficient age) it is mature.
+    pub mature_min_notes: u32,
+    /// Minimum vault age in days for the mature tier (in addition to
+    /// `mature_min_notes`).
+    pub mature_min_age_days: u32,
+}
+
+impl Default for VoiceKeeperBootstrap {
+    /// Design-doc thresholds: observe-only `< 50`, propose-only `≥ 50`,
+    /// mature `≥ 200` notes and `≥ 30` days.
+    fn default() -> Self {
+        Self {
+            observe_below_notes: 50,
+            mature_min_notes: 200,
+            mature_min_age_days: 30,
+        }
+    }
+}
+
+impl VoiceKeeperBootstrap {
+    /// Classify the operating tier for a given vault snapshot.
+    ///
+    /// Mature requires BOTH enough notes and enough age — a 300-note vault
+    /// that is only a week old is still propose-only, because a voice model
+    /// built from a single intense week may not generalize.
+    pub fn tier(&self, snapshot: VaultSnapshot) -> VoiceKeeperTier {
+        if snapshot.human_notes_total < self.observe_below_notes {
+            VoiceKeeperTier::ObserveOnly
+        } else if snapshot.human_notes_total >= self.mature_min_notes
+            && snapshot.age_days >= self.mature_min_age_days
+        {
+            VoiceKeeperTier::Mature
+        } else {
+            VoiceKeeperTier::ProposeOnly
+        }
+    }
+
+    /// Human-readable reason string for the observe-only tier, suitable for the
+    /// standup line "Voice Keeper sleeping: …". Returns `None` when the tier is
+    /// not observe-only (nothing to explain — the agent is active).
+    pub fn observe_only_reason(&self, snapshot: VaultSnapshot) -> Option<String> {
+        match self.tier(snapshot) {
+            VoiceKeeperTier::ObserveOnly => Some(format!(
+                "Voice Keeper is observe-only: {} human notes ({} required to join \
+                 council). Building the voice model passively until then.",
+                snapshot.human_notes_total, self.observe_below_notes,
+            )),
+            VoiceKeeperTier::ProposeOnly | VoiceKeeperTier::Mature => None,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -292,5 +411,73 @@ mod tests {
             "field order must be confidence < rationale < mode < verdicts \
              (got {conf_idx}, {rat_idx}, {mode_idx}, {v_idx})"
         );
+    }
+
+    // ── Sparse-content bootstrap gate ──────────────────────────────────────
+
+    fn snap(notes: u32, age_days: u32) -> VaultSnapshot {
+        VaultSnapshot {
+            human_notes_total: notes,
+            age_days,
+        }
+    }
+
+    #[test]
+    fn tier_below_50_notes_is_observe_only() {
+        let g = VoiceKeeperBootstrap::default();
+        assert_eq!(g.tier(snap(0, 0)), VoiceKeeperTier::ObserveOnly);
+        assert_eq!(g.tier(snap(49, 365)), VoiceKeeperTier::ObserveOnly);
+        // Age is irrelevant below the note floor.
+        assert!(!g.tier(snap(49, 365)).participates_in_council());
+    }
+
+    #[test]
+    fn tier_50_to_199_notes_is_propose_only() {
+        let g = VoiceKeeperBootstrap::default();
+        assert_eq!(g.tier(snap(50, 30)), VoiceKeeperTier::ProposeOnly);
+        assert_eq!(g.tier(snap(199, 9_999)), VoiceKeeperTier::ProposeOnly);
+        let t = g.tier(snap(50, 30));
+        assert!(t.participates_in_council(), "propose-only joins council");
+        assert!(!t.may_auto_land(), "propose-only never auto-lands");
+    }
+
+    #[test]
+    fn tier_mature_requires_both_notes_and_age() {
+        let g = VoiceKeeperBootstrap::default();
+        // Enough notes but too young → still propose-only.
+        assert_eq!(g.tier(snap(300, 29)), VoiceKeeperTier::ProposeOnly);
+        // Both thresholds met → mature.
+        assert_eq!(g.tier(snap(200, 30)), VoiceKeeperTier::Mature);
+        assert!(g.tier(snap(200, 30)).may_auto_land());
+    }
+
+    #[test]
+    fn observe_only_reason_present_only_when_observe_only() {
+        let g = VoiceKeeperBootstrap::default();
+        let r = g
+            .observe_only_reason(snap(12, 5))
+            .expect("observe-only reason");
+        assert!(
+            r.contains("12") && r.contains("50"),
+            "reason names the figures: {r}"
+        );
+        assert!(g.observe_only_reason(snap(50, 30)).is_none());
+        assert!(g.observe_only_reason(snap(200, 30)).is_none());
+    }
+
+    #[test]
+    fn tier_round_trips_via_serde_kebab_case() {
+        for (t, s) in [
+            (VoiceKeeperTier::ObserveOnly, "\"observe-only\""),
+            (VoiceKeeperTier::ProposeOnly, "\"propose-only\""),
+            (VoiceKeeperTier::Mature, "\"mature\""),
+        ] {
+            assert_eq!(serde_json::to_string(&t).unwrap(), s);
+            assert_eq!(
+                serde_json::from_str::<VoiceKeeperTier>(s).unwrap(),
+                t,
+                "kebab-case round trip for {s}"
+            );
+        }
     }
 }
