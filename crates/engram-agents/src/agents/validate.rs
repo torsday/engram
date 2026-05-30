@@ -45,9 +45,9 @@ use super::{
     biographer::BiographerOutput, bridge_builder::BridgeBuilderOutput,
     completion_nudger::CompletionNudgerOutput, confidence_annotator::ConfidenceAnnotatorOutput,
     devils_advocate::DevilsAdvocateOutput, gardener::GardenerOutput, historian::HistorianOutput,
-    inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
-    pair_thinking::PairThinkingTurn, predictor::PredictorOutput, scribe::ScribeOutput,
-    source_demand::SourceDemandOutput, splitter::SplitterOutput,
+    inbox_triage::TriageOutput, inquirer::InquirerOutput, linker::LinkerOutput,
+    merger::MergerOutput, pair_thinking::PairThinkingTurn, predictor::PredictorOutput,
+    scribe::ScribeOutput, source_demand::SourceDemandOutput, splitter::SplitterOutput,
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     tutor::TutorOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
 };
@@ -137,6 +137,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "tutor" => check::<TutorOutput>(agent_name, text),
         "historian" => check::<HistorianOutput>(agent_name, text),
         "biographer" => check::<BiographerOutput>(agent_name, text),
+        "inbox-triage" => check::<TriageOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -170,6 +171,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "tutor",
         "historian",
         "biographer",
+        "inbox-triage",
     ]
 }
 

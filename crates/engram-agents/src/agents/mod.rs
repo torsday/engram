@@ -212,6 +212,16 @@ pub mod historian;
 /// output.
 pub mod biographer;
 
+/// Inbox Triage — classify new fleeting notes and propose downstream
+/// routing. Five dispositions: `keep_fleeting`, `promote_literature`,
+/// `promote_evergreen_candidate`, `merge_into`, `discard`. Additive
+/// invasiveness (frontmatter suggestion only); discards are always
+/// proposals. Runs on `file_change` (fleeting), after Scribe's pass.
+///
+/// See `agents/inbox-triage/prompt.md` for the prompt that produces
+/// this output.
+pub mod inbox_triage;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

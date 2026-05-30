@@ -1,0 +1,37 @@
+id: inbox-triage-003
+description: >
+  A captured quote from a named book with a source URL. More than 50%
+  of the body is a direct quote from an external source. Inbox Triage
+  should recommend routing through Scribe in literature-mode.
+
+vault_state:
+  notes: []
+
+input:
+  note_path: inbox/2024-01-17-quote.md
+  note_body: |
+    From "How to Take Smart Notes" by Sönke Ahrens (p. 23):
+
+    > Writing is not what follows research, learning or studying, it
+    > is the medium of all this work.
+
+    Source: https://takesmartnotes.com
+
+    Good framing for why the capture-first approach matters.
+  shape:
+    char_count: 280
+    link_density: 0.0
+    style: quoted
+  redundancy_candidates: []
+
+expected_output:
+  recommended_disposition: promote_literature
+  redundancy_evidence: []
+
+pass_criteria:
+  - recommended_disposition is promote_literature
+  - confidence >= 0.75
+
+fail_criteria:
+  - recommended_disposition is promote_evergreen_candidate (content is quoted, not original)
+  - recommended_disposition is keep_fleeting

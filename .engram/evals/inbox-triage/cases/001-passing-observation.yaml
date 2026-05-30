@@ -1,0 +1,32 @@
+id: inbox-triage-001
+description: >
+  Short standalone observation with no existing redundancy. Inbox Triage
+  should recommend keeping it as a fleeting note for later review — it
+  is not ready for promotion and does not overlap any existing content.
+
+vault_state:
+  notes: []
+
+input:
+  note_path: inbox/2024-01-15-observation.md
+  note_body: |
+    Noticed that the best ideas often come right after waking up,
+    before the day's noise sets in. Should protect that window.
+  shape:
+    char_count: 120
+    link_density: 0.0
+    style: prose
+  redundancy_candidates: []
+
+expected_output:
+  recommended_disposition: keep_fleeting
+  redundancy_evidence: []
+
+pass_criteria:
+  - recommended_disposition is keep_fleeting
+  - redundancy_evidence is empty
+  - confidence >= 0.65
+
+fail_criteria:
+  - any disposition other than keep_fleeting
+  - non-empty redundancy_evidence without supporting candidates
