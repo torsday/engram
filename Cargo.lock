@@ -2307,6 +2307,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "engram-council"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.18",
+ "tracing",
+ "ulid",
+]
+
+[[package]]
 name = "engram-eval"
 version = "0.1.0"
 dependencies = [
