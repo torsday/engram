@@ -1368,4 +1368,64 @@ trigger = "INVALID_TRIGGER"
         let err = AgentConfig::load(&dir.path().join("agents"), "bad-trigger").unwrap_err();
         assert!(matches!(err, ConfigError::Parse { .. }));
     }
+
+    /// The canonical cross-crate fixture at
+    /// `tests/fixtures/agents/example/config.toml` must parse via this
+    /// crate's schema with every field read back at its (non-default)
+    /// fixture value. The runner's projected view is verified against
+    /// the same file in `engram-agents` so both deserializers stay in
+    /// lockstep. See ADR 0017 (agent config schema).
+    #[test]
+    fn canonical_example_fixture_parses_every_field() {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root reachable from manifest dir");
+        let path = workspace.join("tests/fixtures/agents/example/config.toml");
+        let raw = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
+        let cfg: AgentConfig =
+            toml::from_str(&raw).unwrap_or_else(|e| panic!("parse {}: {}", path.display(), e));
+
+        // [agent]
+        assert_eq!(cfg.agent.name, "example");
+        assert_eq!(
+            cfg.agent.description,
+            "Canonical fixture exercising every supported AgentConfig field."
+        );
+        assert_eq!(cfg.agent.model_tier, ModelTier::Deep);
+        // [schedule]
+        assert_eq!(cfg.schedule.trigger, AgentTrigger::Cron);
+        assert_eq!(cfg.schedule.cron, "0 3 * * *");
+        assert_eq!(cfg.schedule.debounce_seconds, 45);
+        // [permissions]
+        assert!(cfg.permissions.may_create_notes);
+        assert!(!cfg.permissions.may_modify_notes);
+        assert!(cfg.permissions.may_delete_notes);
+        assert_eq!(cfg.permissions.note_types, vec!["evergreen", "moc"]);
+        assert_eq!(
+            cfg.permissions.max_invasiveness,
+            InvasivenessLevel::Structural
+        );
+        // [autonomy]
+        assert_eq!(cfg.autonomy.auto_land_min_confidence, 0.9);
+        assert!(!cfg.autonomy.trust_modulates_threshold);
+        // [council]
+        assert!(!cfg.council.participates);
+        assert!(cfg.council.may_convene);
+        // [memory]
+        assert!(!cfg.memory.enabled);
+        assert_eq!(cfg.memory.rejection_ttl_days, 120);
+        assert_eq!(cfg.memory.max_entries, 5000);
+        // [trust]
+        assert_eq!(cfg.trust.initial_level, TrustLevel::High);
+        assert_eq!(cfg.trust.min_decisions_for_promotion, 50);
+        // [budget]
+        assert_eq!(cfg.budget.monthly_tokens, 250_000);
+        assert!(!cfg.budget.auto_pause);
+        // [conversation]
+        assert!(cfg.conversation.enabled);
+        assert_eq!(cfg.conversation.max_rounds, 6);
+    }
 }

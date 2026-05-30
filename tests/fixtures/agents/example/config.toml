@@ -1,0 +1,53 @@
+# Canonical AgentConfig fixture — exercises EVERY supported field.
+#
+# This is not a real agent. It exists so both deserializers of
+# `agents/<name>/config.toml` — `engram_core::config::AgentConfig`
+# (the canonical, spec-derived schema) and the projected view in
+# `engram_agents::runner::AgentConfig` — can be tested against a
+# single source of truth. See ADR 0017 (agent config schema).
+#
+# Every value below is deliberately *non-default* so a test can
+# distinguish "field was read" from "field fell through to its
+# default". Keep it that way when adding fields.
+
+[agent]
+name = "example"
+description = "Canonical fixture exercising every supported AgentConfig field."
+model_tier = "deep"   # non-default (default: fast)
+
+[schedule]
+trigger = "cron"      # non-default (default: on_demand)
+cron = "0 3 * * *"
+debounce_seconds = 45 # non-default (default: 30)
+
+[permissions]
+may_create_notes = true   # non-default (default: false)
+may_modify_notes = false  # non-default (default: true)
+may_delete_notes = true   # non-default (default: false)
+note_types = ["evergreen", "moc"]   # non-default
+max_invasiveness = "structural"     # non-default (default: additive)
+
+[autonomy]
+auto_land_min_confidence = 0.9      # non-default (default: 0.85)
+trust_modulates_threshold = false   # non-default (default: true)
+
+[council]
+participates = false  # non-default (default: true)
+may_convene = true    # non-default (default: false)
+
+[memory]
+enabled = false           # non-default (default: true)
+rejection_ttl_days = 120  # non-default (default: 90)
+max_entries = 5000        # non-default (default: 10000)
+
+[trust]
+initial_level = "high"            # non-default (default: medium)
+min_decisions_for_promotion = 50  # non-default (default: 30)
+
+[budget]
+monthly_tokens = 250000  # non-default (default: 500000)
+auto_pause = false       # non-default (default: true)
+
+[conversation]
+enabled = true   # non-default (default: false)
+max_rounds = 6   # non-default (default: 0)

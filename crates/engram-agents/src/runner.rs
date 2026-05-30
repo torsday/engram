@@ -2235,6 +2235,35 @@ auto_land_min_confidence = 0.9
         assert_eq!(cfg.cron_interval_secs, 60);
     }
 
+    /// The canonical cross-crate fixture at
+    /// `tests/fixtures/agents/example/config.toml` must parse via
+    /// `from_toml` and project into the runner's flat view. The same
+    /// file is asserted field-by-field against `engram-core`'s schema
+    /// in that crate's tests; together they prove both deserializers
+    /// accept one source of truth. See ADR 0017 (agent config schema).
+    #[test]
+    fn from_toml_accepts_canonical_example_fixture() {
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root reachable from manifest dir");
+        let path = workspace.join("tests/fixtures/agents/example/config.toml");
+        let raw = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
+        let cfg = AgentConfig::from_toml(&raw)
+            .unwrap_or_else(|e| panic!("parse {}: {}", path.display(), e));
+
+        // Projected view: name, trigger, confidence, invasiveness.
+        assert_eq!(cfg.name, "example");
+        assert_eq!(cfg.trigger, TriggerKind::Cron);
+        assert!((cfg.confidence_threshold - 0.9).abs() < 1e-6);
+        assert_eq!(cfg.max_invasiveness, Invasiveness::Structural);
+        // engram-core's `cron: String` doesn't map onto the runner's
+        // tick period — from_core defaults it to 60s.
+        assert_eq!(cfg.cron_interval_secs, 60);
+    }
+
     /// The legacy flat shape still parses — preserves back-compat
     /// for the runner's own test fixtures. Will be dropped once
     /// every fixture migrates to the nested shape.
