@@ -1,0 +1,21 @@
+# Case 005 — on-demand trigger on a rich year with many milestones.
+#
+# Annual Review also runs on demand (not only on the scheduled date). This
+# case invokes it mid-cycle on a year dense with milestones — many ideas
+# crystallized, several threads abandoned. Expect a high-confidence reflection
+# that enumerates multiple milestones.
+id: 005-on-demand-rich-year
+description: >
+  On-demand invocation on a milestone-dense year. Expect a confident
+  reflection that surfaces multiple intellectual milestones.
+input:
+  vault_state: snapshot/cases/005/rich-year.tar
+expected:
+  min_confidence: 0.85
+  rationale_must_mention:
+    - milestones
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 0.5
+  cost_weight: 0.2

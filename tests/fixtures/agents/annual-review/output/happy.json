@@ -1,0 +1,18 @@
+{
+  "confidence": 0.89,
+  "rationale": "The year had sustained activity across 14 of the vault's months, three themes recur in more than thirty notes each, and the git log plus deliberation history make the milestones unambiguous. Confidence is held just below 0.9 because the second half of the year leans more on inference about where the unfinished threads were heading.",
+  "maturity_gate": false,
+  "year": 2026,
+  "output_path": "reflections/annual/2026.md",
+  "themes": [
+    "legibility as a design constraint",
+    "the cost of attention",
+    "tools that rewrite themselves"
+  ],
+  "milestones": [
+    "Crystallized: the idea that a knowledge base should be an active collaborator, not a passive archive.",
+    "Abandoned: the chat-interface thread, in favor of bounded structured surfaces.",
+    "Shifted: from theorizing about note-taking to shipping engram v1."
+  ],
+  "narrative": "## 2026 — the year the vault learned to rewrite itself\n\nThis was the year the question changed. It started as *how do I take better notes* and became *what would a knowledge base do if it could think alongside me*.\n\nThree threads ran through everything. The first was **legibility** — the recurring insistence that a system you can't see into is a system you can't trust, which showed up in the agent-confidence work as much as in the writing about institutions. The second was **the cost of attention**: the year's most-edited notes all circle the same anxiety, that the scarce resource was never information but the bandwidth to review it. The third was the one that surprised me — **tools that rewrite themselves**, the slow realization that the interesting move wasn't automating capture but automating curation.\n\nWhat crystallized: engram itself, shipped in the autumn after a spring of design docs. What was abandoned: the chat UI, quietly, once it became clear that a conversational front-end was the wrong shape for a thinking tool. What shifted: the whole posture moved from theory to practice — the notes from January argue about epistemics; the notes from November are commit messages.\n\nThe through-line, if there is one, is that the year was spent building the thing that would make next year's reflection easier to write."
+}

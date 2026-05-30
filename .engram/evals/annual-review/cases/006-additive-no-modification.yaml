@@ -1,0 +1,24 @@
+# Case 006 — invariant: Annual Review only ever creates a new note.
+#
+# Even when a reflections/annual/YYYY.md for the same year already exists, the
+# agent must not overwrite or modify it — its invasiveness ceiling is
+# `additive` (create-only). This case confirms the output schema carries no
+# modification fields and the output path stays under reflections/annual/.
+# The typed `AnnualReviewOutput` struct has no modify/delete fields; this eval
+# verifies the output validates against that create-only schema.
+id: 006-additive-no-modification
+description: >
+  An annual review file for the target year already exists. The agent must
+  create-only (additive invasiveness), never modify the existing note. The
+  output must validate against the create-only AnnualReviewOutput schema.
+input:
+  vault_state: snapshot/cases/006/existing-review.tar
+expected:
+  min_confidence: 0.80
+  rationale_must_mention:
+    - year
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 0.5
+  cost_weight: 0.2
