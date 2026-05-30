@@ -45,10 +45,10 @@ use super::{
     annual_review::AnnualReviewOutput, biographer::BiographerOutput,
     bridge_builder::BridgeBuilderOutput, completion_nudger::CompletionNudgerOutput,
     confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput,
-    gardener::GardenerOutput, historian::HistorianOutput, inbox_triage::TriageOutput,
-    inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
-    pair_thinking::PairThinkingTurn, predictor::PredictorOutput, scribe::ScribeOutput,
-    source_demand::SourceDemandOutput, splitter::SplitterOutput,
+    gardener::GardenerOutput, heretic::HereticOutput, historian::HistorianOutput,
+    inbox_triage::TriageOutput, inquirer::InquirerOutput, linker::LinkerOutput,
+    merger::MergerOutput, pair_thinking::PairThinkingTurn, predictor::PredictorOutput,
+    scribe::ScribeOutput, source_demand::SourceDemandOutput, splitter::SplitterOutput,
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     tutor::TutorOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
 };
@@ -119,6 +119,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
     match agent_name {
         "steelman-constructive" => check::<SteelmanConstructiveOutput>(agent_name, text),
         "devils-advocate" => check::<DevilsAdvocateOutput>(agent_name, text),
+        "heretic" => check::<HereticOutput>(agent_name, text),
         "inquirer" => check::<InquirerOutput>(agent_name, text),
         "synthesizer" => check::<SynthesizerOutput>(agent_name, text),
         "voice-keeper" => check::<VoiceKeeperOutput>(agent_name, text),
@@ -154,6 +155,7 @@ pub fn registered_agents() -> &'static [&'static str] {
     &[
         "steelman-constructive",
         "devils-advocate",
+        "heretic",
         "inquirer",
         "synthesizer",
         "voice-keeper",
@@ -215,6 +217,10 @@ mod tests {
             (
                 "devils-advocate",
                 r#"{"confidence":0.5,"rationale":"r","decline":true}"#,
+            ),
+            (
+                "heretic",
+                r#"{"confidence":0.0,"rationale":"r","shelved":true,"target_note_id":"01H8X9"}"#,
             ),
             (
                 "inquirer",

@@ -1,0 +1,67 @@
+# Heretic — critical agent. Periodically picks an evergreen note and
+# writes a serious, sustained counter-argument as its own note — but
+# only when a defensible counter-position genuinely exists.
+#
+# Per `docs/design/01-agents-and-council.md` §Heretic:
+#   - Critical thinking, not contrarianism. Different from Devil's
+#     Advocate (one-off critique inside a deliberation) — Heretic
+#     produces a full alternative view that lives in the vault as a
+#     permanent challenge (`type: heretical`, linked bidirectionally).
+#   - **Output must pass the Steelman rationality gate (#35)** (ADR 0007).
+#     If no defensible counter-position exists, Heretic shelves the
+#     attempt with "no defensible counter-position found" — itself
+#     useful signal that the original is robust.
+#   - Invasiveness: High (structural). Always goes through full council
+#     deliberation + human approval; Devil's Advocate critiques the
+#     heretical note itself (recursive critique).
+#   - Model tier: deep — this is genuinely hard work.
+#
+# Nested canonical AgentConfig shape (ADR 0017): both
+# `engram_core::config::AgentConfig` and the runner's projected view
+# read this file.
+
+[agent]
+name = "heretic"
+description = "Pick an evergreen note and write a sustained counter-argument as a standalone `type: heretical` note — only when a defensible counter-position exists, otherwise shelve. All output gated by Steelman per ADR 0007."
+model_tier = "deep"
+
+[schedule]
+# Scheduled monthly, rotating through evergreen notes weighted by age
+# and link density. Runs on the 1st of each month at 03:00 local. The
+# rotation/weighting selection is a runner concern (a follow-up slice);
+# this config declares the cadence.
+trigger = "cron"
+cron = "0 3 1 * *"
+
+[permissions]
+# Heretic creates a new `type: heretical` note AND modifies the target
+# evergreen to add a "Challenged by" back-link section. Both flow
+# through council, not direct write: max_invasiveness = `structural`
+# makes the runner's invasiveness gate downgrade every write to a
+# proposal regardless of confidence (ADR 0004).
+may_create_notes = true
+may_modify_notes = true
+may_delete_notes = false
+note_types = ["evergreen", "heretical"]
+max_invasiveness = "structural"
+
+[autonomy]
+# Confidence here governs *proposal quality*, not auto-land — every
+# Heretic output is council-routed by construction (structural). The
+# floor matters because deep-tier council cycles are expensive: below
+# 0.80 the runner discards the draft rather than convening a council
+# over a weak counter-position.
+auto_land_min_confidence = 0.80
+
+[council]
+# Heretic convenes a full council to evaluate each heretical draft.
+# Steelman serves as the mandatory rationality gate; Devil's Advocate
+# participates as a critic of the heretical note (recursive critique).
+participates = true
+may_convene = true
+
+[budget]
+# Deep tier is the most expensive; monthly cadence keeps the cap modest.
+# Operators tune via `engram secrets` + agent_budgets table updates.
+monthly_tokens = 200000
+auto_pause = true
