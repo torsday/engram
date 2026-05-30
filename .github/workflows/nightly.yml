@@ -5,6 +5,10 @@ on:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 
@@ -12,6 +16,7 @@ jobs:
   real-llm:
     name: real-llm
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -28,11 +33,12 @@ jobs:
             echo "ANTHROPIC_API_KEY not set — skipping real-provider tests"
             exit 0
           fi
-          cargo test --workspace -- --ignored
+          cargo test --workspace --locked -- --ignored
 
   sbom:
     name: sbom
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +46,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Pin the version so the SBOM tool is reproducible run-to-run, and use
+      # `--locked` so the install resolves cargo-cyclonedx's own deps from its
+      # committed lockfile rather than the latest semver-compatible set.
       - name: install cargo-cyclonedx
         # Pinned: cargo-cyclonedx 0.5.x dropped the --output-file flag the
         # job used to pass; pin so an upstream CLI change can't silently
