@@ -1,0 +1,22 @@
+# Case 003 — boundary: exactly at the maturity threshold.
+#
+# A vault exactly 365 days old. The maturity gate uses `>=`, so this passes
+# (it does NOT abstain). The reflection covers months 1–12 — the first annual
+# review. Confidence is moderate: a first year is real but the agent has no
+# prior review to anchor drift against.
+id: 003-at-threshold-passes
+description: >
+  Vault exactly 365 days old. The gate passes (boundary case); expect a
+  real first-year reflection, not an abstention, with at least moderate
+  confidence.
+input:
+  vault_state: snapshot/cases/003/exactly-one-year.tar
+expected:
+  min_confidence: 0.70
+  rationale_must_mention:
+    - year
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 0.5
+  cost_weight: 0.2

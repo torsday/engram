@@ -222,6 +222,19 @@ pub mod biographer;
 /// this output.
 pub mod inbox_triage;
 
+/// Annual Review — once per year, produce a long-form narrative reflection on
+/// the vault's evolution (themes, what crystallized vs. was abandoned, key
+/// insights, intellectual milestones). Temporal agent; additive invasiveness
+/// (one note per year at `reflections/annual/YYYY.md`); always human-approved
+/// (a personal artifact). Carries a deterministic maturity gate that abstains
+/// until the vault is ≥ 12 months old, plus a confidence formula
+/// (0.5×LLM + 0.3×corpus-coverage + 0.2×temporal-span). Uses the `deep`
+/// model tier.
+///
+/// See `agents/annual-review/prompt.md` for the prompt that produces this
+/// output.
+pub mod annual_review;
+
 /// Single dispatch entry point over all typed agent outputs.
 /// Used by callers (eval cases, CLI dry-runs, schema-drift CI
 /// checks) that want strict validation; the runner's hot path

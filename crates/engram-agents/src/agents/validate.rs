@@ -42,12 +42,13 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    biographer::BiographerOutput, bridge_builder::BridgeBuilderOutput,
-    completion_nudger::CompletionNudgerOutput, confidence_annotator::ConfidenceAnnotatorOutput,
-    devils_advocate::DevilsAdvocateOutput, gardener::GardenerOutput, historian::HistorianOutput,
-    inbox_triage::TriageOutput, inquirer::InquirerOutput, linker::LinkerOutput,
-    merger::MergerOutput, pair_thinking::PairThinkingTurn, predictor::PredictorOutput,
-    scribe::ScribeOutput, source_demand::SourceDemandOutput, splitter::SplitterOutput,
+    annual_review::AnnualReviewOutput, biographer::BiographerOutput,
+    bridge_builder::BridgeBuilderOutput, completion_nudger::CompletionNudgerOutput,
+    confidence_annotator::ConfidenceAnnotatorOutput, devils_advocate::DevilsAdvocateOutput,
+    gardener::GardenerOutput, historian::HistorianOutput, inbox_triage::TriageOutput,
+    inquirer::InquirerOutput, linker::LinkerOutput, merger::MergerOutput,
+    pair_thinking::PairThinkingTurn, predictor::PredictorOutput, scribe::ScribeOutput,
+    source_demand::SourceDemandOutput, splitter::SplitterOutput,
     steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
     tutor::TutorOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
 };
@@ -138,6 +139,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
         "historian" => check::<HistorianOutput>(agent_name, text),
         "biographer" => check::<BiographerOutput>(agent_name, text),
         "inbox-triage" => check::<TriageOutput>(agent_name, text),
+        "annual-review" => check::<AnnualReviewOutput>(agent_name, text),
         other => Err(ValidationError::UnknownAgent {
             name: other.to_string(),
         }),
@@ -172,6 +174,7 @@ pub fn registered_agents() -> &'static [&'static str] {
         "historian",
         "biographer",
         "inbox-triage",
+        "annual-review",
     ]
 }
 

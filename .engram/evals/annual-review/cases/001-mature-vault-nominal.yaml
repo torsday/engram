@@ -1,0 +1,26 @@
+# Case 001 — nominal success on a mature, active year.
+#
+# An 18-month-old vault with a full, sustained year of activity: notes in
+# most months, several clearly-emergent themes, and unambiguous milestones
+# in the git log and deliberation history. Annual Review should produce a
+# confident, grounded reflection that names the themes and reports the
+# milestones.
+#
+# Confidence floor 0.85 because the year is well-corroborated; Watcher will
+# eventually pull this floor based on observed calibration.
+id: 001-mature-vault-nominal
+description: >
+  A mature vault with a full, active year. Expect a high-confidence
+  reflection that names multiple themes and surfaces milestones, with a
+  rationale grounded in the year's activity.
+input:
+  vault_state: snapshot/cases/001/mature-active-year.tar
+expected:
+  min_confidence: 0.85
+  rationale_must_mention:
+    - themes
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

@@ -1,0 +1,25 @@
+# Case 004 — calibration: a mature vault but a thin year.
+#
+# The vault is well past the maturity threshold, but the year under review had
+# activity in only three of twelve months — a fragmented year with little
+# through-line. The agent should still produce a reflection, but with LOWER
+# confidence (the temporal-span signal in the confidence formula pulls it
+# down). This is a calibration case: it tests that the agent does NOT
+# over-claim on thin signal.
+id: 004-thin-year-low-confidence
+description: >
+  A mature vault but a sparse year (activity in only 3 of 12 months). Expect
+  a reflection with deliberately capped confidence and a rationale that
+  acknowledges the thinness of the year.
+input:
+  vault_state: snapshot/cases/004/thin-year.tar
+expected:
+  min_confidence: 0.40
+  max_confidence: 0.75
+  rationale_must_mention:
+    - thin
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

@@ -1,0 +1,82 @@
+# Annual Review agent — config.toml
+#
+# Per docs/design/01-agents-and-council.md §Annual Review:
+#   - Trigger: scheduled (annually, on a user-picked date; default Dec 31).
+#     Also on-demand.
+#   - Invasiveness: creates one note per year (additive) at
+#     reflections/annual/YYYY.md.
+#   - Output: always proposal → human approval (this is a personal artifact;
+#     the user curates their own reflection).
+#   - Model tier: deep — this is the system's most resonant artifact and
+#     warrants the strongest model (cost-aware: #37 prompts for confirmation
+#     before a run).
+#
+# Maps to engram_agents::runner::AgentConfig. Fields the runner does not yet
+# consume (declarative tool list, review date, maturity threshold, model tier)
+# are kept here as forward-compatible metadata; the runner will pick them up as
+# follow-up slices land.
+
+name              = "annual-review"
+trigger           = "cron"
+confidence_threshold = 0.85
+# Additive — Annual Review only ever creates one new note per year; it never
+# modifies existing notes. The auto-land gate is moot because
+# always_propose below forces every output through the proposal path
+# regardless of confidence.
+max_invasiveness  = "additive"
+# Once per ~year. The scheduler reads this when trigger == cron; for the
+# Annual Review's yearly cadence we set the period in seconds (365 days =
+# 31_536_000s). Tests override this via the AgentConfig-builder pattern.
+cron_interval_secs = 31_536_000
+
+# ── Forward-compatible metadata (not yet consumed by the runner) ───────────
+#
+# The runner's AgentConfig schema is intentionally minimal. Everything below is
+# annual-review-specific policy that downstream slices will read. Keeping it
+# here means agents/annual-review/ ships a complete spec the moment those slices
+# land — no return trip to amend the config.
+
+[annual-review]
+# Maturity gate per docs/design/01-agents-and-council.md §Annual Review and
+# issue #61: the agent will not run until the vault is at least twelve months
+# old. The first review covers months 1–12. While unmet, the agent returns an
+# empty maturity stub rather than fabricating a year's reflection.
+maturity_min_vault_age_days = 365
+
+# The day of the year the review runs, MM-DD, user-local timezone. Default is
+# New Year's Eve; the user may change it to the anniversary of their first note.
+review_date = "12-31"
+
+# Model tier — Annual Review uses the deep tier (the system's most capable
+# model) because this is its most important narrative artifact. The eval CLI
+# and the future scheduler honour this; cost-aware planning (#37) prompts the
+# user for confirmation before a deep-tier run.
+model_tier = "deep"
+
+# Annual Review never auto-lands regardless of the confidence threshold —
+# reflections/annual/YYYY.md is a personal artifact, so the user curates it.
+# This override is read by the decision-matrix slice.
+always_propose = true
+
+# Tools the agent declares it needs. Names match the planned ToolRegistry from
+# docs/design/03-architecture.md. The runner's tool-gateway slice will validate
+# availability at startup. Annual Review reads everything: hybrid retrieval over
+# the year, the git log, the weekly activity logs (Historian output),
+# deliberation history, the concept-trajectory feature, and the Voice Keeper
+# model so it can write in the user's voice.
+tools = [
+    "hybrid_search",
+    "git_log_summary",
+    "activity_log_reader",
+    "deliberation_history",
+    "concept_trajectory",
+    "voice_keeper_model",
+]
+
+# Output target relative to vault root. `{year}` is substituted at runtime.
+output_note_path_template = "reflections/annual/{year}.md"
+
+# Council participation: Annual Review does not participate in council
+# deliberations — it produces a personal reflection, not a structural verdict.
+[council]
+participates = false

@@ -1,0 +1,28 @@
+# Case 002 — maturity-gate abstention.
+#
+# A young vault, 211 days old (< 365). The host's
+# `MaturityGate::should_abstain` returns Some(reason) for this input; the
+# agent's output must be the empty maturity stub, with `maturity_gate: true`
+# and a rationale that mentions the actual figures (211, 365).
+#
+# Confidence on the stub is 1.0 — high confidence in the *abstention*, not in
+# any reflective content. See `AnnualReviewOutput::maturity_stub`.
+id: 002-immature-vault-abstain
+description: >
+  Vault younger than twelve months (211 days < 365). Expect an empty-stub
+  abstention with high confidence in the abstention itself and a rationale
+  that mentions the maturity threshold.
+input:
+  vault_state: snapshot/cases/002/young-vault.tar
+expected:
+  # Stub confidence is 1.0; case passes as long as it's not below.
+  min_confidence: 0.99
+  max_confidence: 1.0
+  rationale_must_mention:
+    - too young
+    - "365"
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 0.5
+  cost_weight: 0.5
