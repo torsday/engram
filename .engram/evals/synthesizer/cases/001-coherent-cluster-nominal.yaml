@@ -1,0 +1,23 @@
+# Case 001 — coherent cluster, nominal success.
+#
+# Five notes from one quarter circle the same unnamed concept (the
+# editor's choice of what to drop). Synthesizer should recognize the
+# single concept, propose a well-named evergreen (a *name*, not a
+# description), and cite all five source notes. High confidence because
+# the cluster is tight and the concept is clearly absent from the vault.
+#
+# Confidence floor 0.80 — matches the config's discard floor below which
+# the runner won't even convene a council.
+id: 001-coherent-cluster-nominal
+description: >
+  A tight five-note cluster circling one unnamed concept. Expect a
+  confident proposed evergreen that names (not describes) the concept.
+input:
+  vault_state: snapshot/cases/001/coherent-cluster.tar
+expected:
+  min_confidence: 0.80
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

@@ -1,0 +1,25 @@
+# Case 006 — invariant: structural output never auto-lands.
+#
+# Even a high-confidence, clearly-coherent proposal must NOT auto-land:
+# creating a new evergreen is a Structural change (ADR 0004), so every
+# Synthesizer output is downgraded to a council proposal regardless of
+# confidence. This case pairs a confident coherent cluster with the
+# expectation that the output is still a *proposal* — the runner's
+# invasiveness gate, not confidence, governs the path.
+#
+# The eval layer asserts the confident proposal; the always-proposal
+# routing invariant is enforced deterministically by the integration
+# test (no auto-land, no .git mutation).
+id: 006-structural-never-autolands
+description: >
+  A confident, coherent proposal. Expect high confidence but a proposal
+  path (never auto-land) because evergreen creation is Structural.
+input:
+  vault_state: snapshot/cases/006/confident-coherent-cluster.tar
+expected:
+  min_confidence: 0.85
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
