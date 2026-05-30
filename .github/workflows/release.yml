@@ -15,6 +15,7 @@ jobs:
   verify-version:
     name: verify version
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +33,7 @@ jobs:
     name: build ${{ matrix.target }}
     needs: verify-version
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       matrix:
         include:
@@ -53,7 +55,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: build
-        run: cargo build --release --package engram-cli --target ${{ matrix.target }}
+        run: cargo build --release --package engram-cli --target ${{ matrix.target }} --locked
 
       - name: strip binary
         run: strip target/${{ matrix.target }}/release/engram
@@ -74,6 +76,7 @@ jobs:
     name: create release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

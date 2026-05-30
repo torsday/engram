@@ -14,9 +14,10 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: build
+  fmt:
+    name: fmt
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +40,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
 
       - name: install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -57,11 +58,64 @@ jobs:
       - name: fmt
         run: cargo fmt --all -- --check
 
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      # `cache-targets: false` — only cache `~/.cargo/registry` + `~/.cargo/git`
+      # + the lockfile-keyed dep build artifacts under `~/.cargo/`, not the
+      # workspace `target/` directory. The full `target/` for this workspace
+      # (LanceDB + datafusion + comrak + rusqlite + lance pulls in ~2 GB)
+      # overflowed the runner's disk during the post-run cache save (see
+      # #212). Trade-off: slightly slower clean builds, but PRs unblock.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+
       - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      # `cache-targets: false` — only cache `~/.cargo/registry` + `~/.cargo/git`
+      # + the lockfile-keyed dep build artifacts under `~/.cargo/`, not the
+      # workspace `target/` directory. The full `target/` for this workspace
+      # (LanceDB + datafusion + comrak + rusqlite + lance pulls in ~2 GB)
+      # overflowed the runner's disk during the post-run cache save (see
+      # #212). Trade-off: slightly slower clean builds, but PRs unblock.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
+
+  docs-fmt:
+    name: docs fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -73,6 +127,7 @@ jobs:
   docs-drift:
     name: docs drift
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
