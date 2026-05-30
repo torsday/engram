@@ -1,0 +1,22 @@
+# Case 005 — merge surfaces a genuine claim conflict (no silent pick).
+#
+# The two notes mostly agree but make one directly conflicting claim.
+# Merger should still propose the canonical merge, but surface the conflict
+# in unresolved_conflicts with a suggested resolution rather than silently
+# choosing one claim and discarding the other. Silently dropping a
+# contested claim during a merge is a subtle way to lose real content.
+id: 005-unresolved-conflict-surfaced
+description: >
+  A duplicate pair with one conflicting claim. Expect a merge that
+  surfaces the conflict rather than silently resolving it.
+input:
+  vault_state: snapshot/cases/005/duplicate-with-conflict.tar
+expected:
+  min_confidence: 0.80
+  rationale_must_mention:
+    - conflict
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.3

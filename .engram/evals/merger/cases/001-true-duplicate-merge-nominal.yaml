@@ -1,0 +1,21 @@
+# Case 001 — true duplicate, nominal merge.
+#
+# Two notes name the same concept and reach the same central claim from
+# slightly different angles. Merger should propose a canonical note that
+# preserves both angles, with both former titles captured as aliases. High
+# confidence because the conceptual identity is unambiguous.
+#
+# Confidence floor 0.85 — matches the council-convening floor.
+id: 001-true-duplicate-merge-nominal
+description: >
+  Two notes naming the same concept. Expect a canonical merge that
+  preserves both angles, with aliases for the former titles.
+input:
+  vault_state: snapshot/cases/001/true-duplicate-pair.tar
+expected:
+  min_confidence: 0.85
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

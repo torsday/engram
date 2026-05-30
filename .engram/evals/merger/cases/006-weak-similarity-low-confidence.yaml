@@ -1,0 +1,23 @@
+# Case 006 — calibration: weak similarity, honest low confidence.
+#
+# The two notes are somewhat related and a merge is conceivable, but the
+# case is genuinely borderline — they might be one concept or two. A
+# well-calibrated Merger reports low confidence (or declines) rather than
+# confidently merging on a coincidental overlap. Over-confident merging on
+# weak similarity is exactly what erodes the vault's conceptual structure;
+# we assert a confidence ceiling.
+id: 006-weak-similarity-low-confidence
+description: >
+  A borderline pair that might be one concept or two. Expect honest low
+  confidence, not a confident merge on coincidental overlap.
+input:
+  vault_state: snapshot/cases/006/borderline-similar-pair.tar
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - coincidental
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5
