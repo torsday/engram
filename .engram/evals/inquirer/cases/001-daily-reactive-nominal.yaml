@@ -1,0 +1,24 @@
+# Case 001 — daily-reactive nominal success.
+#
+# End of a productive day on a mature vault: several notes were touched
+# and the vault has enough history to connect today's writing to a prior
+# thread. Inquirer (daily-reactive) should produce exactly one specific,
+# falsifiable question with solid confidence, citing the note(s) it
+# connects today's change to.
+#
+# Confidence floor 0.80 — the corpus is rich enough that a good
+# connecting question is well-supported. Watcher will tune this floor
+# from observed accept/reject ratios over time.
+id: 001-daily-reactive-nominal
+description: >
+  A mature vault at end-of-day with same-day edits. Expect a single
+  high-confidence question connecting today's writing to vault history.
+input:
+  vault_state: snapshot/cases/001/mature-vault-active-day.tar
+expected:
+  min_confidence: 0.80
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

@@ -1,0 +1,23 @@
+# Case 003 — holistic-gap weekly cadence.
+#
+# A week's worth of activity on a vault with visible tensions between
+# notes and a few dense clusters with unexplored intersections. Inquirer
+# (holistic-gap) should surface 3–5 questions the vault *cannot
+# currently answer* — tensions, unexplored intersections, premises
+# stated but not defended.
+#
+# Confidence floor 0.75. The good signal here is recall (finding the
+# real gaps), so precision/recall carry full weight.
+id: 003-holistic-gap-weekly
+description: >
+  A vault with genuine tensions and unexplored intersections. Expect
+  3–5 questions the vault can't currently answer, with motivating links.
+input:
+  vault_state: snapshot/cases/003/vault-with-tensions.tar
+expected:
+  min_confidence: 0.75
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

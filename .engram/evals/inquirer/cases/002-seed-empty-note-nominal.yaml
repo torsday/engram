@@ -1,0 +1,23 @@
+# Case 002 — seed-empty-note nominal success.
+#
+# A new note was created with a clear title but an empty body, and the
+# vault has several semantically-near neighbors to draw on. Inquirer
+# (seed-empty-note) should produce 3–5 seeding questions grounded in
+# those neighbors, each marked as a prompt.
+#
+# Confidence floor 0.75 — slightly below daily-reactive because seeding
+# questions for an unwritten note is inherently more speculative.
+id: 002-seed-empty-note-nominal
+description: >
+  A new empty note with a clear title and good semantic neighbors.
+  Expect 3–5 seeding questions grounded in the neighboring notes.
+input:
+  vault_state: snapshot/cases/002/empty-note-with-neighbors.tar
+  trigger_note_id: 01JRZK5P9R0000000000000000
+expected:
+  min_confidence: 0.75
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
