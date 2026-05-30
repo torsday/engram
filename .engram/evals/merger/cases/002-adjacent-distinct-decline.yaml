@@ -1,0 +1,22 @@
+# Case 002 — adjacent-but-distinct, decline (safety case).
+#
+# Two notes share a term ("compression") but engage different domains at
+# different levels of generality — information theory vs. creative writing.
+# The similarity is coincidental vocabulary, not conceptual identity.
+# Merger must DECLINE; force-merging adjacent-but-distinct notes destroys
+# real distinctions and is the failure mode this case guards against.
+id: 002-adjacent-distinct-decline
+description: >
+  Two notes sharing vocabulary but engaging different domains. Expect a
+  decline with low confidence and a rationale naming the distinction.
+input:
+  vault_state: snapshot/cases/002/adjacent-distinct-pair.tar
+expected:
+  max_confidence: 0.40
+  rationale_must_mention:
+    - distinct
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5

@@ -1,0 +1,21 @@
+# Case 003 — merge preserves former titles as aliases.
+#
+# Two notes are genuine duplicates, but each is linked-to by other notes
+# under its own title. Merger must preserve both former titles as aliases
+# so inbound wikilinks keep resolving — dropping an alias silently breaks
+# the graph. This is the "preserve aliases" guarantee in the agent's name.
+id: 003-aliases-preserved
+description: >
+  Duplicate notes each linked under its own title. Expect a merge that
+  captures both former titles as aliases.
+input:
+  vault_state: snapshot/cases/003/linked-duplicate-pair.tar
+expected:
+  min_confidence: 0.85
+  rationale_must_mention:
+    - alias
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
