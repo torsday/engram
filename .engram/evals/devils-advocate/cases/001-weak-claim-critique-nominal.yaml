@@ -1,0 +1,23 @@
+# Case 001 — nominal critique: a load-bearing unstated assumption.
+#
+# A note makes a confident claim that rests on an unstated assumption the
+# neighbor notes actually contest. Devil's Advocate should surface the
+# central claim, name the load-bearing assumption, and propose an
+# annotation grounded in the counter-evidence notes. High confidence
+# because the counter-evidence is specific and present in the vault.
+#
+# Confidence floor 0.85 — a defensible critique with real counter-notes.
+id: 001-weak-claim-critique-nominal
+description: >
+  A claim resting on a contested unstated assumption with counter-evidence
+  in the neighbors. Expect a confident, grounded critique.
+input:
+  vault_state: snapshot/cases/001/contested-assumption.tar
+  trigger_note_id: 01H8DA00000000000000000000
+expected:
+  min_confidence: 0.85
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

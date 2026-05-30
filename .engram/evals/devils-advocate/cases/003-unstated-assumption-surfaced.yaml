@@ -1,0 +1,21 @@
+# Case 003 — critique centers on an unstated load-bearing assumption.
+#
+# The note's argument is fine on its face but silently depends on an
+# assumption it never states. Devil's Advocate should surface the
+# assumption (load_bearing=true) and explain why the argument collapses
+# without it — even when there is no direct counter-evidence note. This is
+# the "identify unstated assumptions" half of the agent's job.
+id: 003-unstated-assumption-surfaced
+description: >
+  An argument with a silent load-bearing assumption. Expect that
+  assumption surfaced with an explanation of its load.
+input:
+  vault_state: snapshot/cases/003/silent-assumption.tar
+  trigger_note_id: 01H8DA00000000000000000002
+expected:
+  min_confidence: 0.80
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

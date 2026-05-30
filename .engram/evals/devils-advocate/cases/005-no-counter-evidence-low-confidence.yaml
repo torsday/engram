@@ -1,0 +1,24 @@
+# Case 005 — calibration: a critique exists in principle but no support.
+#
+# The note's claim is arguable, but the vault supplies no counter-evidence
+# and no clear unstated assumption to attack. A well-calibrated Devil's
+# Advocate reports low confidence and declines to fabricate a critique
+# from nothing — an objection it can't ground would fail the Steelman gate.
+# Over-confidence here (manufacturing contrarian objections) is exactly
+# what ADR 0007 rules out. We assert a confidence ceiling.
+id: 005-no-counter-evidence-low-confidence
+description: >
+  An arguable claim with no grounding for a critique. Expect honest low
+  confidence and no fabricated, ungrounded objection.
+input:
+  vault_state: snapshot/cases/005/no-counter-evidence.tar
+  trigger_note_id: 01H8DA00000000000000000004
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - counter
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5
