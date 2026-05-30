@@ -1,0 +1,22 @@
+# Case 004 — coherent primary, secondary concept flagged.
+#
+# The cluster circles one strong concept but also contains a weaker
+# second one. Synthesizer should propose the primary evergreen AND flag
+# the secondary in cluster_coherence.secondary_concept so the runner can
+# re-cluster around it next sweep — without losing the signal. Excluding
+# the non-supporting cluster members from source_note_ids is expected.
+id: 004-secondary-concept-flagged
+description: >
+  A cluster with one strong and one weaker concept. Expect a proposal
+  for the primary plus a flagged secondary concept for re-clustering.
+input:
+  vault_state: snapshot/cases/004/two-concept-cluster.tar
+expected:
+  min_confidence: 0.75
+  rationale_must_mention:
+    - secondary
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

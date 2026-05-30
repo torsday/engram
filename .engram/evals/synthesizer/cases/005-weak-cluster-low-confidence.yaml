@@ -1,0 +1,22 @@
+# Case 005 — calibration: weak cluster, honest low confidence.
+#
+# A thin, loosely-related cluster where a concept *might* be present but
+# the evidence is weak. A well-calibrated Synthesizer either declines or
+# proposes with honestly low confidence and says the cluster is weak —
+# rather than manufacturing a confident name from thin signal. This is
+# the over-confidence calibration guard; we assert a confidence ceiling.
+id: 005-weak-cluster-low-confidence
+description: >
+  A thin, weakly-related cluster. Expect honest low confidence and a
+  rationale acknowledging the weak coherence (or a decline).
+input:
+  vault_state: snapshot/cases/005/weak-cluster.tar
+expected:
+  max_confidence: 0.60
+  rationale_must_mention:
+    - weak
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5
