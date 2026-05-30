@@ -41,13 +41,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: install cargo-cyclonedx
-        run: cargo install cargo-cyclonedx
+        # Pinned: cargo-cyclonedx 0.5.x dropped the --output-file flag the
+        # job used to pass; pin so an upstream CLI change can't silently
+        # re-break SBOM generation (see issue #312).
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
 
       - name: generate SBOM
-        run: cargo cyclonedx --format json --output-file sbom.json
+        # --describe crate (default) emits one CycloneDX SBOM per workspace
+        # member at crates/<member>/sbom.json. --override-filename sets the
+        # base name; there is no --output-file in this version.
+        run: cargo cyclonedx --format json --override-filename sbom
 
       - uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: sbom.json
+          path: crates/*/sbom.json
           retention-days: 30
