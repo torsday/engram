@@ -1,0 +1,27 @@
+# Case 004 — blindspot quarterly negative-space analysis.
+#
+# A quarter of accumulated material where the vault repeatedly cites a
+# thinker without engaging their framework, and gestures at a domain
+# adjacent to its interests without ever entering it. Inquirer
+# (blindspot) should produce 5–8 observations framed as questions about
+# what is *absent* — some with empty `motivating_note_ids` because the
+# question is about a gap, not a motivating note.
+#
+# Confidence floor 0.70 — negative-space analysis is the most
+# interpretive mode, so the bar is lower and calibration matters most.
+# The rationale must name the absence it found.
+id: 004-blindspot-quarterly
+description: >
+  A vault that cites without engaging and gestures without entering.
+  Expect 5–8 negative-space questions; rationale names the absence.
+input:
+  vault_state: snapshot/cases/004/vault-with-blindspots.tar
+expected:
+  min_confidence: 0.70
+  rationale_must_mention:
+    - absent
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2
