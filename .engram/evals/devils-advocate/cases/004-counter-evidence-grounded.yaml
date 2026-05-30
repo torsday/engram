@@ -1,0 +1,21 @@
+# Case 004 — critique grounded in specific counter-notes.
+#
+# A claim that two neighbor notes directly contradict with concrete
+# counter-examples. Devil's Advocate should propose annotations whose
+# counter_note_ids point at those specific notes — the critique is only as
+# strong as the evidence it cites, and citing the real counter-notes is
+# what lets it survive the Steelman gate.
+id: 004-counter-evidence-grounded
+description: >
+  A claim contradicted by specific neighbor notes. Expect annotations
+  citing those counter-notes by id.
+input:
+  vault_state: snapshot/cases/004/contradicted-claim.tar
+  trigger_note_id: 01H8DA00000000000000000003
+expected:
+  min_confidence: 0.85
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.2

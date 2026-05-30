@@ -1,0 +1,27 @@
+# Case 006 — invariant: defensible critique, not contrarianism.
+#
+# A note invites a superficial objection that does not survive scrutiny —
+# the obvious counter-argument is already addressed two notes over. Devil's
+# Advocate must recognize that the easy objection fails the Steelman gate
+# and either decline or critique only the genuinely-unaddressed point.
+# This is the core ADR 0007 invariant: critique earns its place by being
+# defensible, not by being contrarian.
+#
+# The eval layer asserts the calibrated output; the Steelman-gate flow
+# itself is a follow-up runner slice (#35).
+id: 006-gated-not-contrarian
+description: >
+  A note inviting a superficial-but-answered objection. Expect Devil's
+  Advocate to avoid the gate-failing contrarian take.
+input:
+  vault_state: snapshot/cases/006/superficial-objection-answered.tar
+  trigger_note_id: 01H8DA00000000000000000005
+expected:
+  max_confidence: 0.50
+  rationale_must_mention:
+    - defensible
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.3

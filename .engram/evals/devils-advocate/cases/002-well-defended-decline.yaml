@@ -1,0 +1,24 @@
+# Case 002 — well-defended note, decline (Steelman-gate restraint).
+#
+# The note's central claim is already well-defended: it cites the
+# counter-example a critic would raise, acknowledges it, and its remaining
+# assumptions are explicit and load-bearing. Devil's Advocate must DECLINE
+# (decline=true) rather than manufacture an objection — a contrarian
+# critique here would fail the Steelman rationality gate (ADR 0007).
+# Contrarianism for its own sake is the failure mode this case guards.
+id: 002-well-defended-decline
+description: >
+  A note whose claim is already well-defended. Expect a decline with low
+  confidence — no manufactured, gate-failing critique.
+input:
+  vault_state: snapshot/cases/002/well-defended-note.tar
+  trigger_note_id: 01H8DA00000000000000000001
+expected:
+  max_confidence: 0.40
+  rationale_must_mention:
+    - defensible
+scoring:
+  precision_weight: 1.0
+  recall_weight: 1.0
+  calibration_weight: 1.0
+  cost_weight: 0.5
