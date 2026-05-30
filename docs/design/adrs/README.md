@@ -24,6 +24,7 @@ Format: each ADR is one page, in the form `NNNN-decision-name.md`. Status is `Ac
 | [0014](0014-lancedb-vector-storage.md)           | LanceDB for vector storage in v1 (supersedes sqlite-vec)                       | Accepted |
 | [0015](0015-per-crate-errors-shared-category.md) | Per-crate Error enums + shared `ErrorCategory` (no `EngramError` mega-enum)    | Accepted |
 | [0016](0016-per-agent-typed-outputs.md)          | Per-agent typed output schemas in `engram_agents::agents`                      | Accepted |
+| [0017](0017-agent-config-schema.md)              | One canonical `AgentConfig` schema owned by `engram-core`; runner projects     | Accepted |
 
 ## When to write an ADR
 
