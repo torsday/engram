@@ -49,8 +49,9 @@ use super::{
     inbox_triage::TriageOutput, inquirer::InquirerOutput, linker::LinkerOutput,
     merger::MergerOutput, pair_thinking::PairThinkingTurn, predictor::PredictorOutput,
     scribe::ScribeOutput, source_demand::SourceDemandOutput, splitter::SplitterOutput,
-    steelman_constructive::SteelmanConstructiveOutput, synthesizer::SynthesizerOutput,
-    tutor::TutorOutput, voice_keeper::VoiceKeeperOutput, witness::WitnessOutput,
+    steelman::SteelmanOutput, steelman_constructive::SteelmanConstructiveOutput,
+    synthesizer::SynthesizerOutput, tutor::TutorOutput, voice_keeper::VoiceKeeperOutput,
+    witness::WitnessOutput,
 };
 use crate::cartographer::CartographerContinuousOutput;
 
@@ -118,6 +119,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
     // contract, which is exactly what we want the compiler to catch.
     match agent_name {
         "steelman-constructive" => check::<SteelmanConstructiveOutput>(agent_name, text),
+        "steelman" => check::<SteelmanOutput>(agent_name, text),
         "devils-advocate" => check::<DevilsAdvocateOutput>(agent_name, text),
         "heretic" => check::<HereticOutput>(agent_name, text),
         "inquirer" => check::<InquirerOutput>(agent_name, text),
@@ -154,6 +156,7 @@ pub fn validate(agent_name: &str, text: &str) -> Result<(), ValidationError> {
 pub fn registered_agents() -> &'static [&'static str] {
     &[
         "steelman-constructive",
+        "steelman",
         "devils-advocate",
         "heretic",
         "inquirer",
@@ -213,6 +216,10 @@ mod tests {
             (
                 "steelman-constructive",
                 r#"{"confidence":0.5,"rationale":"r"}"#,
+            ),
+            (
+                "steelman",
+                r#"{"confidence":0.5,"rationale":"r","verdict":"pass","criteria":{"engages_actual_claim":{"held":true,"why":"x"},"uses_real_evidence":{"held":true,"why":"x"},"internally_consistent":{"held":true,"why":"x"},"has_real_world_adherents":{"held":true,"why":"x"},"concedes_whats_true":{"held":true,"why":"x"}}}"#,
             ),
             (
                 "devils-advocate",

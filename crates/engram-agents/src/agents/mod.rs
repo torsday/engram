@@ -36,6 +36,17 @@
 /// JSON schema.
 pub mod steelman_constructive;
 
+/// Steelman (gate role) — the mandatory rationality gate for all
+/// critical agents (Devil's Advocate, Heretic, Socratic Prober) per
+/// ADR 0007. Emits a five-criterion judgment (`SteelmanOutput`); the
+/// pure verdict logic that consumes it lives in
+/// `engram_council::gate`. Sibling of `steelman_constructive` (the
+/// constructive role) — two roles, two agents, one epistemic skill.
+///
+/// See `agents/steelman/prompt.md` for the prompt that produces this
+/// output.
+pub mod steelman;
+
 /// Devil's Advocate — argue against claims; surface counter-
 /// evidence and unstated assumptions. Critical counterpart to
 /// `steelman_constructive`; all output passes the Steelman

@@ -1,0 +1,64 @@
+# Steelman (gate role) — the mandatory rationality gate for all critical
+# agents (Devil's Advocate, Heretic, Socratic Prober).
+#
+# Per ADR 0007 and `docs/design/01-agents-and-council.md` §The rationality
+# gate, every critique passes a five-criterion test before it can count in a
+# council vote:
+#   1. Engages the actual claim (not a strawman)
+#   2. Uses real evidence (citation, not assertion)
+#   3. Internally consistent (coherent alternative, not mere negation)
+#   4. Has real-world adherents (a thinker the user respects could hold it)
+#   5. Concedes what's true (acknowledges what the original got right)
+#
+# All five must hold to pass. Any failure → one revision attempt; a second
+# failure → shelved as "no defensible critique found". The gate is structural:
+# it cannot be bypassed by trust score or invasiveness ceiling.
+#
+# This is the GATE role only. The constructive role (strengthen weak notes)
+# is a separate agent — `agents/steelman-constructive/`.
+
+[agent]
+name = "steelman"
+description = "Mandatory rationality gate for critical agents: five-criterion test (ADR 0007) → pass / request-revision / shelve."
+# Deep tier: the five criteria require careful judgment (e.g. "has real-world
+# adherents", "internally consistent"), not a cheap yes/no classification.
+# NOTE: ADR 0007's Consequences section says "fast" tier on cost grounds; this
+# follows #35's acceptance criteria ("deep model tier for the gate role"),
+# which is the more recent and specific decision. Flagged for ADR 0007 reconcile.
+model_tier = "deep"
+
+[schedule]
+# Invoked within council deliberation whenever a critical agent's critique is
+# being evaluated. Not independently scheduled.
+trigger = "on_demand"
+
+[permissions]
+# The gate never writes to the vault. It evaluates a critique and returns a
+# verdict; landing (or shelving) is the council/driver's action, not the
+# gate's. All write permissions are denied by design.
+may_create_notes = false
+may_modify_notes = false
+may_delete_notes = false
+note_types = ["fleeting", "literature", "evergreen", "moc"]
+max_invasiveness = "mechanical"
+
+[autonomy]
+# The gate produces a verdict, not an auto-landable change. This floor governs
+# nothing the gate writes (it writes nothing); it exists only so the config
+# shape matches every other agent. The verdict's bindingness is structural,
+# not confidence-gated.
+auto_land_min_confidence = 1.0
+
+[council]
+# Steelman is the only agent that participates in EVERY council — its gate
+# verdict is binding on critical agents' votes. It does not convene councils;
+# those are triggered by the critical agents whose output it gates.
+participates = true
+may_convene = false
+
+[budget]
+# Deep tier and participation in every council make this a hotter path than
+# most agents, but the gate prompt is tight (five booleans + rationale), so the
+# per-call payload is small. Operators tune via `engram secrets` + agent_budgets.
+monthly_tokens = 200000
+auto_pause = true
