@@ -135,3 +135,17 @@ Return vault notes changed within a time window.
 Structural health check: broken links, orphaned notes, missing sidecars.
 
 **Input:** none required.
+
+---
+
+### `trace_concept`
+
+Trace how a concept has evolved across the vault: the chronological trail of
+notes that engage it, each tagged by its role in the evolution — `draft`
+(earliest), `revision` (in between), `reversal` (a note the vault marks
+`status = contested`), or `current` (latest). Reuses the same retrieval as
+`search_notes`; adds no retrieval logic of its own.
+
+**Input:** `concept` (string, required), `since` (ISO-8601, optional — default all time), `max_excerpts` (integer, default 20).
+
+**Output:** `{ concept, narrative, excerpts: [{ at, note_id, snippet, role }] }`. `narrative` is reserved for the Synthesizer's per-concept evolution narrative and is `null` until that store lands.
