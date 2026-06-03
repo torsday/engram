@@ -425,3 +425,60 @@ until those subsystems are wired in.
 | `io_error`             | I/O failure scanning the vault   |
 
 ---
+
+`trace_concept` MCP tool — how a concept has evolved across the vault.
+
+Surfaces the chronological trail of notes that engage a concept, so a
+client can see how the user's thinking shifted over time: the earliest
+note is the `draft`, the latest the `current` state, notes in between are
+`revision`s, and any note the vault marks `status = contested` is a
+`reversal`.
+
+The tool is a *translation surface* over the existing index: it reuses
+[`engram_index::search::hybrid_search`] (the same retrieval `search_notes`
+uses) to find the notes that engage the concept, then reads each note's
+timestamps and status from the `notes` table to order them and classify
+the role. It adds no retrieval logic of its own.
+
+## Input schema
+
+```json
+{
+  "concept":      "lossy compression",   // required
+  "since":        "2024-01-01T00:00:00Z", // optional, default: all time
+  "max_excerpts": 20                      // optional, default: 20
+}
+```
+
+## Output schema
+
+```json
+{
+  "concept":   "lossy compression",
+  "narrative": null,                       // see note below
+  "excerpts": [
+    {
+      "at":      "2024-02-01T00:00:00Z",
+      "note_id": "01JXXXXXXXXXXXXXXXXXXXXXXX",
+      "snippet": "…matching text…",
+      "role":    "draft"
+    }
+  ]
+}
+```
+
+`narrative` is reserved for the Synthesizer's evolution narrative for the
+concept. v1 returns `null`: the Synthesizer (#49) produces evergreen notes,
+not yet a persisted per-concept evolution narrative, so there is nothing to
+surface. The field is part of the schema so the surface is stable when that
+store lands.
+
+## Error codes
+
+| code                   | meaning                                  |
+|------------------------|------------------------------------------|
+| `bad_input`            | Empty `concept`, or `max_excerpts == 0`  |
+| `vault_not_configured` | SQLite DB not found / not accessible     |
+| `search_error`         | Unexpected SQLite / FTS failure          |
+
+---
