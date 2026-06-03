@@ -241,6 +241,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(FollowLinksTool);
     r.register(ListTagsTool);
     r.register(RecentChangesTool);
+    r.register(TraceConceptTool);
     r
 }
 
@@ -549,6 +550,48 @@ impl Tool for RecentChangesTool {
         let parsed = parse_input::<crate::recent_changes::RecentChangesInput>(input)?;
         let out =
             crate::recent_changes::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
+
+// ── trace_concept ──────────────────────────────────────────────────────────
+
+struct TraceConceptTool;
+
+impl Tool for TraceConceptTool {
+    fn name(&self) -> &'static str {
+        "trace_concept"
+    }
+    fn description(&self) -> &'static str {
+        "Trace how a concept has evolved across the vault: chronological excerpts from the notes that engage it, each tagged draft / revision / reversal / current."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "required": ["concept"],
+            "properties": {
+                "concept": {
+                    "type": "string",
+                    "description": "The concept to trace (matched against note title + content)."
+                },
+                "since": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Only include notes modified at or after this ISO-8601 timestamp. Defaults to all time."
+                },
+                "max_excerpts": {
+                    "type": "integer",
+                    "default": 20,
+                    "minimum": 1,
+                    "description": "Maximum number of chronological excerpts to return."
+                }
+            }
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = parse_input::<crate::trace_concept::TraceConceptInput>(input)?;
+        let out =
+            crate::trace_concept::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }

@@ -39,8 +39,8 @@ pub mod vault_health;
 /// `read_biography` — retrieve the Biographer agent's current user model.
 pub mod read_biography {}
 
-/// `trace_concept` — concept evolution over time via git history.
-pub mod trace_concept {}
+/// `trace_concept` — how a concept has evolved across the vault over time.
+pub mod trace_concept;
 
 /// `write_note` — gated write: subject to confidence threshold and review queue.
 pub mod write_note {}
