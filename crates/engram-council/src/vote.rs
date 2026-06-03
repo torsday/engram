@@ -33,19 +33,23 @@ pub struct Vote {
     pub rationale: String,
     /// Optional suggested edit on top of the proposal.
     pub suggested_edits: Option<String>,
-    /// Whether this vote passed the Steelman rationality gate (#35).
+    /// Whether this vote passed the Steelman rationality gate (ADR 0007).
     ///
     /// `true` for non-critical agents (the gate only applies to critical roles)
     /// and for critical votes that survived the five-criterion test. `false`
     /// when a critical agent's critique failed the gate — such a vote is
     /// **ignored** by [`crate::tally`] (a gate-failed reject does not shelve a
-    /// proposal). Until #35 lands, the driver sets this to `true`.
+    /// proposal). The gate's decision core landed with #35
+    /// ([`crate::gate::SteelmanGate`]); until the async driver *wires* it
+    /// (#317) — mapping each critique's [`crate::gate::GateVerdict`] onto this
+    /// field — the driver sets this to `true`.
     pub gated: bool,
 }
 
 impl Vote {
     /// Construct a gate-passing vote (the common case: non-critical agents, and
-    /// the pre-#35 default where every vote is treated as gated-in).
+    /// the pre-wiring default where every vote is treated as gated-in until
+    /// #317 sets `gated` from the gate verdict).
     pub fn new(agent: impl Into<String>, kind: VoteKind, rationale: impl Into<String>) -> Self {
         Self {
             agent: agent.into(),

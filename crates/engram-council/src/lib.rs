@@ -34,10 +34,12 @@
 //!   async orchestration layer that sits *on top of* this core. The core
 //!   exposes [`state::CouncilSession::record_round`] / [`state::CouncilSession::revise`]
 //!   so that layer just feeds it votes.
-//! - **Steelman rationality gate (#35).** Critical agents' votes must pass
-//!   `SteelmanGate::evaluate` before counting. The hook is [`vote::Vote::gated`]
-//!   — a vote carries whether it survived the gate; [`converge`] already ignores
-//!   gate-failed votes. The gate *implementation* lands with #35.
+//! - **Steelman gate wiring (#317).** The gate's pure decision core landed with
+//!   #35 — see [`gate::SteelmanGate::evaluate`] and [`gate::GateVerdict`]. What
+//!   remains is *driving* it: the async layer produces each critical agent's
+//!   [`gate::FiveCriteria`] via an `engram-llm` call, then sets
+//!   [`vote::Vote::gated`] from the verdict so [`converge`] (which already
+//!   ignores gate-failed votes) honors it. That wiring is tracked on #317.
 //! - **Persistence.** Transcript markdown at `.engram/deliberations/<id>.md` and
 //!   the `deliberations` / `deliberation_votes` SQLite rows. [`Outcome`] and
 //!   [`state::CouncilSession`] expose everything a persistence layer needs to
@@ -46,11 +48,13 @@
 //!   async driver, not the pure core.
 
 pub mod converge;
+pub mod gate;
 pub mod quorum;
 pub mod state;
 pub mod vote;
 
 pub use converge::{tally, Outcome};
+pub use gate::{Attempt, Criterion, FiveCriteria, GateStats, GateVerdict, SteelmanGate};
 pub use quorum::{select_quorum, QuorumInput};
 pub use state::{CouncilError, CouncilSession, Phase};
 pub use vote::{Vote, VoteKind};
