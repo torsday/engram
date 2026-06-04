@@ -244,6 +244,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(TraceConceptTool);
     r.register(ReadBiographyTool);
     r.register(ReadIndexTool);
+    r.register(ListPredictionsTool);
     r
 }
 
@@ -663,6 +664,45 @@ impl Tool for ReadIndexTool {
         };
         let out =
             crate::read_index::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
+
+// ── list_predictions ─────────────────────────────────────────────────────────
+
+struct ListPredictionsTool;
+
+impl Tool for ListPredictionsTool {
+    fn name(&self) -> &'static str {
+        "list_predictions"
+    }
+    fn description(&self) -> &'static str {
+        "List the Predictor's ledger: predicted claims, due dates, open/resolved status, and a count rollup. Filter by status (open/resolved/due/all) and topic."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "resolved", "due", "all"],
+                    "default": "open",
+                    "description": "Which predictions to return."
+                },
+                "topic": { "type": "string", "description": "Restrict to a single topic." },
+                "limit": { "type": "integer", "default": 50, "minimum": 1, "description": "Max predictions to return." }
+            },
+            "additionalProperties": false
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = if input.is_null() {
+            crate::list_predictions::ListPredictionsInput::default()
+        } else {
+            parse_input::<crate::list_predictions::ListPredictionsInput>(input)?
+        };
+        let out = crate::list_predictions::handle(vault_root, parsed)
+            .map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }
