@@ -245,6 +245,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(ReadBiographyTool);
     r.register(ReadIndexTool);
     r.register(ListPredictionsTool);
+    r.register(DueFlashcardsTool);
     r
 }
 
@@ -703,6 +704,39 @@ impl Tool for ListPredictionsTool {
         };
         let out = crate::list_predictions::handle(vault_root, parsed)
             .map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
+
+// ── due_flashcards ───────────────────────────────────────────────────────────
+
+struct DueFlashcardsTool;
+
+impl Tool for DueFlashcardsTool {
+    fn name(&self) -> &'static str {
+        "due_flashcards"
+    }
+    fn description(&self) -> &'static str {
+        "List Tutor's flashcards that are due for review (FSRS): front/back, source note, schedule, interval, reps. Optional deck = source-note path prefix."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "deck": { "type": "string", "description": "Source-note path prefix (folder-as-deck)." },
+                "limit": { "type": "integer", "default": 20, "minimum": 1, "description": "Max cards to return." }
+            },
+            "additionalProperties": false
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = if input.is_null() {
+            crate::due_flashcards::DueFlashcardsInput::default()
+        } else {
+            parse_input::<crate::due_flashcards::DueFlashcardsInput>(input)?
+        };
+        let out =
+            crate::due_flashcards::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }

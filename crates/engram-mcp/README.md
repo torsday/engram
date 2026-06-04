@@ -184,3 +184,16 @@ status, confidence at claim — plus a count rollup over the whole ledger. Read-
 **Input:** `status` (`"open"` default | `"resolved"` | `"due"` | `"all"`), `topic` (string), `limit` (integer, default 50).
 
 **Output:** `{ predictions: [{ id, claim, made_at, due_at, status, resolution, confidence_at_claim }], calibration_summary?: { total, resolved, open } }`. Full per-topic Brier calibration is a Predictor follow-on.
+
+---
+
+### `due_flashcards`
+
+List Tutor's flashcards that are due for review (FSRS-4.5 scheduling) — for
+starting a practice session in-conversation or answering "what's due?". A card
+is due when its `next_review_at` is in the past or it has never been reviewed.
+Read-only.
+
+**Input:** `deck` (string — source-note path prefix), `limit` (integer, default 20).
+
+**Output:** `{ cards: [{ id, front, back, source_note_id, scheduled_for, interval_days, reps }] }`.

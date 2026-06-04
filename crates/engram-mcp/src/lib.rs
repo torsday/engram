@@ -45,6 +45,9 @@ pub mod read_index;
 /// `list_predictions` — the Predictor's ledger (claims, due dates, resolution).
 pub mod list_predictions;
 
+/// `due_flashcards` — Tutor's cards that are due for review (FSRS).
+pub mod due_flashcards;
+
 /// `trace_concept` — how a concept has evolved across the vault over time.
 pub mod trace_concept;
 
