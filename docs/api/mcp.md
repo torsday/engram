@@ -504,6 +504,53 @@ rows from the `notes` table. No logic of its own.
 
 ---
 
+`list_predictions` MCP tool — the Predictor's ledger.
+
+Returns predictions the Predictor has logged: the claim, when it was made
+and is due, its open/resolved status, and the confidence at claim time —
+plus a small calibration rollup over the whole ledger.
+
+A translation surface over the index: reads the `predictions` table. No
+logic of its own beyond the status/topic filters and the count rollup.
+
+## Input schema
+
+```json
+{
+  "status": "open",     // optional: "open" (default) | "resolved" | "due" | "all"
+  "topic":  "ml",       // optional: only this topic
+  "limit":  50          // optional, default 50
+}
+```
+
+## Output schema
+
+```json
+{
+  "predictions": [
+    {
+      "id": "01J…", "claim": "…", "made_at": "…", "due_at": "…",
+      "status": "pending", "resolution": null, "confidence_at_claim": 0.7
+    }
+  ],
+  "calibration_summary": { "total": 12, "resolved": 4, "open": 8 }
+}
+```
+
+`calibration_summary` is a count rollup over the *entire* ledger (not the
+filtered page). Full per-topic Brier calibration is a Predictor follow-on —
+it needs a resolved-correctness signal the index doesn't yet carry.
+
+## Error codes
+
+| code                   | meaning                                   |
+|------------------------|-------------------------------------------|
+| `bad_input`            | Unrecognised `status`, or `limit == 0`    |
+| `vault_not_configured` | SQLite DB not found / not accessible      |
+| `internal_error`       | Unexpected SQLite failure                 |
+
+---
+
 `trace_concept` MCP tool — how a concept has evolved across the vault.
 
 Surfaces the chronological trail of notes that engage a concept, so a

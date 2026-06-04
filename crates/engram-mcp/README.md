@@ -173,3 +173,14 @@ active MOC note. Read-only.
 **Input:** `mode` (`"root"` default | `"all_mocs"`).
 
 **Output:** `{ root_index_body, mocs?: [{ path, title, body }] }`. Returns a `not_available` error when no `index.md` exists yet.
+
+---
+
+### `list_predictions`
+
+List the Predictor's ledger — predicted claims, when made and due, open/resolved
+status, confidence at claim — plus a count rollup over the whole ledger. Read-only.
+
+**Input:** `status` (`"open"` default | `"resolved"` | `"due"` | `"all"`), `topic` (string), `limit` (integer, default 50).
+
+**Output:** `{ predictions: [{ id, claim, made_at, due_at, status, resolution, confidence_at_claim }], calibration_summary?: { total, resolved, open } }`. Full per-topic Brier calibration is a Predictor follow-on.

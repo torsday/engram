@@ -42,6 +42,9 @@ pub mod read_biography;
 /// `read_index` — the vault's Map-of-Content index (Cartographer's output).
 pub mod read_index;
 
+/// `list_predictions` — the Predictor's ledger (claims, due dates, resolution).
+pub mod list_predictions;
+
 /// `trace_concept` — how a concept has evolved across the vault over time.
 pub mod trace_concept;
 
