@@ -243,6 +243,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(RecentChangesTool);
     r.register(TraceConceptTool);
     r.register(ReadBiographyTool);
+    r.register(ReadIndexTool);
     r
 }
 
@@ -625,6 +626,43 @@ impl Tool for ReadBiographyTool {
         };
         let out =
             crate::read_biography::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
+
+// ── read_index ─────────────────────────────────────────────────────────────
+
+struct ReadIndexTool;
+
+impl Tool for ReadIndexTool {
+    fn name(&self) -> &'static str {
+        "read_index"
+    }
+    fn description(&self) -> &'static str {
+        "Return the vault's Map-of-Content index (Cartographer's output): the root index.md, and — with mode='all_mocs' — every active MOC note. Read-only."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["root", "all_mocs"],
+                    "default": "root",
+                    "description": "`root` returns just index.md; `all_mocs` also returns every MOC note."
+                }
+            },
+            "additionalProperties": false
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        let parsed = if input.is_null() {
+            crate::read_index::ReadIndexInput::default()
+        } else {
+            parse_input::<crate::read_index::ReadIndexInput>(input)?
+        };
+        let out =
+            crate::read_index::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }

@@ -39,6 +39,9 @@ pub mod vault_health;
 /// `read_biography` — retrieve the Biographer agent's current user model.
 pub mod read_biography;
 
+/// `read_index` — the vault's Map-of-Content index (Cartographer's output).
+pub mod read_index;
+
 /// `trace_concept` — how a concept has evolved across the vault over time.
 pub mod trace_concept;
 

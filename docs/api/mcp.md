@@ -467,6 +467,43 @@ No inputs — there is one canonical biography.
 
 ---
 
+`read_index` MCP tool — the vault's Map-of-Content (MOC) index.
+
+Returns Cartographer's auto-maintained navigation surface: the root
+`index.md` (a Karpathy-style one-line-per-note index) and, on request, the
+active MOC notes (`note_type = 'moc'`).
+
+A translation surface over the index: reads the `index.md` row and the MOC
+rows from the `notes` table. No logic of its own.
+
+## Input schema
+
+```json
+{ "mode": "root" }   // optional; "root" (default) or "all_mocs"
+```
+
+## Output schema
+
+```json
+{
+  "root_index_body": "## Notes\n- [[a]] one-liner\n…",
+  "mocs": [                       // present only when mode = "all_mocs"
+    { "path": "mocs/topic.md", "title": "Topic MOC", "body": "…" }
+  ]
+}
+```
+
+## Error codes
+
+| code                   | meaning                                       |
+|------------------------|-----------------------------------------------|
+| `bad_input`            | Unrecognised `mode`                           |
+| `vault_not_configured` | SQLite DB not found / not accessible          |
+| `not_available`        | No `index.md` yet (Cartographer hasn't run)   |
+| `internal_error`       | Unexpected SQLite failure                     |
+
+---
+
 `trace_concept` MCP tool — how a concept has evolved across the vault.
 
 Surfaces the chronological trail of notes that engage a concept, so a
