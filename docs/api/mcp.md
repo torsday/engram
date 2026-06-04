@@ -426,6 +426,47 @@ until those subsystems are wired in.
 
 ---
 
+`read_biography` MCP tool — the Biographer's current user model.
+
+Returns the contents of the Biographer's single note, `meta/biography.md`,
+so a client can ground assistance in the user's known roles, domains, and
+ongoing work. Read-only — the Biographer is the only writer.
+
+A translation surface over the index: reads the indexed `meta/biography.md`
+row from the `notes` table (content, `modified_at`, frontmatter). It adds no
+logic of its own beyond splitting out the section headings and lifting
+`confidence` from the note's frontmatter.
+
+## Input schema
+
+```json
+{}
+```
+
+No inputs — there is one canonical biography.
+
+## Output schema
+
+```json
+{
+  "body":         "## Identity\n…",            // full markdown
+  "last_updated": "2024-06-01T00:00:00Z",      // the note's modified_at
+  "sections":     ["Identity", "Domains of expertise", "…"],
+  "confidence":   0.86                          // from frontmatter, else 0.0
+}
+```
+
+## Error codes
+
+| code                   | meaning                                       |
+|------------------------|-----------------------------------------------|
+| `vault_not_configured` | SQLite DB not found / not accessible          |
+| `not_available`        | No `meta/biography.md` yet (Biographer hasn't |
+|                        | written one — e.g. the vault is too sparse)   |
+| `internal_error`       | Unexpected SQLite failure                     |
+
+---
+
 `trace_concept` MCP tool — how a concept has evolved across the vault.
 
 Surfaces the chronological trail of notes that engage a concept, so a

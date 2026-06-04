@@ -242,6 +242,7 @@ pub fn default_registry() -> ToolRegistry {
     r.register(ListTagsTool);
     r.register(RecentChangesTool);
     r.register(TraceConceptTool);
+    r.register(ReadBiographyTool);
     r
 }
 
@@ -592,6 +593,38 @@ impl Tool for TraceConceptTool {
         let parsed = parse_input::<crate::trace_concept::TraceConceptInput>(input)?;
         let out =
             crate::trace_concept::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
+        serialize_output(out)
+    }
+}
+
+// ── read_biography ─────────────────────────────────────────────────────────
+
+struct ReadBiographyTool;
+
+impl Tool for ReadBiographyTool {
+    fn name(&self) -> &'static str {
+        "read_biography"
+    }
+    fn description(&self) -> &'static str {
+        "Return the Biographer's current user model (meta/biography.md): its body, section headings, last-updated time, and confidence. Read-only."
+    }
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        })
+    }
+    fn invoke(&self, vault_root: &Path, input: Value) -> Result<Value, ToolError> {
+        // No-arg tool: tolerate a `null`/absent arguments payload as the empty
+        // object so clients that omit `arguments` still work.
+        let parsed = if input.is_null() {
+            crate::read_biography::ReadBiographyInput::default()
+        } else {
+            parse_input::<crate::read_biography::ReadBiographyInput>(input)?
+        };
+        let out =
+            crate::read_biography::handle(vault_root, parsed).map_err(|e| adapt_tool_error!(e))?;
         serialize_output(out)
     }
 }

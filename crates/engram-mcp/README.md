@@ -149,3 +149,15 @@ notes that engage it, each tagged by its role in the evolution — `draft`
 **Input:** `concept` (string, required), `since` (ISO-8601, optional — default all time), `max_excerpts` (integer, default 20).
 
 **Output:** `{ concept, narrative, excerpts: [{ at, note_id, snippet, role }] }`. `narrative` is reserved for the Synthesizer's per-concept evolution narrative and is `null` until that store lands.
+
+---
+
+### `read_biography`
+
+Return the Biographer's current user model — the contents of `meta/biography.md`
+— so a client can ground assistance in the user's known roles, domains, and
+ongoing work. Read-only; the Biographer is the only writer.
+
+**Input:** none.
+
+**Output:** `{ body, last_updated, sections: [string], confidence }`. Returns a `not_available` error when no biography has been written yet (e.g. the vault is still too sparse).
