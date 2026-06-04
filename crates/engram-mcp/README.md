@@ -161,3 +161,15 @@ ongoing work. Read-only; the Biographer is the only writer.
 **Input:** none.
 
 **Output:** `{ body, last_updated, sections: [string], confidence }`. Returns a `not_available` error when no biography has been written yet (e.g. the vault is still too sparse).
+
+---
+
+### `read_index`
+
+Return the vault's Map-of-Content index — Cartographer's auto-maintained
+navigation surface: the root `index.md`, and (with `mode = "all_mocs"`) every
+active MOC note. Read-only.
+
+**Input:** `mode` (`"root"` default | `"all_mocs"`).
+
+**Output:** `{ root_index_body, mocs?: [{ path, title, body }] }`. Returns a `not_available` error when no `index.md` exists yet.
