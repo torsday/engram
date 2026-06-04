@@ -551,6 +551,54 @@ it needs a resolved-correctness signal the index doesn't yet carry.
 
 ---
 
+`due_flashcards` MCP tool — Tutor's cards that are due for review.
+
+Returns the flashcards whose FSRS schedule has come due (or that have never
+been reviewed), so a client can start a practice session in-conversation or
+answer "what's due?".
+
+A translation surface over the index: reads the `flashcards` table. The only
+logic is the due filter, the optional deck filter, and deriving
+`interval_days` from the schedule.
+
+## Input schema
+
+```json
+{
+  "deck":  "ml",   // optional: source-note path prefix (folder-as-deck)
+  "limit": 20      // optional, default 20
+}
+```
+
+## Output schema
+
+```json
+{
+  "cards": [
+    {
+      "id": "01J…", "front": "Q?", "back": "A",
+      "source_note_id": "01J…", "scheduled_for": "2024-06-01T00:00:00Z",
+      "interval_days": 6, "reps": 3
+    }
+  ]
+}
+```
+
+A card is "due" when its `next_review_at` is in the past, or when it has
+never been scheduled (a new card). New cards sort first, then the most
+overdue. `deck` is the source note's path prefix — engram has no separate
+deck model yet, so a folder of source notes is the natural grouping.
+
+## Error codes
+
+| code                   | meaning                                   |
+|------------------------|-------------------------------------------|
+| `bad_input`            | `limit == 0`                              |
+| `vault_not_configured` | SQLite DB not found / not accessible      |
+| `internal_error`       | Unexpected SQLite failure                 |
+
+---
+
 `trace_concept` MCP tool — how a concept has evolved across the vault.
 
 Surfaces the chronological trail of notes that engage a concept, so a
