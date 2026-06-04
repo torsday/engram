@@ -36,3 +36,9 @@ pub mod search;
 /// SQLite queries for token usage tracking, agent budget enforcement, and
 /// cost summaries. Backed by `token_usage` and `agent_budgets` tables.
 pub mod budget_store;
+
+/// Persistence for council deliberations: the authoritative markdown
+/// transcript at `.engram/deliberations/<id>.md` plus the indexable
+/// `deliberations` / `deliberation_votes` rows. DTO-based to keep
+/// `engram-index` free of an `engram-council` dependency.
+pub mod deliberation_store;
