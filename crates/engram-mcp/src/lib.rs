@@ -37,7 +37,7 @@ pub mod recent_changes;
 pub mod vault_health;
 
 /// `read_biography` — retrieve the Biographer agent's current user model.
-pub mod read_biography {}
+pub mod read_biography;
 
 /// `trace_concept` — how a concept has evolved across the vault over time.
 pub mod trace_concept;
